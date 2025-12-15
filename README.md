@@ -12,6 +12,10 @@ https://baramim.blogspot.com/
 
 
 **설치방법**
+<p align="center">
+  <img src="docs/install.sh.png" alt="Example Image" width="256">
+</p>
+
 - 저장소를 다운로드 하세요.
 - 터미널을 이용 install.sh 에 실행권한을 주세요.
 - chmod +x install.sh
