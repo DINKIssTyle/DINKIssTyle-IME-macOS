@@ -68,6 +68,16 @@
         return NO;
     }
 
+    // Backspace Handling (keyCode 51)
+    if (keyCode == 51) {
+        if ([engine backspace]) {
+            [self updateComposition:sender];
+            return YES;
+        } else {
+            return NO;
+        }
+    }
+
     if (keyCode == 36 || keyCode == 49) { // Enter or Space
         [self commitComposition:sender];
         return NO;
