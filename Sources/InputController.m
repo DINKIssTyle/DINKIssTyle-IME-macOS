@@ -162,6 +162,10 @@
 }
 
 // Menu handling (Modes)
+- (void)showPreferences:(id)sender {
+    [[PreferencesController sharedController] showPreferences];
+}
+
 - (NSMenu *)menu {
     NSMenu *menu = [[[NSMenu alloc] initWithTitle:@"DKST"] autorelease];
     

@@ -53,28 +53,34 @@
 
 - (unichar)mapFromChar:(unichar)c {
     switch(c) {
-        case 'q': return 0x1107; case 'Q': return 0x1108;
-        case 'w': return 0x110c; case 'W': return 0x110d;
-        case 'e': return 0x1103; case 'E': return 0x1104;
-        case 'r': return 0x1100; case 'R': return 0x1101;
-        case 't': return 0x1109; case 'T': return 0x110a;
-        case 'y': return 0x116d; case 'u': return 0x1167;
-        case 'i': return 0x1163; 
+        case 'q': return 0x1107; case 'Q': return 0x1108; // ㅂ, ㅃ
+        case 'w': return 0x110c; case 'W': return 0x110d; // ㅈ, ㅉ
+        case 'e': return 0x1103; case 'E': return 0x1104; // ㄷ, ㄸ
+        case 'r': return 0x1100; case 'R': return 0x1101; // ㄱ, ㄲ
+        case 't': return 0x1109; case 'T': return 0x110a; // ㅅ, ㅆ
+        case 'y': return 0x116d; case 'Y': return 0x116d; // ㅛ
+        case 'u': return 0x1167; case 'U': return 0x1167; // ㅕ
+        case 'i': return 0x1163; case 'I': return 0x1163; // ㅑ
         case 'o': return 0x1162; case 'O': return 0x1164; // o=ㅐ, O=ㅒ
         case 'p': return 0x1166; case 'P': return 0x1168; // p=ㅔ, P=ㅖ
         
-        case 'a': return 0x1106; case 's': return 0x1102;
-        case 'd': return 0x110b; case 'f': return 0x1105;
-        case 'g': return 0x1112;
-        case 'h': return 0x1169;
-        case 'j': return 0x1165;
-        case 'k': return 0x1161;
-        case 'l': return 0x1175;
+        case 'a': return 0x1106; case 'A': return 0x1106; // ㅁ
+        case 's': return 0x1102; case 'S': return 0x1102; // ㄴ
+        case 'd': return 0x110b; case 'D': return 0x110b; // ㅇ
+        case 'f': return 0x1105; case 'F': return 0x1105; // ㄹ
+        case 'g': return 0x1112; case 'G': return 0x1112; // ㅎ
+        case 'h': return 0x1169; case 'H': return 0x1169; // ㅗ
+        case 'j': return 0x1165; case 'J': return 0x1165; // ㅓ
+        case 'k': return 0x1161; case 'K': return 0x1161; // ㅏ
+        case 'l': return 0x1175; case 'L': return 0x1175; // ㅣ
         
-        case 'z': return 0x110f; case 'x': return 0x1110;
-        case 'c': return 0x110e; case 'v': return 0x1111;
-        case 'b': return 0x1172; case 'n': return 0x116e;
-        case 'm': return 0x1173;
+        case 'z': return 0x110f; case 'Z': return 0x110f; // ㅋ
+        case 'x': return 0x1110; case 'X': return 0x1110; // ㅌ
+        case 'c': return 0x110e; case 'C': return 0x110e; // ㅊ
+        case 'v': return 0x1111; case 'V': return 0x1111; // ㅍ
+        case 'b': return 0x1172; case 'B': return 0x1172; // ㅠ
+        case 'n': return 0x116e; case 'N': return 0x116e; // ㅜ
+        case 'm': return 0x1173; case 'M': return 0x1173; // ㅡ
         default: return 0;
     }
     return 0;

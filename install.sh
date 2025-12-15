@@ -1,14 +1,19 @@
 #!/bin/bash
 
 # --- 설정 및 경로 ---
-# 스크립트가 있는 현재 폴더 경로를 절대 경로로 가져옵니다.
 SCRIPT_DIR="$( cd "$( dirname "${BASH_SOURCE[0]}" )" && pwd )"
-
-# [수정됨] 스크립트 위치 하위의 build 폴더 안의 앱을 바라보도록 설정
 SOURCE_APP="${SCRIPT_DIR}/build/DKST.app"
-
 DEST_DIR="/Library/Input Methods"
 DEST_APP="${DEST_DIR}/DKST.app"
+PROCESS_NAME="DKST"
+
+# --- 함수: 프로세스 종료 ---
+function kill_dkst_process() {
+    echo "🔄 변경 사항 적용을 위해 $PROCESS_NAME 프로세스를 종료합니다..."
+    # pkill로 이름이 포함된 프로세스 강제 종료 (-9)
+    # 2>/dev/null: 에러 메시지 숨김 / || true: 프로세스가 없어도 계속 진행
+    sudo pkill -9 -f "$PROCESS_NAME" 2>/dev/null || true
+}
 
 # --- 화면 출력 및 메뉴 ---
 clear
@@ -37,15 +42,17 @@ case $CHOICE in
 
         echo "관리자 권한이 필요합니다. 비밀번호를 입력해주세요."
         
-        # 1. 기존 파일 정리 및 복사
+        # 1. 기존 파일 정리 및 새 파일 복사
+        echo "기존 앱 파일 제거 및 새 파일 복사 중..."
         sudo rm -rf "$DEST_APP"
-        
-        # build 폴더에서 복사
         sudo cp -R "$SOURCE_APP" "$DEST_DIR/"
         
         # 2. xattr 실행 (격리 해제)
         echo "확장 속성(quarantine) 제거 중..."
         sudo xattr -cr "$DEST_APP"
+        
+        # 3. [순서 변경됨] 설치 완료 후 프로세스 종료
+        kill_dkst_process
         
         echo "[설치 완료]"
         SHOW_MESSAGE=true
@@ -56,13 +63,16 @@ case $CHOICE in
         echo "[제거 시작]"
         echo "관리자 권한이 필요합니다. 비밀번호를 입력해주세요."
         
-        # 1. 제거 수행
+        # 1. 파일 제거 수행
         if [ -d "$DEST_APP" ]; then
             sudo rm -rf "$DEST_APP"
-            echo "제거되었습니다."
+            echo "파일이 제거되었습니다."
         else
-            echo "설치된 입력기가 없습니다."
+            echo "설치된 입력기 파일이 없습니다."
         fi
+        
+        # 2. [순서 변경됨] 제거 완료 후 프로세스 종료
+        kill_dkst_process
         
         echo "[제거 완료]"
         SHOW_MESSAGE=true
@@ -84,7 +94,7 @@ if [ "$SHOW_MESSAGE" = true ]; then
     echo ""
     echo "******************************************************"
     echo " 작업이 완료되었습니다."
-    echo " 변경 사항을 완벽하게 적용하려면 반드시"
-    echo " [로그아웃 후 다시 로그인]하거나 [재부팅] 해주세요."
+    echo " 프로세스가 종료되었습니다. 시스템이 자동으로 재실행하거나"
+    echo " [로그아웃 후 다시 로그인]하면 적용됩니다."
     echo "******************************************************"
 fi
