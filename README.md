@@ -13,7 +13,7 @@ https://baramim.blogspot.com/
 
 **설치방법**
 <p align="center">
-  <img src="docs/install.sh.png" alt="Example Image" width="256">
+  <img src="docs/install.sh.png" alt="Example Image" width="800">
 </p>
 
 - 저장소를 다운로드 하세요.
