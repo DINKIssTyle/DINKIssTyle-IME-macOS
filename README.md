@@ -11,9 +11,8 @@
 https://baramim.blogspot.com/
 
 
-*** 설치 방법 ***
-저장소를 다운로드 하세요.
-터미널을 이용 install.sh 에 실행권한을 주세요.
-chmod +x install.sh
-
-터미널에서 install.sh 를 실행합니다.
+**설치방법**
+- 저장소를 다운로드 하세요.
+- 터미널을 이용 install.sh 에 실행권한을 주세요.
+- chmod +x install.sh
+- 터미널에서 install.sh 를 실행합니다.
