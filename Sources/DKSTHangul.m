@@ -222,8 +222,15 @@
             if (_jong == 0) {
                 // Moa-jjiki Case: Jung only (no Cho)?
                 if (_cho == 0) {
-                    _cho = hangul; // ㅏ + ㄱ -> 가
-                    return YES; 
+                    if (self.moaJjikiEnabled) {
+                        _cho = hangul; // ㅏ + ㄱ -> 가
+                        return YES;
+                    } else {
+                        // Moa-jjiki Disabled: Flush Jung, start new Cho
+                         [_completed appendFormat:@"%C", [self currentSyllable]];
+                         _cho = hangul; _jung = 0; _jong = 0;
+                         return YES;
+                    }
                 }
                 
                 // Normal Case: Cho+Jung + Cho -> Check Jongseong

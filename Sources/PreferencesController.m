@@ -28,14 +28,23 @@
     if (self) {
         NSView *contentView = [panel contentView];
         
-        // Checkbox
-        capsLockSwitchCheckbox = [[[NSButton alloc] initWithFrame:NSMakeRect(40, 60, 280, 24)] autorelease];
+        // Checkbox: Caps Lock
+        capsLockSwitchCheckbox = [[[NSButton alloc] initWithFrame:NSMakeRect(40, 80, 280, 24)] autorelease];
         [capsLockSwitchCheckbox setButtonType:NSButtonTypeSwitch];
         [capsLockSwitchCheckbox setTitle:@"Use Caps Lock to switch Input Mode"];
         [capsLockSwitchCheckbox setTarget:self];
         [capsLockSwitchCheckbox setAction:@selector(toggleCapsLockSwitch:)];
         
         [contentView addSubview:capsLockSwitchCheckbox];
+
+        // Checkbox: Moa-jjiki
+        moaJjikiCheckbox = [[[NSButton alloc] initWithFrame:NSMakeRect(40, 50, 280, 24)] autorelease];
+        [moaJjikiCheckbox setButtonType:NSButtonTypeSwitch];
+        [moaJjikiCheckbox setTitle:@"Enable Moa-chigi (Combine Vowel+Consonant)"];
+        [moaJjikiCheckbox setTarget:self];
+        [moaJjikiCheckbox setAction:@selector(toggleMoaJjiki:)];
+        
+        [contentView addSubview:moaJjikiCheckbox];
         
         // Initial State
         [self refreshState];
@@ -58,9 +67,13 @@
 }
 
 - (void)refreshState {
-    BOOL enabled = [[NSUserDefaults standardUserDefaults] boolForKey:@"EnableCapsLockSwitch"];
-    [capsLockSwitchCheckbox setState:(enabled ? NSControlStateValueOn : NSControlStateValueOff)];
-    NSLog(@"PreferencesController: State refreshed. Enabled: %d", enabled);
+    BOOL capsEnabled = [[NSUserDefaults standardUserDefaults] boolForKey:@"EnableCapsLockSwitch"];
+    [capsLockSwitchCheckbox setState:(capsEnabled ? NSControlStateValueOn : NSControlStateValueOff)];
+    
+    BOOL moaEnabled = [[NSUserDefaults standardUserDefaults] boolForKey:@"EnableMoaJjiki"];
+    [moaJjikiCheckbox setState:(moaEnabled ? NSControlStateValueOn : NSControlStateValueOff)];
+    
+    NSLog(@"PreferencesController: State refreshed. Caps: %d, Moa: %d", capsEnabled, moaEnabled);
 }
 
 - (IBAction)toggleCapsLockSwitch:(id)sender {
@@ -68,6 +81,13 @@
     [[NSUserDefaults standardUserDefaults] setBool:enabled forKey:@"EnableCapsLockSwitch"];
     [[NSUserDefaults standardUserDefaults] synchronize];
     NSLog(@"PreferencesController: CapsLock Toggle -> %d", enabled);
+}
+
+- (IBAction)toggleMoaJjiki:(id)sender {
+    BOOL enabled = ([sender state] == NSControlStateValueOn);
+    [[NSUserDefaults standardUserDefaults] setBool:enabled forKey:@"EnableMoaJjiki"];
+    [[NSUserDefaults standardUserDefaults] synchronize];
+    NSLog(@"PreferencesController: MoaJjiki Toggle -> %d", enabled);
 }
 
 @end

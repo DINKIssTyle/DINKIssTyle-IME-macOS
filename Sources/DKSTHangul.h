@@ -13,4 +13,7 @@
 // 키 입력을 처리. 처리했으면 YES, 아니면 NO 반환.
 - (BOOL)processCode:(NSInteger)keyCode modifiers:(NSUInteger)flags;
 
+@property (nonatomic, assign) BOOL moaJjikiEnabled;
+
+
 @end

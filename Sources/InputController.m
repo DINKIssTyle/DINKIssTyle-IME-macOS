@@ -10,8 +10,11 @@
         engine = [[DKSTHangul alloc] init];
         currentMode = kDKSTHangulMode; // Default to Hangul
         
-        // Set default preference for Caps Lock switching to YES
-        [[NSUserDefaults standardUserDefaults] registerDefaults:@{ @"EnableCapsLockSwitch": @YES }];
+        // Set default preference
+        [[NSUserDefaults standardUserDefaults] registerDefaults:@{ 
+            @"EnableCapsLockSwitch": @YES,
+            @"EnableMoaJjiki": @YES
+        }];
     }
     return self;
 }
@@ -26,6 +29,10 @@
 - (void)activateServer:(id)sender {
     NSLog(@"DKST: activateServer called");
     [sender overrideKeyboardWithKeyboardNamed:@"com.apple.keylayout.US"];
+    
+    // Apply Preferences
+    BOOL moaEnabled = [[NSUserDefaults standardUserDefaults] boolForKey:@"EnableMoaJjiki"];
+    [engine setMoaJjikiEnabled:moaEnabled];
     
     // Ensure clean state and force Hangul mode on activation
     [engine reset];
