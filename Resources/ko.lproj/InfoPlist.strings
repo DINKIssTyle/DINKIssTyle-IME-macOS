@@ -1,0 +1,5 @@
+/* Localized versions of Info.plist keys */
+"CFBundleName" = "DKST";
+"CFBundleDisplayName" = "DKST";
+"com.dinkisstyle.inputmethod.DKST.english" = "영어";
+"com.dinkisstyle.inputmethod.DKST.hangul" = "한글";
