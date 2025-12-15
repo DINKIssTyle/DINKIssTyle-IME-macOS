@@ -1,5 +1,5 @@
 <p align="center">
-  <img src="docs/Main_img.png" alt="Example Image" width="600">
+  <img src="docs/Main_img.png" alt="Example Image" width="256">
 </p>
 
 간단한 macOS용 한글입력기
