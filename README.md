@@ -1,5 +1,9 @@
 <p align="center">
-  <img src="docs/Main_img.png" alt="Example Image" width="256">
+  <img src="docs/DKST_video.gif" alt="Video Demo" width="90%">
+</p>
+
+<p align="center">
+  <img src="docs/Main_img.png" alt="Icon Image" width="128">
 </p>
 
 애플실리콘 맥용 간단한 macOS용 한글입력기  
