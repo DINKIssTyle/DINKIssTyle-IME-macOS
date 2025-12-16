@@ -69,6 +69,8 @@ cat > build/DKSTPreferences.app/Contents/Info.plist <<EOF
     <string>com.dinkisstyle.inputmethod.DKST.preferences</string>
     <key>CFBundleName</key>
     <string>DKST Preferences</string>
+    <key>CFBundleIconFile</key>
+    <string>DKST</string>
     <key>CFBundlePackageType</key>
     <string>APPL</string>
     <key>LSMinimumSystemVersion</key>
@@ -78,6 +80,9 @@ cat > build/DKSTPreferences.app/Contents/Info.plist <<EOF
 </dict>
 </plist>
 EOF
+
+# Copy Icon
+cp Resources/DKST.icns build/DKSTPreferences.app/Contents/Resources/
 
 # Copy Prefs app into Input Method Resources
 rm -rf build/DKST.app/Contents/Resources/DKSTPreferences.app

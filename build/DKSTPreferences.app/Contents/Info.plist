@@ -8,6 +8,8 @@
     <string>com.dinkisstyle.inputmethod.DKST.preferences</string>
     <key>CFBundleName</key>
     <string>DKST Preferences</string>
+    <key>CFBundleIconFile</key>
+    <string>DKST</string>
     <key>CFBundlePackageType</key>
     <string>APPL</string>
     <key>LSMinimumSystemVersion</key>
