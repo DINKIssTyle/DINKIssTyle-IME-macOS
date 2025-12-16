@@ -76,7 +76,7 @@
         // 5. Full Character Delete (Moved Up)
         fullDeleteCheckbox = [[[NSButton alloc] initWithFrame:NSMakeRect(20, 300, 400, 24)] autorelease];
         [fullDeleteCheckbox setButtonType:NSButtonTypeSwitch];
-        [fullDeleteCheckbox setTitle:@"Backspace deletes entire character (한 -> empty)"];
+        [fullDeleteCheckbox setTitle:@"Backspace deletes entire character (글자단위 삭제)"];
         [fullDeleteCheckbox setTarget:self];
         [fullDeleteCheckbox setAction:@selector(toggleFullDelete:)];
         [contentView addSubview:fullDeleteCheckbox];
@@ -142,8 +142,13 @@
     BOOL capsEnabled = [defaults boolForKey:@"EnableCapsLockSwitch"];
     [capsLockSwitchCheckbox setState:(capsEnabled ? NSControlStateValueOn : NSControlStateValueOff)];
     
-    BOOL moaEnabled = [defaults boolForKey:@"EnableMoaJjiki"];
-    [moaJjikiCheckbox setState:(moaEnabled ? NSControlStateValueOn : NSControlStateValueOff)];
+    // Moa-chigi Default: YES
+    if ([defaults objectForKey:@"EnableMoaJjiki"] == nil) {
+        [moaJjikiCheckbox setState:NSControlStateValueOn];
+    } else {
+        BOOL moaEnabled = [defaults boolForKey:@"EnableMoaJjiki"];
+        [moaJjikiCheckbox setState:(moaEnabled ? NSControlStateValueOn : NSControlStateValueOff)];
+    }
     
     BOOL fullDelete = [defaults boolForKey:@"FullCharacterDelete"];
     [fullDeleteCheckbox setState:(fullDelete ? NSControlStateValueOn : NSControlStateValueOff)];
