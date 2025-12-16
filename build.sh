@@ -46,4 +46,39 @@ cp -r Resources/ko.lproj build/DKST.app/Contents/Resources/
 # Create PkgInfo
 echo "APPL????" > build/DKST.app/Contents/PkgInfo
 
-echo "Build Complete: build/DKST.app"
+# Build DKSTPreferences.app
+echo "Compiling DKSTPreferences..."
+mkdir -p build/DKSTPreferences.app/Contents/MacOS
+mkdir -p build/DKSTPreferences.app/Contents/Resources
+
+clang -o build/DKSTPreferences.app/Contents/MacOS/DKSTPreferences \
+    Sources/PreferencesApp/main.m \
+    Sources/PreferencesController.m \
+    Sources/DKSTConstants.m \
+    -framework Cocoa -I Sources
+
+# Create simple Info.plist for Prefs
+cat > build/DKSTPreferences.app/Contents/Info.plist <<EOF
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
+<plist version="1.0">
+<dict>
+    <key>CFBundleExecutable</key>
+    <string>DKSTPreferences</string>
+    <key>CFBundleIdentifier</key>
+    <string>com.dinkisstyle.inputmethod.DKST.preferences</string>
+    <key>CFBundleName</key>
+    <string>DKST Preferences</string>
+    <key>CFBundlePackageType</key>
+    <string>APPL</string>
+    <key>LSMinimumSystemVersion</key>
+    <string>10.13</string>
+    <key>NSPrincipalClass</key>
+    <string>NSApplication</string>
+</dict>
+</plist>
+EOF
+
+# Copy Prefs app into Input Method Resources
+rm -rf build/DKST.app/Contents/Resources/DKSTPreferences.app
+cp -r build/DKSTPreferences.app build/DKST.app/Contents/Resources/

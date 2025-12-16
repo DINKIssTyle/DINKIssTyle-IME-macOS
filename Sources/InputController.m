@@ -48,11 +48,21 @@
 }
 
 - (BOOL)handleEvent:(NSEvent *)event client:(id)sender {
-    // Handle modifier keys, special keys, etc.
-    NSUInteger modifiers = [event modifierFlags] & (NSEventModifierFlagCommand | NSEventModifierFlagControl | NSEventModifierFlagOption);
+    // 1. Check if Preferences Window is Key (Active)
+    // If so, redirect events to the application itself to allow typing in the table view.
+    NSWindow *prefWindow = [[PreferencesController sharedController] window];
+    if (prefWindow && [prefWindow isKeyWindow]) {
+        [NSApp sendEvent:event];
+        return YES; // Stop IMK from processing it for the client (TextEdit)
+    }
+
+    // Handle modifier keys
+    // NOTE: validation of Shift for shortcuts requires it to be preserved in the mask
+    NSUInteger modifiers = [event modifierFlags] & (NSEventModifierFlagCommand | NSEventModifierFlagControl | NSEventModifierFlagOption | NSEventModifierFlagShift);
     
     // Allow Pass-through for Command/Ctrl/Option
-    if (modifiers != 0 && modifiers != NSEventModifierFlagShift) {
+    // If modifiers have Cmd/Ctrl/Option, pass through. Shift is allowed for processing.
+    if ((modifiers & (NSEventModifierFlagCommand | NSEventModifierFlagControl | NSEventModifierFlagOption)) != 0) {
         [self commitComposition:sender];
         return NO;
     }
@@ -92,11 +102,50 @@
     
     // Check mode - Removed to enforce Hangul processing at all times.
     // We treat this Input Method as purely Hangul. English is handled by switching to "ABC" Input Source.
-    /*
-    if ([currentMode isEqualToString:kDKSTEnglishMode]) {
-        return NO; // Let system handle English
+    
+    // CUSTOM SHIFT SHORTCUT CHECK
+    NSUserDefaults *defaults = [NSUserDefaults standardUserDefaults];
+    BOOL shiftEnabled = [defaults boolForKey:@"EnableCustomShift"];
+    
+    if (shiftEnabled && (modifiers == NSEventModifierFlagShift)) {
+        // Map keyCode to key string used in dictionary
+        NSString *lookupKey = nil;
+        switch (keyCode) {
+            case 16: lookupKey = @"y (ㅛ)"; break;
+            case 32: lookupKey = @"u (ㅕ)"; break;
+            case 34: lookupKey = @"i (ㅑ)"; break;
+            case 0:  lookupKey = @"a (ㅁ)"; break;
+            case 1:  lookupKey = @"s (ㄴ)"; break;
+            case 2:  lookupKey = @"d (ㅇ)"; break;
+            case 3:  lookupKey = @"f (ㄹ)"; break;
+            case 5:  lookupKey = @"g (ㅎ)"; break;
+            case 4:  lookupKey = @"h (ㅗ)"; break;
+            case 38: lookupKey = @"j (ㅓ)"; break;
+            case 40: lookupKey = @"k (ㅏ)"; break;
+            case 37: lookupKey = @"l (ㅣ)"; break;
+            case 6:  lookupKey = @"z (ㅋ)"; break;
+            case 7:  lookupKey = @"x (ㅌ)"; break;
+            case 8:  lookupKey = @"c (ㅊ)"; break;
+            case 9:  lookupKey = @"v (ㅍ)"; break;
+            case 11: lookupKey = @"b (ㅠ)"; break;
+            case 45: lookupKey = @"n (ㅜ)"; break;
+            case 46: lookupKey = @"m (ㅡ)"; break;
+            default: break;
+        }
+        
+        if (lookupKey) {
+            NSDictionary *mappings = [defaults dictionaryForKey:@"DKSTCustomShiftMappings"];
+            NSString *output = [mappings objectForKey:lookupKey];
+            if (output && [output length] > 0) {
+                // If we have mapped content, commit it directly
+                // First commit any pending composition
+                [self commitComposition:sender];
+                
+                [sender insertText:output replacementRange:NSMakeRange(NSNotFound, NSNotFound)];
+                return YES; // Consumed
+            }
+        }
     }
-    */
     
     // Process Hangul
     BOOL processed = [engine processCode:keyCode modifiers:[event modifierFlags]];
@@ -170,7 +219,12 @@
 
 // Menu handling (Modes)
 - (void)showPreferences:(id)sender {
-    [[PreferencesController sharedController] showPreferences];
+    NSString *path = [[NSBundle mainBundle] pathForResource:@"DKSTPreferences" ofType:@"app"];
+    if (path) {
+        [[NSWorkspace sharedWorkspace] launchApplication:path];
+    } else {
+        NSLog(@"DKST: Could not find Preferences app at %@", path);
+    }
 }
 
 - (NSMenu *)menu {

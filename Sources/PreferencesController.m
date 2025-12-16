@@ -11,40 +11,94 @@
     return sharedController;
 }
 
+// Helper to get shared defaults
+- (NSUserDefaults *)defaults {
+    // Access the specific domain of the Input Method
+    return [[[NSUserDefaults alloc] initWithSuiteName:@"com.dinkisstyle.inputmethod.DKST"] autorelease];
+}
+
 - (id)init {
-    NSRect frame = NSMakeRect(0, 0, 350, 150);
-    // Use NSPanel for utility window behavior
-    NSPanel *panel = [[[NSPanel alloc] initWithContentRect:frame
-                                                 styleMask:(NSWindowStyleMaskTitled | NSWindowStyleMaskClosable | NSWindowStyleMaskUtilityWindow)
-                                                   backing:NSBackingStoreBuffered
-                                                     defer:NO] autorelease];
-    [panel setTitle:@"DKST Preferences"];
-    [panel center];
-    [panel setLevel:NSFloatingWindowLevel]; 
-    [panel setFloatingPanel:YES];
-    [panel setHidesOnDeactivate:NO]; // Keep visible if switching apps
+    NSRect frame = NSMakeRect(0, 0, 450, 400); 
+    NSWindow *window = [[[NSWindow alloc] initWithContentRect:frame
+                                                    styleMask:(NSWindowStyleMaskTitled | NSWindowStyleMaskClosable | NSWindowStyleMaskMiniaturizable)
+                                                      backing:NSBackingStoreBuffered
+                                                        defer:NO] autorelease];
+    [window setTitle:@"DKST Preferences"];
+    [window center];
+    [window setDelegate:self]; // Set delegate to handle close
     
-    self = [super initWithWindow:panel];
+    self = [super initWithWindow:window];
     if (self) {
-        NSView *contentView = [panel contentView];
+        NSView *contentView = [window contentView];
         
-        // Checkbox: Caps Lock
-        capsLockSwitchCheckbox = [[[NSButton alloc] initWithFrame:NSMakeRect(40, 80, 280, 24)] autorelease];
+        // Define Keys
+        mappingKeys = [[NSMutableArray alloc] initWithObjects:
+                       @"y (ㅛ)", @"u (ㅕ)", @"i (ㅑ)", 
+                       @"a (ㅁ)", @"s (ㄴ)", @"d (ㅇ)", @"f (ㄹ)", @"g (ㅎ)",
+                       @"h (ㅗ)", @"j (ㅓ)", @"k (ㅏ)", @"l (ㅣ)",
+                       @"z (ㅋ)", @"x (ㅌ)", @"c (ㅊ)", @"v (ㅍ)", @"b (ㅠ)", @"n (ㅜ)", @"m (ㅡ)", nil];
+        
+        // Load Dictionary
+        NSDictionary *saved = [[self defaults] dictionaryForKey:@"DKSTCustomShiftMappings"];
+        if (saved) {
+            mappingDict = [saved mutableCopy];
+        } else {
+            mappingDict = [[NSMutableDictionary alloc] init];
+            for (NSString *key in mappingKeys) {
+                [mappingDict setObject:@"" forKey:key];
+            }
+        }
+        
+        // 1. Caps Lock
+        capsLockSwitchCheckbox = [[[NSButton alloc] initWithFrame:NSMakeRect(20, 360, 400, 24)] autorelease];
         [capsLockSwitchCheckbox setButtonType:NSButtonTypeSwitch];
         [capsLockSwitchCheckbox setTitle:@"Use Caps Lock to switch Input Mode"];
         [capsLockSwitchCheckbox setTarget:self];
         [capsLockSwitchCheckbox setAction:@selector(toggleCapsLockSwitch:)];
-        
         [contentView addSubview:capsLockSwitchCheckbox];
 
-        // Checkbox: Moa-jjiki
-        moaJjikiCheckbox = [[[NSButton alloc] initWithFrame:NSMakeRect(40, 50, 280, 24)] autorelease];
+        // 2. Moa-jjiki
+        moaJjikiCheckbox = [[[NSButton alloc] initWithFrame:NSMakeRect(20, 330, 400, 24)] autorelease];
         [moaJjikiCheckbox setButtonType:NSButtonTypeSwitch];
         [moaJjikiCheckbox setTitle:@"Enable Moa-chigi (Combine Vowel+Consonant)"];
         [moaJjikiCheckbox setTarget:self];
         [moaJjikiCheckbox setAction:@selector(toggleMoaJjiki:)];
-        
         [contentView addSubview:moaJjikiCheckbox];
+        
+        // 3. Custom Shift Enable
+        customShiftCheckbox = [[[NSButton alloc] initWithFrame:NSMakeRect(20, 300, 400, 24)] autorelease];
+        [customShiftCheckbox setButtonType:NSButtonTypeSwitch];
+        [customShiftCheckbox setTitle:@"Enable Custom Shift Shortcuts (Emoji/Text)"];
+        [customShiftCheckbox setTarget:self];
+        [customShiftCheckbox setAction:@selector(toggleCustomShift:)];
+        [contentView addSubview:customShiftCheckbox];
+        
+        // 4. Table Scroll View
+        NSScrollView *scrollView = [[[NSScrollView alloc] initWithFrame:NSMakeRect(20, 20, 410, 270)] autorelease];
+        [scrollView setBorderType:NSBezelBorder];
+        [scrollView setHasVerticalScroller:YES];
+        
+        // Table View
+        mappingsTableView = [[[NSTableView alloc] initWithFrame:NSMakeRect(0, 0, 410, 270)] autorelease];
+        
+        // Columns
+        NSTableColumn *keyCol = [[[NSTableColumn alloc] initWithIdentifier:@"Key"] autorelease];
+        [[keyCol headerCell] setStringValue:@"Key"];
+        [keyCol setWidth:80];
+        [keyCol setEditable:NO];
+        [mappingsTableView addTableColumn:keyCol];
+        
+        NSTableColumn *outCol = [[[NSTableColumn alloc] initWithIdentifier:@"Output"] autorelease];
+        [[outCol headerCell] setStringValue:@"Output (Text/Emoji)"];
+        [outCol setWidth:300];
+        [outCol setEditable:YES];
+        [mappingsTableView addTableColumn:outCol];
+        
+        [mappingsTableView setDataSource:self];
+        [mappingsTableView setDelegate:self];
+        
+        [scrollView setDocumentView:mappingsTableView];
+        [contentView addSubview:scrollView];
         
         // Initial State
         [self refreshState];
@@ -52,42 +106,90 @@
     return self;
 }
 
+- (void)dealloc {
+    [mappingKeys release];
+    [mappingDict release];
+    [super dealloc];
+}
+
+// Window Delegate
+- (void)windowWillClose:(NSNotification *)notification {
+    // Terminate the app when window closes (since it's a standalone Prefs app now)
+    [NSApp terminate:nil];
+}
+
 - (void)showPreferences {
     NSLog(@"PreferencesController: showPreferences called");
     NSWindow *window = [self window];
-    
-    // Ensure visibility
     [window center];
     [window makeKeyAndOrderFront:nil];
-    [window setLevel:NSFloatingWindowLevel]; // Re-assert level
-    
+    [window setLevel:NSFloatingWindowLevel];
     [NSApp activateIgnoringOtherApps:YES];
-    
     [self refreshState];
 }
 
 - (void)refreshState {
-    BOOL capsEnabled = [[NSUserDefaults standardUserDefaults] boolForKey:@"EnableCapsLockSwitch"];
+    NSUserDefaults *defaults = [self defaults];
+    
+    BOOL capsEnabled = [defaults boolForKey:@"EnableCapsLockSwitch"];
     [capsLockSwitchCheckbox setState:(capsEnabled ? NSControlStateValueOn : NSControlStateValueOff)];
     
-    BOOL moaEnabled = [[NSUserDefaults standardUserDefaults] boolForKey:@"EnableMoaJjiki"];
+    BOOL moaEnabled = [defaults boolForKey:@"EnableMoaJjiki"];
     [moaJjikiCheckbox setState:(moaEnabled ? NSControlStateValueOn : NSControlStateValueOff)];
     
-    NSLog(@"PreferencesController: State refreshed. Caps: %d, Moa: %d", capsEnabled, moaEnabled);
+    BOOL shiftEnabled = [defaults boolForKey:@"EnableCustomShift"];
+    [customShiftCheckbox setState:(shiftEnabled ? NSControlStateValueOn : NSControlStateValueOff)];
+    [mappingsTableView setEnabled:shiftEnabled]; // Disable table if feature off
+    
+    [mappingsTableView reloadData];
 }
+
+// MARK: - Actions
 
 - (IBAction)toggleCapsLockSwitch:(id)sender {
     BOOL enabled = ([sender state] == NSControlStateValueOn);
-    [[NSUserDefaults standardUserDefaults] setBool:enabled forKey:@"EnableCapsLockSwitch"];
-    [[NSUserDefaults standardUserDefaults] synchronize];
-    NSLog(@"PreferencesController: CapsLock Toggle -> %d", enabled);
+    [[self defaults] setBool:enabled forKey:@"EnableCapsLockSwitch"];
+    [[self defaults] synchronize];
 }
 
 - (IBAction)toggleMoaJjiki:(id)sender {
     BOOL enabled = ([sender state] == NSControlStateValueOn);
-    [[NSUserDefaults standardUserDefaults] setBool:enabled forKey:@"EnableMoaJjiki"];
-    [[NSUserDefaults standardUserDefaults] synchronize];
-    NSLog(@"PreferencesController: MoaJjiki Toggle -> %d", enabled);
+    [[self defaults] setBool:enabled forKey:@"EnableMoaJjiki"];
+    [[self defaults] synchronize];
+}
+
+- (IBAction)toggleCustomShift:(id)sender {
+    BOOL enabled = ([sender state] == NSControlStateValueOn);
+    [[self defaults] setBool:enabled forKey:@"EnableCustomShift"];
+    [[self defaults] synchronize];
+    [self refreshState];
+}
+
+// MARK: - TableView DataSource
+
+- (NSInteger)numberOfRowsInTableView:(NSTableView *)tableView {
+    return [mappingKeys count];
+}
+
+- (id)tableView:(NSTableView *)tableView objectValueForTableColumn:(NSTableColumn *)tableColumn row:(NSInteger)row {
+    NSString *key = [mappingKeys objectAtIndex:row];
+    if ([[tableColumn identifier] isEqualToString:@"Key"]) {
+        return key;
+    } else {
+        return [mappingDict objectForKey:key];
+    }
+}
+
+- (void)tableView:(NSTableView *)tableView setObjectValue:(id)object forTableColumn:(NSTableColumn *)tableColumn row:(NSInteger)row {
+    if ([[tableColumn identifier] isEqualToString:@"Output"]) {
+        NSString *key = [mappingKeys objectAtIndex:row];
+        NSString *newValue = (NSString *)object;
+        [mappingDict setObject:newValue forKey:key];
+        
+        // Save
+        [[self defaults] setObject:mappingDict forKey:@"DKSTCustomShiftMappings"];
+        [[self defaults] synchronize];
+    }
 }
 
 @end
