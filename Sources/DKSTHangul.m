@@ -157,6 +157,14 @@
     // 1. If empty, return NO
     if (_cho == 0 && _jung == 0 && _jong == 0) return NO;
     
+    // Check Full Delete Option
+    if (self.fullCharacterDelete) {
+        _cho = 0;
+        _jung = 0;
+        _jong = 0;
+        return YES;
+    }
+    
     // 2. Jongseong
     if (_jong != 0) {
         unichar j1 = 0, j2 = 0;

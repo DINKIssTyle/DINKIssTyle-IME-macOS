@@ -4,6 +4,7 @@
 @interface PreferencesController : NSWindowController <NSTableViewDataSource, NSTableViewDelegate, NSWindowDelegate> {
     IBOutlet NSButton *capsLockSwitchCheckbox;
     IBOutlet NSButton *moaJjikiCheckbox;
+    IBOutlet NSButton *fullDeleteCheckbox;
     
     // New Feature
     IBOutlet NSButton *customShiftCheckbox;
@@ -28,6 +29,7 @@
 - (void)showPreferences;
 - (IBAction)toggleCapsLockSwitch:(id)sender;
 - (IBAction)toggleMoaJjiki:(id)sender;
+- (IBAction)toggleFullDelete:(id)sender;
 
 
 @end

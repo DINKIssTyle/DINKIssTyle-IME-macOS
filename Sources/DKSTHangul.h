@@ -14,6 +14,7 @@
 - (BOOL)processCode:(NSInteger)keyCode modifiers:(NSUInteger)flags;
 
 @property (nonatomic, assign) BOOL moaJjikiEnabled;
+@property (nonatomic, assign) BOOL fullCharacterDelete;
 
 
 @end

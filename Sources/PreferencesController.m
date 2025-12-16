@@ -65,16 +65,24 @@
         [moaJjikiCheckbox setAction:@selector(toggleMoaJjiki:)];
         [contentView addSubview:moaJjikiCheckbox];
         
-        // 3. Custom Shift Enable
-        customShiftCheckbox = [[[NSButton alloc] initWithFrame:NSMakeRect(20, 300, 400, 24)] autorelease];
+        // 3. Custom Shift Enable (Moved Down)
+        customShiftCheckbox = [[[NSButton alloc] initWithFrame:NSMakeRect(20, 270, 400, 24)] autorelease];
         [customShiftCheckbox setButtonType:NSButtonTypeSwitch];
         [customShiftCheckbox setTitle:@"Enable Custom Shift Shortcuts (Emoji/Text)"];
         [customShiftCheckbox setTarget:self];
         [customShiftCheckbox setAction:@selector(toggleCustomShift:)];
         [contentView addSubview:customShiftCheckbox];
         
+        // 5. Full Character Delete (Moved Up)
+        fullDeleteCheckbox = [[[NSButton alloc] initWithFrame:NSMakeRect(20, 300, 400, 24)] autorelease];
+        [fullDeleteCheckbox setButtonType:NSButtonTypeSwitch];
+        [fullDeleteCheckbox setTitle:@"Backspace deletes entire character (한 -> empty)"];
+        [fullDeleteCheckbox setTarget:self];
+        [fullDeleteCheckbox setAction:@selector(toggleFullDelete:)];
+        [contentView addSubview:fullDeleteCheckbox];
+
         // 4. Table Scroll View
-        NSScrollView *scrollView = [[[NSScrollView alloc] initWithFrame:NSMakeRect(20, 20, 410, 270)] autorelease];
+        NSScrollView *scrollView = [[[NSScrollView alloc] initWithFrame:NSMakeRect(20, 20, 410, 240)] autorelease];
         [scrollView setBorderType:NSBezelBorder];
         [scrollView setHasVerticalScroller:YES];
         
@@ -137,6 +145,9 @@
     BOOL moaEnabled = [defaults boolForKey:@"EnableMoaJjiki"];
     [moaJjikiCheckbox setState:(moaEnabled ? NSControlStateValueOn : NSControlStateValueOff)];
     
+    BOOL fullDelete = [defaults boolForKey:@"FullCharacterDelete"];
+    [fullDeleteCheckbox setState:(fullDelete ? NSControlStateValueOn : NSControlStateValueOff)];
+    
     BOOL shiftEnabled = [defaults boolForKey:@"EnableCustomShift"];
     [customShiftCheckbox setState:(shiftEnabled ? NSControlStateValueOn : NSControlStateValueOff)];
     [mappingsTableView setEnabled:shiftEnabled]; // Disable table if feature off
@@ -155,6 +166,12 @@
 - (IBAction)toggleMoaJjiki:(id)sender {
     BOOL enabled = ([sender state] == NSControlStateValueOn);
     [[self defaults] setBool:enabled forKey:@"EnableMoaJjiki"];
+    [[self defaults] synchronize];
+}
+
+- (IBAction)toggleFullDelete:(id)sender {
+    BOOL enabled = ([sender state] == NSControlStateValueOn);
+    [[self defaults] setBool:enabled forKey:@"FullCharacterDelete"];
     [[self defaults] synchronize];
 }
 

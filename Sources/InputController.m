@@ -13,7 +13,8 @@
         // Set default preference
         [[NSUserDefaults standardUserDefaults] registerDefaults:@{ 
             @"EnableCapsLockSwitch": @YES,
-            @"EnableMoaJjiki": @YES
+            @"EnableMoaJjiki": @YES,
+            @"FullCharacterDelete": @NO
         }];
     }
     return self;
@@ -33,6 +34,9 @@
     // Apply Preferences
     BOOL moaEnabled = [[NSUserDefaults standardUserDefaults] boolForKey:@"EnableMoaJjiki"];
     [engine setMoaJjikiEnabled:moaEnabled];
+    
+    BOOL fullDelete = [[NSUserDefaults standardUserDefaults] boolForKey:@"FullCharacterDelete"];
+    [engine setFullCharacterDelete:fullDelete];
     
     // Ensure clean state and force Hangul mode on activation
     [engine reset];
