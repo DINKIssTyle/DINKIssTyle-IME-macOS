@@ -1,5 +1,5 @@
 #!/bin/bash
-set -e
+#set -e
 
 # Auto-detect Xcode if currently using CommandLineTools (needed for ibtool)
 if [ -z "$DEVELOPER_DIR" ] && xcode-select -p | grep -q "CommandLineTools"; then
