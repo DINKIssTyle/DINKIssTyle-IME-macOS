@@ -226,7 +226,14 @@
 - (void)showPreferences:(id)sender {
     NSString *path = [[NSBundle mainBundle] pathForResource:@"DKSTPreferences" ofType:@"app"];
     if (path) {
-        [[NSWorkspace sharedWorkspace] launchApplication:path];
+        NSURL *url = [NSURL fileURLWithPath:path];
+        [[NSWorkspace sharedWorkspace] openApplicationAtURL:url
+                                              configuration:[NSWorkspaceOpenConfiguration configuration]
+                                          completionHandler:^(NSRunningApplication *app, NSError *error) {
+            if (error) {
+                NSLog(@"DKST: Failed to launch Preferences app: %@", error);
+            }
+        }];
     } else {
         NSLog(@"DKST: Could not find Preferences app at %@", path);
     }
