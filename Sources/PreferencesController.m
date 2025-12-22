@@ -278,6 +278,8 @@
     }
     
     NSString *infoPath = [path stringByAppendingPathComponent:@"Contents/Info.plist"];
+    NSLog(@"DKST Preferences: Attempting to update Info.plist at: %@", infoPath);
+    
     NSMutableDictionary *infoDict = [NSMutableDictionary dictionaryWithContentsOfFile:infoPath];
     
     if (infoDict) {
@@ -292,14 +294,29 @@
                     [hangulDict setObject:iconName forKey:@"tsInputModePaletteIconFileKey"]; // Also update palette if present
                     
                     // Write back
-                    [infoDict writeToFile:infoPath atomically:YES];
+                    BOOL success = [infoDict writeToFile:infoPath atomically:YES];
+                    if (success) {
+                         NSLog(@"DKST Preferences: Successfully wrote to Info.plist. New Icon: %@", iconName);
+                         
+                         // Touch the bundle to force cache refresh
+                         NSFileManager *fm = [NSFileManager defaultManager];
+                         NSDictionary *attrs = @{NSFileModificationDate: [NSDate date]};
+                         NSError *error = nil;
+                         if (![fm setAttributes:attrs ofItemAtPath:path error:&error]) {
+                             NSLog(@"DKST Preferences: Failed to touch bundle at %@: %@", path, error);
+                         } else {
+                             NSLog(@"DKST Preferences: Touched bundle to refresh cache.");
+                         }
+                    } else {
+                         NSLog(@"DKST Preferences: Failed to write to Info.plist via writeToFile.");
+                    }
                     
                     // Since cached by system, suggest reboot (handled by UI label)
                 }
             }
         }
     } else {
-        NSLog(@"DKST: Could not find Info.plist at %@", infoPath);
+        NSLog(@"DKST Preferences: Could not find or load Info.plist at %@", infoPath);
     }
 }
 
