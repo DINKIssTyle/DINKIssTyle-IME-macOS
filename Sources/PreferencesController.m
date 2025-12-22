@@ -86,7 +86,7 @@
         // 4. Old Hangul
         oldHangulCheckbox = [[[NSButton alloc] initWithFrame:NSMakeRect(20, 280, 400, 24)] autorelease];
         [oldHangulCheckbox setButtonType:NSButtonTypeSwitch];
-        [oldHangulCheckbox setTitle:@"Using old Korean script (옛한글 사용)"];
+        [oldHangulCheckbox setTitle:@"Using old Korean script (실험적인 옛한글 사용)"];
         [oldHangulCheckbox setTarget:self];
         [oldHangulCheckbox setAction:@selector(toggleOldHangul:)];
         [contentView addSubview:oldHangulCheckbox];
