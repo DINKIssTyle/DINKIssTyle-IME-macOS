@@ -7,9 +7,7 @@
     IBOutlet NSButton *oldHangulCheckbox;
     IBOutlet NSButton *customShiftCheckbox;
     
-    // Icon Selection
-    IBOutlet NSButton *iconPdfRadio;
-    IBOutlet NSButton *iconPngRadio;
+
     
     // Backspace Behavior
     IBOutlet NSButton *backspaceJasoRadio;
