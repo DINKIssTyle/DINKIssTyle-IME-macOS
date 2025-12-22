@@ -14,18 +14,15 @@
     NSMutableString *_completed;
 }
 
-// Old Hangul Choseongs
-#define CHOSEONG_YESIEUNG       0x1147
-    #define CHOSEONG_PANSIOT        0x1140
-    #define CHOSEONG_YEORINHIEUH    0x1159
-    #define CHOSEONG_KAPYEOUNPHIEUP 0x1157
-    #define CHOSEONG_SSANGYESIEUNG  0x114C
-    #define CHOSEONG_SG             0x111B
-    #define CHOSEONG_BS             0x1121
-    #define CHOSEONG_BJ             0x1127 // Sios-Pieup actually 0x1127 is S-P? User said BJ -> 317D (S-P).
-    // Correct mapping check: B(q) + J(w) -> S-P?
-    // User: ㅂ(q) + ㅈ(w) = ㅽ (Siot-Pieup).
-    // B(1107) + J(110C) -> 1127 (Siot-Pieup). (User logic overrides standard spelling?)
+    // Old Hangul Choseongs
+    #define CHOSEONG_YESIEUNG       0x114C // Yesieung (ㆁ)
+    #define CHOSEONG_SSANGIEUNG     0x1147 // SsangIeung (ㆀ) - Shift+D
+    #define CHOSEONG_PANSIOT        0x1140 // Bansiot (ㅿ)
+    #define CHOSEONG_YEORINHIEUH    0x1159 // Yeorinhieuh (ㆆ)
+    #define CHOSEONG_KAPYEOUNPHIEUP 0x1157 // KapyeounPhieup (ㆄ)
+    #define CHOSEONG_SG             0x112D // Sios-Kiyeok (ㅺ)
+    #define CHOSEONG_BS             0x112F // Sios-Tikeut (ㅼ)
+    #define CHOSEONG_BJ             0x1132 // Sios-Pieup (ㅽ)
     
     // Old Hangul Jungseongs
     #define JUNGSEONG_ARAEAE        0x11A1
@@ -88,15 +85,16 @@
 }
 
 // Check types
-- (BOOL)isCho:(unichar)c { return c >= 0x1100 && c <= 0x1112; }
-- (BOOL)isJung:(unichar)c { return (c >= 0x1161 && c <= 0x1175) || (c == 0x119E); }
-- (BOOL)isJong:(unichar)c { return (c >= 0x11A8 && c <= 0x11C2); }
+// Updated ranges for Old Hangul
+- (BOOL)isCho:(unichar)c { return (c >= 0x1100 && c <= 0x115F); } // Expanded
+- (BOOL)isJung:(unichar)c { return (c >= 0x1161 && c <= 0x11A7); } // Expanded
+- (BOOL)isJong:(unichar)c { return (c >= 0x11A8 && c <= 0x11FF); } // Expanded
 
 - (unichar)mapFromChar:(unichar)c {
     // Old Hangul Overrides for Shift+D/Shift+G
     if (self.oldHangulEnabled) {
-        if (c == 'D') return 0x114C; // ㆀ
-        if (c == 'G') return 0x1157; // ㆄ
+        if (c == 'D') return CHOSEONG_SSANGIEUNG; // ㆀ
+        if (c == 'G') return CHOSEONG_KAPYEOUNPHIEUP; // ㆄ
     }
 
     switch(c) {
@@ -113,9 +111,9 @@
         
         case 'a': return 0x1106; case 'A': return 0x1106; // ㅁ
         case 's': return 0x1102; case 'S': return 0x1102; // ㄴ
-        case 'd': return 0x110b; case 'D': return 0x110b; // ㅇ (Old: D->ㆀ handled above)
+        case 'd': return 0x110b; case 'D': return 0x110b; // ㅇ
         case 'f': return 0x1105; case 'F': return 0x1105; // ㄹ
-        case 'g': return 0x1112; case 'G': return 0x1112; // ㅎ (Old: G->ㆄ handled above)
+        case 'g': return 0x1112; case 'G': return 0x1112; // ㅎ
         case 'h': return 0x1169; case 'H': return 0x1169; // ㅗ
         case 'j': return 0x1165; case 'J': return 0x1165; // ㅓ
         case 'k': return 0x1161; case 'K': return 0x1161; // ㅏ
@@ -137,18 +135,18 @@
     if (!self.oldHangulEnabled) return 0;
     
     // ㅇ + ㅇ = ㆁ (Yesieung)
-    if (a == 0x110B && b == 0x110B) return 0x1147;
+    if (a == 0x110B && b == 0x110B) return CHOSEONG_YESIEUNG;
     // ㅅ + ㅅ = ㅿ (Bansiot)
-    if (a == 0x1109 && b == 0x1109) return 0x1140;
+    if (a == 0x1109 && b == 0x1109) return CHOSEONG_PANSIOT;
     // ㅎ + ㅎ = ㆆ (Yeorinhieuh)
-    if (a == 0x1112 && b == 0x1112) return 0x1159;
+    if (a == 0x1112 && b == 0x1112) return CHOSEONG_YEORINHIEUH;
     
     // ㄱ + ㅅ = ㅺ (Sg)
-    if (a == 0x1100 && b == 0x1109) return 0x111B;
-    // ㅂ + ㅅ = ㅼ (Bs?)
-    if (a == 0x1107 && b == 0x1109) return 0x1121;
-    // ㅂ + ㅈ = ㅽ (Bj?)
-    if (a == 0x1107 && b == 0x110C) return 0x1127;
+    if (a == 0x1100 && b == 0x1109) return CHOSEONG_SG;
+    // ㅂ + ㅅ = ㅼ (Bs)
+    if (a == 0x1107 && b == 0x1109) return CHOSEONG_BS;
+    // ㅂ + ㅈ = ㅽ (Bj)
+    if (a == 0x1107 && b == 0x110C) return CHOSEONG_BJ;
     
     return 0;
 }
