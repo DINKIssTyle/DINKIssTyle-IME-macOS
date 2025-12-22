@@ -52,7 +52,7 @@
         // 1. Caps Lock
         capsLockSwitchCheckbox = [[[NSButton alloc] initWithFrame:NSMakeRect(20, 360, 400, 24)] autorelease];
         [capsLockSwitchCheckbox setButtonType:NSButtonTypeSwitch];
-        [capsLockSwitchCheckbox setTitle:@"Use Caps Lock to switch Input Mode"];
+        [capsLockSwitchCheckbox setTitle:@"Caps Lock을 눌러 입력 언어 전환"];
         [capsLockSwitchCheckbox setTarget:self];
         [capsLockSwitchCheckbox setAction:@selector(toggleCapsLockSwitch:)];
         [contentView addSubview:capsLockSwitchCheckbox];
@@ -60,7 +60,7 @@
         // 2. Moa-jjiki
         moaJjikiCheckbox = [[[NSButton alloc] initWithFrame:NSMakeRect(20, 330, 400, 24)] autorelease];
         [moaJjikiCheckbox setButtonType:NSButtonTypeSwitch];
-        [moaJjikiCheckbox setTitle:@"Enable Moa-chigi (Combine Vowel+Consonant)"];
+        [moaJjikiCheckbox setTitle:@"모아치기 (자모 순서 자동 보정)"];
         [moaJjikiCheckbox setTarget:self];
         [moaJjikiCheckbox setAction:@selector(toggleMoaJjiki:)];
         [contentView addSubview:moaJjikiCheckbox];
@@ -68,7 +68,7 @@
         // 3. Custom Shift Enable (Moved Down)
         customShiftCheckbox = [[[NSButton alloc] initWithFrame:NSMakeRect(20, 270, 400, 24)] autorelease];
         [customShiftCheckbox setButtonType:NSButtonTypeSwitch];
-        [customShiftCheckbox setTitle:@"Enable Custom Shift Shortcuts (Emoji/Text)"];
+        [customShiftCheckbox setTitle:@"쉬프트키 + 단자음/단모음 사용자화 사용"];
         [customShiftCheckbox setTarget:self];
         [customShiftCheckbox setAction:@selector(toggleCustomShift:)];
         [contentView addSubview:customShiftCheckbox];
@@ -76,7 +76,7 @@
         // 5. Full Character Delete (Moved Up)
         fullDeleteCheckbox = [[[NSButton alloc] initWithFrame:NSMakeRect(20, 300, 400, 24)] autorelease];
         [fullDeleteCheckbox setButtonType:NSButtonTypeSwitch];
-        [fullDeleteCheckbox setTitle:@"Backspace deletes entire character (글자단위 삭제)"];
+        [fullDeleteCheckbox setTitle:@"글자 단위로 삭제"];
         [fullDeleteCheckbox setTarget:self];
         [fullDeleteCheckbox setAction:@selector(toggleFullDelete:)];
         [contentView addSubview:fullDeleteCheckbox];
@@ -91,13 +91,13 @@
         
         // Columns
         NSTableColumn *keyCol = [[[NSTableColumn alloc] initWithIdentifier:@"Key"] autorelease];
-        [[keyCol headerCell] setStringValue:@"Key"];
+        [[keyCol headerCell] setStringValue:@"키"];
         [keyCol setWidth:80];
         [keyCol setEditable:NO];
         [mappingsTableView addTableColumn:keyCol];
         
         NSTableColumn *outCol = [[[NSTableColumn alloc] initWithIdentifier:@"Output"] autorelease];
-        [[outCol headerCell] setStringValue:@"Output (Text/Emoji)"];
+        [[outCol headerCell] setStringValue:@"출력 내용 (Text/Emoji)"];
         [outCol setWidth:300];
         [outCol setEditable:YES];
         [mappingsTableView addTableColumn:outCol];
