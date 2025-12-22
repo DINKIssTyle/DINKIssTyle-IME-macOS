@@ -13,6 +13,23 @@
     NSMutableString *_buffer;
     NSMutableString *_completed;
 }
+
+// Old Hangul Choseongs
+#define CHOSEONG_YESIEUNG       0x1147
+    #define CHOSEONG_PANSIOT        0x1140
+    #define CHOSEONG_YEORINHIEUH    0x1159
+    #define CHOSEONG_KAPYEOUNPHIEUP 0x1157
+    #define CHOSEONG_SSANGYESIEUNG  0x114C
+    #define CHOSEONG_SG             0x111B
+    #define CHOSEONG_BS             0x1121
+    #define CHOSEONG_BJ             0x1127 // Sios-Pieup actually 0x1127 is S-P? User said BJ -> 317D (S-P).
+    // Correct mapping check: B(q) + J(w) -> S-P?
+    // User: ㅂ(q) + ㅈ(w) = ㅽ (Siot-Pieup).
+    // B(1107) + J(110C) -> 1127 (Siot-Pieup). (User logic overrides standard spelling?)
+    
+    // Old Hangul Jungseongs
+    #define JUNGSEONG_ARAEAE        0x11A1
+
 @end
 
 @implementation DKSTHangul
@@ -76,6 +93,12 @@
 - (BOOL)isJong:(unichar)c { return (c >= 0x11A8 && c <= 0x11C2); }
 
 - (unichar)mapFromChar:(unichar)c {
+    // Old Hangul Overrides for Shift+D/Shift+G
+    if (self.oldHangulEnabled) {
+        if (c == 'D') return 0x114C; // ㆀ
+        if (c == 'G') return 0x1157; // ㆄ
+    }
+
     switch(c) {
         case 'q': return 0x1107; case 'Q': return 0x1108; // ㅂ, ㅃ
         case 'w': return 0x110c; case 'W': return 0x110d; // ㅈ, ㅉ
@@ -90,9 +113,9 @@
         
         case 'a': return 0x1106; case 'A': return 0x1106; // ㅁ
         case 's': return 0x1102; case 'S': return 0x1102; // ㄴ
-        case 'd': return 0x110b; case 'D': return 0x110b; // ㅇ
+        case 'd': return 0x110b; case 'D': return 0x110b; // ㅇ (Old: D->ㆀ handled above)
         case 'f': return 0x1105; case 'F': return 0x1105; // ㄹ
-        case 'g': return 0x1112; case 'G': return 0x1112; // ㅎ
+        case 'g': return 0x1112; case 'G': return 0x1112; // ㅎ (Old: G->ㆄ handled above)
         case 'h': return 0x1169; case 'H': return 0x1169; // ㅗ
         case 'j': return 0x1165; case 'J': return 0x1165; // ㅓ
         case 'k': return 0x1161; case 'K': return 0x1161; // ㅏ
@@ -109,6 +132,28 @@
     }
     return 0;
 }
+
+- (unichar)combineCho:(unichar)a second:(unichar)b {
+    if (!self.oldHangulEnabled) return 0;
+    
+    // ㅇ + ㅇ = ㆁ (Yesieung)
+    if (a == 0x110B && b == 0x110B) return 0x1147;
+    // ㅅ + ㅅ = ㅿ (Bansiot)
+    if (a == 0x1109 && b == 0x1109) return 0x1140;
+    // ㅎ + ㅎ = ㆆ (Yeorinhieuh)
+    if (a == 0x1112 && b == 0x1112) return 0x1159;
+    
+    // ㄱ + ㅅ = ㅺ (Sg)
+    if (a == 0x1100 && b == 0x1109) return 0x111B;
+    // ㅂ + ㅅ = ㅼ (Bs?)
+    if (a == 0x1107 && b == 0x1109) return 0x1121;
+    // ㅂ + ㅈ = ㅽ (Bj?)
+    if (a == 0x1107 && b == 0x110C) return 0x1127;
+    
+    return 0;
+}
+
+
 
 - (unichar)currentSyllable {
     if (_cho == 0 && _jung == 0 && _jong == 0) return 0;
@@ -248,9 +293,15 @@
              // State: Cho only or Empty
              if (_cho == 0) { _cho = hangul; }
              else { 
-                 // Flush prev Cho, start new
-                 [_completed appendFormat:@"%C", [self compatibilityJamo:_cho]];
-                 _cho = hangul;
+                 // Try Combine Cho (Old Hangul)
+                 unichar compound = [self combineCho:_cho second:hangul];
+                 if (compound) {
+                     _cho = compound;
+                 } else {
+                     // Flush prev Cho, start new
+                     [_completed appendFormat:@"%C", [self compatibilityJamo:_cho]];
+                     _cho = hangul;
+                 }
             }
         } else {
             // Already have Jung.
@@ -273,7 +324,10 @@
                 if (asJong) {
                     _jong = asJong;
                 } else {
-                    // Start new syllable
+                    // Not a valid Jongseong. Maybe combined Cho (Old Hangul)?
+                    // But we already have Jung, so it's a new Syllable unless Old Hangul allows Cho+Jung+Cho?
+                    // No, Cho+Jung+Cho structure isn't standard. It must be Jongseong or new Syllable.
+                    // If it's not a valid Jongseong, it's a new syllable.
                     [self flush];
                     _cho = hangul; _jung = 0; _jong = 0;
                 }

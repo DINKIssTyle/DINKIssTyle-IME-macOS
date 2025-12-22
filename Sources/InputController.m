@@ -142,6 +142,13 @@
             default: break;
         }
         
+        // Old Hangul Bypass for 'd' (ㅇ) and 'g' (ㅎ)
+        // If Old Hangul is enabled, Shift+D and Shift+G should bypass usage of custom phrase
+        BOOL oldHangul = [[NSUserDefaults standardUserDefaults] boolForKey:@"EnableOldHangul"];
+        if (oldHangul && (keyCode == 2 || keyCode == 5)) {
+             lookupKey = nil; // Skip map lookup
+        }
+        
         if (lookupKey) {
             NSDictionary *mappings = [defaults dictionaryForKey:@"DKSTCustomShiftMappings"];
             NSString *output = [mappings objectForKey:lookupKey];
