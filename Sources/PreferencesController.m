@@ -82,7 +82,7 @@
         [contentView addSubview:fullDeleteCheckbox];
 
         // 4. Table Scroll View
-        NSScrollView *scrollView = [[[NSScrollView alloc] initWithFrame:NSMakeRect(20, 20, 410, 240)] autorelease];
+        NSScrollView *scrollView = [[[NSScrollView alloc] initWithFrame:NSMakeRect(20, 40, 410, 220)] autorelease];
         [scrollView setBorderType:NSBezelBorder];
         [scrollView setHasVerticalScroller:YES];
         
@@ -107,6 +107,18 @@
         
         [scrollView setDocumentView:mappingsTableView];
         [contentView addSubview:scrollView];
+        
+        // 6. Copyright Label
+        NSTextField *copyrightLabel = [[[NSTextField alloc] initWithFrame:NSMakeRect(20, 10, 410, 18)] autorelease];
+        [copyrightLabel setStringValue:@"(C) 2025 DINKI'ssTyle"];
+        [copyrightLabel setBezeled:NO];
+        [copyrightLabel setDrawsBackground:NO];
+        [copyrightLabel setEditable:NO];
+        [copyrightLabel setSelectable:NO];
+        [copyrightLabel setAlignment:NSTextAlignmentCenter];
+        [copyrightLabel setTextColor:[NSColor secondaryLabelColor]];
+        [copyrightLabel setFont:[NSFont systemFontOfSize:11]];
+        [contentView addSubview:copyrightLabel];
         
         // Initial State
         [self refreshState];
