@@ -37,7 +37,31 @@
 
 - (NSString *)composedString {
     if (_cho == 0 && _jung == 0 && _jong == 0) return @"";
-    return [NSString stringWithFormat:@"%C", [self currentSyllable]];
+    unichar s = [self currentSyllable];
+    if (s != 0) return [NSString stringWithFormat:@"%C", s];
+    
+    // Archaic / Non-combinable case: Use raw Jamo (0x11xx) instead of compatibility (0x31xx)
+    // to allow OS rendering to form a cluster.
+    NSMutableString *res = [NSMutableString string];
+    if (_cho) [res appendFormat:@"%C", _cho];
+    if (_jung) [res appendFormat:@"%C", _jung];
+    if (_jong) [res appendFormat:@"%C", _jong];
+    return res;
+}
+
+- (void)flush {
+    if (_cho == 0 && _jung == 0 && _jong == 0) return;
+    
+    unichar s = [self currentSyllable];
+    if (s != 0) {
+        [_completed appendFormat:@"%C", s];
+    } else {
+        // Archaic / Non-combinable case
+        if (_cho) [_completed appendFormat:@"%C", _cho];
+        if (_jung) [_completed appendFormat:@"%C", _jung];
+        if (_jong) [_completed appendFormat:@"%C", _jong];
+    }
+    _cho = 0; _jung = 0; _jong = 0;
 }
 
 - (NSString *)commitString {
@@ -48,7 +72,7 @@
 
 // Check types
 - (BOOL)isCho:(unichar)c { return c >= 0x1100 && c <= 0x1112; }
-- (BOOL)isJung:(unichar)c { return c >= 0x1161 && c <= 0x1175; }
+- (BOOL)isJung:(unichar)c { return (c >= 0x1161 && c <= 0x1175) || (c == 0x119E); }
 - (BOOL)isJong:(unichar)c { return (c >= 0x11A8 && c <= 0x11C2); }
 
 - (unichar)mapFromChar:(unichar)c {
@@ -135,6 +159,8 @@
         };
         return map[u - 0x1161];
     }
+    
+    if (u == 0x119E) return 0x318D; // Araea
     return u;
 }
 
@@ -145,6 +171,8 @@
 
 - (int)jungIndex:(unichar)c {
     if (c >= 0x1161 && c <= 0x1175) return c - 0x1161;
+    // Araea is not part of modern syllable block (U+AC00-U+D7A3), 
+    // but we support it as an independent jamo for now.
     return -1;
 }
 
@@ -210,8 +238,7 @@
     
     if (hangul == 0) {
         if (_cho || _jung || _jong) {
-            [_completed appendFormat:@"%C", [self currentSyllable]];
-            _cho = 0; _jung = 0; _jong = 0;
+            [self flush];
         }
         return NO;
     }
@@ -235,7 +262,7 @@
                         return YES;
                     } else {
                         // Moa-jjiki Disabled: Flush Jung, start new Cho
-                         [_completed appendFormat:@"%C", [self currentSyllable]];
+                         [self flush];
                          _cho = hangul; _jung = 0; _jong = 0;
                          return YES;
                     }
@@ -247,7 +274,7 @@
                     _jong = asJong;
                 } else {
                     // Start new syllable
-                    [_completed appendFormat:@"%C", [self currentSyllable]];
+                    [self flush];
                     _cho = hangul; _jung = 0; _jong = 0;
                 }
             } else { // Cho+Jung+Jong
@@ -257,7 +284,7 @@
                     _jong = compound;
                 } else {
                     // Flush, start new
-                    [_completed appendFormat:@"%C", [self currentSyllable]];
+                    [self flush];
                     _cho = hangul; _jung = 0; _jong = 0;
                 }
             }
@@ -271,12 +298,12 @@
             if (j2) {
                 _jong = j1;
                 unichar nextCho = [self jongToCho:j2];
-                [_completed appendFormat:@"%C", [self currentSyllable]];
+                [self flush];
                 _cho = nextCho; _jung = hangul; _jong = 0;
             } else {
                 unichar nextCho = [self jongToCho:_jong];
                 _jong = 0;
-                [_completed appendFormat:@"%C", [self currentSyllable]];
+                [self flush];
                 _cho = nextCho; _jung = hangul; _jong = 0;
             }
         } else if (_jung) {
@@ -386,6 +413,12 @@
     if (a == 0x116e && b == 0x1166) return 0x1170; // ㅞ
     if (a == 0x116e && b == 0x1175) return 0x1171; // ㅟ
     if (a == 0x1173 && b == 0x1175) return 0x1174; // ㅢ
+    
+    // Araea (Optional)
+    if (self.oldHangulEnabled) {
+        if (a == 0x1161 && b == 0x1161) return 0x119E; // ㅏ + ㅏ = ᆞ (Araea)
+    }
+    
     return 0;
 }
 
@@ -399,6 +432,7 @@
         case 0x1170: *j1 = 0x116e; *j2 = 0x1166; break; // ㅞ
         case 0x1171: *j1 = 0x116e; *j2 = 0x1175; break; // ㅟ
         case 0x1174: *j1 = 0x1173; *j2 = 0x1175; break; // ㅢ
+        case 0x119E: *j1 = 0x1161; *j2 = 0x1161; break; // ᆞ -> ㅏ + ㅏ
     }
 }
 

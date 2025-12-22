@@ -60,7 +60,7 @@
 				<key>TISIntendedLanguage</key>
 				<string>ko</string>
 				<key>tsInputModeAlternateMenuIconFileKey</key>
-				<string>Hangul.pdf</string>
+				<string>Hangul.tiff</string>
 				<key>tsInputModeDefaultStateKey</key>
 				<true/>
 				<key>tsInputModeIsVisibleKey</key>
@@ -70,9 +70,9 @@
 				<key>tsInputModeKeyEquivalentModifiersKey</key>
 				<integer>4608</integer>
 				<key>tsInputModeMenuIconFileKey</key>
-				<string>Hangul.pdf</string>
+				<string>Hangul.tiff</string>
 				<key>tsInputModePaletteIconFileKey</key>
-				<string>Hangul.pdf</string>
+				<string>Hangul.tiff</string>
 				<key>tsInputModePrimaryInScriptKey</key>
 				<false/>
 				<key>tsInputModeScriptKey</key>

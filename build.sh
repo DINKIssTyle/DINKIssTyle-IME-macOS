@@ -40,6 +40,7 @@ echo "Copying Resources..."
 cp Resources/*.tiff build/DKST.app/Contents/Resources/ 2>/dev/null || :
 cp Resources/*.icns build/DKST.app/Contents/Resources/ 2>/dev/null || :
 cp Resources/*.pdf build/DKST.app/Contents/Resources/ 2>/dev/null || :
+cp Resources/*.png build/DKST.app/Contents/Resources/ 2>/dev/null || :
 cp -r Resources/en.lproj build/DKST.app/Contents/Resources/
 cp -r Resources/ko.lproj build/DKST.app/Contents/Resources/
 

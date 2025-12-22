@@ -15,6 +15,7 @@
 
 @property (nonatomic, assign) BOOL moaJjikiEnabled;
 @property (nonatomic, assign) BOOL fullCharacterDelete;
+@property (nonatomic, assign) BOOL oldHangulEnabled;
 
 
 @end

@@ -14,6 +14,7 @@
         [[NSUserDefaults standardUserDefaults] registerDefaults:@{ 
             @"EnableCapsLockSwitch": @NO,
             @"EnableMoaJjiki": @YES,
+            @"EnableOldHangul": @NO,
             @"FullCharacterDelete": @NO,
             @"EnableCustomShift": @NO
         }];
@@ -35,6 +36,9 @@
     // Apply Preferences
     BOOL moaEnabled = [[NSUserDefaults standardUserDefaults] boolForKey:@"EnableMoaJjiki"];
     [engine setMoaJjikiEnabled:moaEnabled];
+    
+    BOOL oldHangulEnabled = [[NSUserDefaults standardUserDefaults] boolForKey:@"EnableOldHangul"];
+    [engine setOldHangulEnabled:oldHangulEnabled];
     
     BOOL fullDelete = [[NSUserDefaults standardUserDefaults] boolForKey:@"FullCharacterDelete"];
     [engine setFullCharacterDelete:fullDelete];
@@ -226,7 +230,14 @@
 - (void)showPreferences:(id)sender {
     NSString *path = [[NSBundle mainBundle] pathForResource:@"DKSTPreferences" ofType:@"app"];
     if (path) {
-        [[NSWorkspace sharedWorkspace] launchApplication:path];
+        NSURL *url = [NSURL fileURLWithPath:path];
+        [[NSWorkspace sharedWorkspace] openApplicationAtURL:url
+                                              configuration:[NSWorkspaceOpenConfiguration configuration]
+                                          completionHandler:^(NSRunningApplication * _Nullable app, NSError * _Nullable error) {
+            if (error) {
+                NSLog(@"DKST: Failed to launch Preferences: %@", error);
+            }
+        }];
     } else {
         NSLog(@"DKST: Could not find Preferences app at %@", path);
     }

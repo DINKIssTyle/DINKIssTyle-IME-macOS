@@ -4,10 +4,17 @@
 @interface PreferencesController : NSWindowController <NSTableViewDataSource, NSTableViewDelegate, NSWindowDelegate> {
     IBOutlet NSButton *capsLockSwitchCheckbox;
     IBOutlet NSButton *moaJjikiCheckbox;
-    IBOutlet NSButton *fullDeleteCheckbox;
-    
-    // New Feature
+    IBOutlet NSButton *oldHangulCheckbox;
     IBOutlet NSButton *customShiftCheckbox;
+    
+    // Icon Selection
+    IBOutlet NSButton *iconPdfRadio;
+    IBOutlet NSButton *iconPngRadio;
+    
+    // Backspace Behavior
+    IBOutlet NSButton *backspaceJasoRadio;
+    IBOutlet NSButton *backspaceGulpjaRadio;
+    
     IBOutlet NSTableView *mappingsTableView;
     
     NSMutableArray *mappingKeys;
