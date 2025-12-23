@@ -32,7 +32,7 @@ Universal Binary
   <img src="docs/install.sh.png" alt="Example Image" width="800">
 </p>
 
-- [마지막 릴리즈](https://github.com/DINKIssTyle/DINKIssTyle-IME-macOS/releases) 다운로드 하세요.
+- [마지막 릴리즈](https://github.com/DINKIssTyle/DINKIssTyle-IME-macOS/releases) 를 다운로드 하세요.
 - 압축을 풀고, 터미널에서 chmod +x 다운로드받은위치/install.command 를 실행하세요.
 - install.command 더블클릭 해서 실행합니다.
 
