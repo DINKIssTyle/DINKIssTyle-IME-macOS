@@ -16,7 +16,7 @@ mkdir -p build/DKST.app/Contents/Resources/Base.lproj
 
 # Compile Sources (Manual Reference Counting)
 echo "Compiling Sources..."
-clang -framework Cocoa -framework InputMethodKit \
+clang -arch x86_64 -arch arm64 -framework Cocoa -framework InputMethodKit \
     -o build/DKST.app/Contents/MacOS/DKST \
     Sources/*.m
 
@@ -51,7 +51,7 @@ echo "Compiling DKSTPreferences..."
 mkdir -p build/DKSTPreferences.app/Contents/MacOS
 mkdir -p build/DKSTPreferences.app/Contents/Resources
 
-clang -o build/DKSTPreferences.app/Contents/MacOS/DKSTPreferences \
+clang -arch x86_64 -arch arm64 -o build/DKSTPreferences.app/Contents/MacOS/DKSTPreferences \
     Sources/PreferencesApp/main.m \
     Sources/PreferencesController.m \
     Sources/DKSTConstants.m \

@@ -35,7 +35,7 @@
 // MARK: - Input Method Kit Methods
 
 - (void)activateServer:(id)sender {
-    NSLog(@"DKST: activateServer called");
+    DKSTLog(@"activateServer called");
     [sender overrideKeyboardWithKeyboardNamed:@"com.apple.keylayout.US"];
     
     // Apply Preferences
@@ -54,7 +54,7 @@
 }
 
 - (void)deactivateServer:(id)sender {
-    NSLog(@"DKST: deactivateServer called");
+    DKSTLog(@"deactivateServer called");
     [self commitComposition:sender];
 }
 
@@ -75,7 +75,7 @@
 
     // Process Candidate Navigation (Arrow keys, Enter, Space, numbers)
     if ([_candidates isVisible]) {
-        NSLog(@"DKST: Candidate window is visible, keyCode=%d", keyCode);
+        DKSTLog(@"Candidate window is visible, keyCode=%d", keyCode);
         BOOL handled = NO;
         if (keyCode == 126) { // Up
             [_candidates performSelector:@selector(moveUp:) withObject:sender];
@@ -99,23 +99,23 @@
             [_candidates hide];
             handled = YES;
         } else if (keyCode == 36 || keyCode == 49) { // Enter or Space
-            NSLog(@"DKST: Enter/Space pressed in candidate window");
+            DKSTLog(@"Enter/Space pressed in candidate window");
             // Select current
             NSAttributedString *current = [_candidates selectedCandidateString];
-            NSLog(@"DKST: selectedCandidateString=%@", current);
+            DKSTLog(@"selectedCandidateString=%@", current);
             
             // If no candidate is selected, try to use the first one from our persisted array
             if (!current && _currentHanjaCandidates && [_currentHanjaCandidates count] > 0) {
-                NSLog(@"DKST: Using first candidate from _currentHanjaCandidates");
+                DKSTLog(@"Using first candidate from _currentHanjaCandidates");
                 NSString *firstCandidate = [_currentHanjaCandidates objectAtIndex:0];
                 [self commitCandidate:firstCandidate client:sender];
                 handled = YES;
             } else if (current) {
-                NSLog(@"DKST: About to call commitCandidate");
+                DKSTLog(@"About to call commitCandidate");
                 [self commitCandidate:current client:sender];
                 handled = YES;
             } else {
-                NSLog(@"DKST: No candidate available, hiding window");
+                DKSTLog(@"No candidate available, hiding window");
                 [_candidates hide];
                 handled = YES;
             }
@@ -388,11 +388,11 @@
                                               configuration:[NSWorkspaceOpenConfiguration configuration]
                                           completionHandler:^(NSRunningApplication *app, NSError *error) {
             if (error) {
-                NSLog(@"DKST: Failed to launch Preferences app: %@", error);
+                DKSTLog(@"Failed to launch Preferences app: %@", error);
             }
         }];
     } else {
-        NSLog(@"DKST: Could not find Preferences app at %@", path);
+        DKSTLog(@"Could not find Preferences app at %@", path);
     }
 }
 
@@ -465,7 +465,7 @@
     }
     
     // Debug log
-    NSLog(@"DKST: commitCandidate selected='%@'", selected);
+    DKSTLog(@"commitCandidate selected='%@'", selected);
     
     if (selected) {
         NSString *hanja = [[selected componentsSeparatedByString:@" "] firstObject];
@@ -479,10 +479,10 @@
              [sender insertText:hanja replacementRange:NSMakeRange(0, length)];
              [engine reset];
         } else {
-             NSLog(@"DKST: Failed to extract hanja from '%@'", selected);
+             DKSTLog(@"Failed to extract hanja from '%@'", selected);
         }
     } else {
-        NSLog(@"DKST: No candidate selected to commit");
+        DKSTLog(@"No candidate selected to commit");
     }
     
     [_candidates hide];

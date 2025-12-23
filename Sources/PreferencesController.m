@@ -1,4 +1,5 @@
 #import "PreferencesController.h"
+#import "DKSTConstants.h"
 
 @implementation PreferencesController
 
@@ -147,7 +148,7 @@
 }
 
 - (void)showPreferences {
-    NSLog(@"PreferencesController: showPreferences called");
+    DKSTLog(@"PreferencesController: showPreferences called");
     NSWindow *window = [self window];
     [window center];
     [window makeKeyAndOrderFront:nil];
