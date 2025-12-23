@@ -11,7 +11,7 @@
   self = [super initWithServer:server delegate:delegate client:inputClient];
   if (self) {
     engine = [[DKSTHangul alloc] init];
-    currentMode = kDKSTHangulMode; // Default to Hangul
+    currentMode = [kDKSTHangulMode retain]; // Default to Hangul (Retain)
 
     // Set default preference
     [[NSUserDefaults standardUserDefaults] registerDefaults:@{
@@ -21,14 +21,27 @@
       @"EnableCustomShift" : @NO
     }];
 
-    _candidates = [[IMKCandidates alloc]
-        initWithServer:server
-             panelType:kIMKSingleColumnScrollingCandidatePanel];
-    [_candidates setAttributes:@{IMKCandidatesSendServerKeyEventFirst : @YES}];
-    [_candidates
-        setSelectionKeys:[NSArray arrayWithObjects:@"1", @"2", @"3", @"4", @"5",
-                                                   @"6", @"7", @"8", @"9",
-                                                   nil]];
+    // Fix: Check if client is our Preferences App to avoid creating candidates
+    // for it This prevents "zombie" candidate windows when Prefs app is closed
+    NSString *clientBundleID = [inputClient bundleIdentifier];
+    BOOL isPreferencesApp = [clientBundleID
+        isEqualToString:@"com.dinkisstyle.inputmethod.DKST.preferences"];
+
+    if (!isPreferencesApp) {
+      _candidates = [[IMKCandidates alloc]
+          initWithServer:server
+               panelType:kIMKSingleColumnScrollingCandidatePanel];
+      [_candidates
+          setAttributes:@{IMKCandidatesSendServerKeyEventFirst : @YES}];
+      [_candidates
+          setSelectionKeys:[NSArray arrayWithObjects:@"1", @"2", @"3", @"4",
+                                                     @"5", @"6", @"7", @"8",
+                                                     @"9", nil]];
+    } else {
+      DKSTLog(
+          @"Initialized for Preferences App - Skipping Candidates creation");
+      _candidates = nil;
+    }
   }
   return self;
 }
@@ -36,6 +49,7 @@
 - (void)dealloc {
   [_candidates release];
   [engine release];
+  [currentMode release]; // Proper cleanup
   [super dealloc];
 }
 
@@ -43,7 +57,24 @@
 
 - (void)activateServer:(id)sender {
   DKSTLog(@"activateServer called");
-  [sender overrideKeyboardWithKeyboardNamed:@"com.apple.keylayout.US"];
+
+  // Fix: Initialize current mode SAFELY before using it
+  // Since we rely on system switching, this Input Method should always be in
+  // Hangul mode when active.
+  if (currentMode != kDKSTHangulMode) {
+    [currentMode release];
+    currentMode = [kDKSTHangulMode retain];
+  }
+
+  // Always call super first
+  [super activateServer:sender];
+
+  @try {
+    [sender overrideKeyboardWithKeyboardNamed:@"com.apple.keylayout.US"];
+    [sender selectInputMode:currentMode];
+  } @catch (NSException *exception) {
+    DKSTLog(@"Exception in activateServer: %@", exception);
+  }
 
   // Apply Preferences
   BOOL moaEnabled =
@@ -56,16 +87,24 @@
 
   // Ensure clean state and force Hangul mode on activation
   [engine reset];
-
-  // Since we rely on system switching, this Input Method should always be in
-  // Hangul mode when active.
-  currentMode = kDKSTHangulMode;
-  [sender selectInputMode:currentMode];
 }
 
 - (void)deactivateServer:(id)sender {
   DKSTLog(@"deactivateServer called");
-  [self commitComposition:sender];
+
+  // Cleanup candidates before anything else
+  if (_candidates) {
+    [_candidates hide];
+  }
+
+  @try {
+    [self commitComposition:sender];
+  } @catch (NSException *exception) {
+    DKSTLog(@"Exception in deactivateServer: %@", exception);
+  }
+
+  // Always call super last
+  [super deactivateServer:sender];
 }
 
 - (BOOL)handleEvent:(NSEvent *)event client:(id)sender {
@@ -581,7 +620,11 @@
   if (tag == kTextServiceInputModePropertyTag) {
     NSString *newMode = (NSString *)value;
     if (newMode) {
-      currentMode = newMode;
+      // Proper MRC retain/release
+      if (currentMode != newMode) {
+        [currentMode release];
+        currentMode = [newMode retain];
+      }
       [self commitComposition:sender];
     }
   }
@@ -644,7 +687,11 @@
 - (void)selectInputMode:(id)sender {
   NSInteger tag = [sender tag];
   NSString *newMode = (tag == 0) ? kDKSTEnglishMode : kDKSTHangulMode;
-  currentMode = newMode;
+
+  if (currentMode != newMode) {
+    [currentMode release];
+    currentMode = [newMode retain];
+  }
 
   [[self client] selectInputMode:newMode];
 }
