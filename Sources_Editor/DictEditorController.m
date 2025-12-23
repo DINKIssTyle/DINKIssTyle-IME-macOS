@@ -280,7 +280,19 @@
 
 - (void)showSaveSuccess {
   NSString *oldStatus = [self.statusLabel stringValue];
-  [self.statusLabel setStringValue:@"Saved successfully!"];
+  [self.statusLabel setStringValue:@"Saved! Restarting DKST..."];
+
+  // Kill DKST process so the dictionary changes take effect
+  // The system will automatically restart the IME when needed
+  NSTask *task = [[NSTask alloc] init];
+  [task setLaunchPath:@"/usr/bin/pkill"];
+  [task setArguments:@[ @"-x", @"DKST" ]];
+  @try {
+    [task launch];
+  } @catch (NSException *exception) {
+    // Ignore if pkill fails (process might not be running)
+  }
+
   [self performSelector:@selector(restoreStatus:)
              withObject:oldStatus
              afterDelay:2.0];
