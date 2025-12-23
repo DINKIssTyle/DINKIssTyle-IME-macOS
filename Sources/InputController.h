@@ -5,6 +5,8 @@
 @interface InputController : IMKInputController {
     DKSTHangul *engine;
     NSString *currentMode;
+    IMKCandidates *_candidates;
+    NSArray *_currentHanjaCandidates;
 }
 
 - (void)updateComposition:(id)sender;
