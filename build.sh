@@ -43,8 +43,11 @@ mkdir -p build/DKST.app/Contents/MacOS
 mkdir -p build/DKST.app/Contents/Resources/Base.lproj
 
 # Compile Sources (Manual Reference Counting)
+# -mmacosx-version-min ensures the binary runs on macOS 10.15+
+# even when built on newer macOS (e.g., macOS 26 beta)
 echo "Compiling Sources..."
-clang -arch x86_64 -arch arm64 $OPTIMIZATION $DEBUG_FLAGS \
+clang -arch x86_64 -arch arm64 -mmacosx-version-min=10.15 \
+    $OPTIMIZATION $DEBUG_FLAGS \
     -framework Cocoa -framework InputMethodKit \
     -o build/DKST.app/Contents/MacOS/DKST \
     Sources/*.m
@@ -81,7 +84,8 @@ echo "Compiling DKSTPreferences..."
 mkdir -p build/DKSTPreferences.app/Contents/MacOS
 mkdir -p build/DKSTPreferences.app/Contents/Resources
 
-clang -arch x86_64 -arch arm64 $OPTIMIZATION $DEBUG_FLAGS \
+clang -arch x86_64 -arch arm64 -mmacosx-version-min=10.15 \
+    $OPTIMIZATION $DEBUG_FLAGS \
     -o build/DKSTPreferences.app/Contents/MacOS/DKSTPreferences \
     Sources/PreferencesApp/main.m \
     Sources/PreferencesController.m \
