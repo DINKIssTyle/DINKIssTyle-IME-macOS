@@ -42,10 +42,28 @@ case $CHOICE in
 
         echo "관리자 권한이 필요합니다. 비밀번호를 입력해주세요."
         
+        # 0. 기존 hanja.txt 백업 (사용자 수정본 보존)
+        HANJA_FILE="${DEST_APP}/Contents/Resources/hanja.txt"
+        HANJA_BACKUP="/tmp/hanja_backup_$$.txt"
+        if [ -f "$HANJA_FILE" ]; then
+            echo "기존 hanja.txt 파일을 백업 중..."
+            sudo cp "$HANJA_FILE" "$HANJA_BACKUP"
+            HANJA_PRESERVED=true
+        else
+            HANJA_PRESERVED=false
+        fi
+        
         # 1. 기존 파일 정리 및 새 파일 복사
         echo "기존 앱 파일 제거 및 새 파일 복사 중..."
         sudo rm -rf "$DEST_APP"
         sudo cp -R "$SOURCE_APP" "$DEST_DIR/"
+        
+        # 1.5. 백업한 hanja.txt 복원
+        if [ "$HANJA_PRESERVED" = true ] && [ -f "$HANJA_BACKUP" ]; then
+            echo "사용자 hanja.txt 파일 복원 중..."
+            sudo cp "$HANJA_BACKUP" "$HANJA_FILE"
+            rm -f "$HANJA_BACKUP"
+        fi
         
         # 2. xattr 실행 (격리 해제)
         echo "확장 속성(quarantine) 제거 중..."
