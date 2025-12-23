@@ -93,31 +93,27 @@
 - (void)deactivateServer:(id)sender {
   DKSTLog(@"deactivateServer called");
 
-  // Cleanup candidates before anything else
-  if (_candidates) {
-    [_candidates hide];
-  }
+  // NOTE: Do NOT manipulate _candidates here!
+  // InputMethodKit manages candidates internally and accessing it during
+  // deactivation can cause crashes if InputMethodKit has already released
+  // internal references.
 
-  // Clear any existing Hanja candidates data
+  // Clear our own Hanja candidates data only
   if (_currentHanjaCandidates) {
     [_currentHanjaCandidates release];
     _currentHanjaCandidates = nil;
   }
   _currentHanjaIndex = 0;
 
+  // Commit any pending composition
   @try {
     [self commitComposition:sender];
   } @catch (NSException *exception) {
     DKSTLog(@"Exception in deactivateServer (commit): %@", exception);
   }
 
-  // Always call super last, wrapped in try-catch to prevent crash
-  @
-  try {
-    [super deactivateServer:sender];
-  } @catch (NSException *exception) {
-    DKSTLog(@"Exception in deactivateServer (super): %@", exception);
-  }
+  // Call super - this is required for proper cleanup
+  [super deactivateServer:sender];
 }
 
 - (BOOL)handleEvent:(NSEvent *)event client:(id)sender {
