@@ -32,11 +32,9 @@ Universal Binary
   <img src="docs/install.sh.png" alt="Example Image" width="800">
 </p>
 
-- 마지막 릴리즈를 https://github.com/DINKIssTyle/DINKIssTyle-IME-macOS/releas 다운로드 하세요.
+- [마지막 릴리즈](https://github.com/DINKIssTyle/DINKIssTyle-IME-macOS/releases) 다운로드 하세요.
+- 압축을 풀고, 터미널에서 chmod +x 다운로드받은위치/install.command 를 실행하세요.
 - install.command 더블클릭 해서 실행합니다.
-- 만약 install.command 가 실행되지 않으면 터미널을 이용해서 실행권한을 줘야 합니다.  
-  터미널에서 chmod +x install.command 를 실행하세요.
-
 
 ***이 프로젝트의 기본적인 한국어 입력기 구조는 바람입력기를 참고해서 작성되었습니다.***
 ***https://baramim.blogspot.com/***  
