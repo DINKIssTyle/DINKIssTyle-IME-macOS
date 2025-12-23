@@ -1,4 +1,5 @@
 #import "DKSTHanjaDictionary.h"
+#import "DKSTConstants.h"
 
 @implementation DKSTHanjaDictionary {
     NSDictionary *_dictionary;
@@ -16,16 +17,52 @@
 - (instancetype)init {
     self = [super init];
     if (self) {
-        // Initialize with sample data
-        // In a real app, load from a file.
-        _dictionary = @{
-            @"한": @[@"韓 (한국 한)", @"漢 (한수 한)", @"汗 (땀 한)", @"限 (한할 한)"],
-            @"국": @[@"國 (나라 국)", @"局 (판 국)", @"菊 (국화 국)"],
-            @"대": @[@"大 (큰 대)", @"代 (대신할 대)", @"待 (기다릴 대)", @"對 (대할 대)"],
-            @"한글": @[@"한글 (우리 글자)"],
-            @"대한민국": @[@"大韓民國"]
-        };
-        [_dictionary retain];
+        NSMutableDictionary *dict = [NSMutableDictionary dictionary];
+        
+        // Load from hanja.txt in bundle
+        NSString *path = [[NSBundle mainBundle] pathForResource:@"hanja" ofType:@"txt"];
+        DKSTLog(@"Loading Hanja dictionary from: %@", path);
+        
+        if (path) {
+            NSError *error = nil;
+            NSString *content = [NSString stringWithContentsOfFile:path encoding:NSUTF8StringEncoding error:&error];
+            if (content) {
+                NSArray *lines = [content componentsSeparatedByString:@"\n"];
+                for (NSString *line in lines) {
+                    if ([line length] == 0) continue;
+                    
+                    // Format: Hangul:Hanja1,Hanja2,...
+                    NSArray *parts = [line componentsSeparatedByString:@":"];
+                    if ([parts count] == 2) {
+                        NSString *key = [parts objectAtIndex:0];
+                        NSString *valuesStr = [parts objectAtIndex:1];
+                        NSArray *values = [valuesStr componentsSeparatedByString:@","];
+                        
+                        // Trim whitespace
+                        NSMutableArray *trimmedValues = [NSMutableArray array];
+                        for (NSString *v in values) {
+                            NSString *trimmed = [v stringByTrimmingCharactersInSet:[NSCharacterSet whitespaceCharacterSet]];
+                            if ([trimmed length] > 0) {
+                                [trimmedValues addObject:trimmed];
+                            }
+                        }
+                        
+                        if ([trimmedValues count] > 0) {
+                            [dict setObject:trimmedValues forKey:key];
+                        }
+                    }
+                }
+            } else {
+                DKSTLog(@"Failed to read hanja.txt: %@", error);
+            }
+        }
+        
+        // Use parsed dictionary, or empty if failed
+        _dictionary = [dict copy]; // Helper makes it immutable
+        
+        // If file load failed or was empty, maybe fallback?
+        // For now, let's just log.
+        DKSTLog(@"Loaded %lu Hanja entries", (unsigned long)[_dictionary count]);
     }
     return self;
 }

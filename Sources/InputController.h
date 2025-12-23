@@ -7,6 +7,7 @@
     NSString *currentMode;
     IMKCandidates *_candidates;
     NSArray *_currentHanjaCandidates;
+    NSRange _selectedTextRange;  // For selected text Hanja conversion
 }
 
 - (void)updateComposition:(id)sender;

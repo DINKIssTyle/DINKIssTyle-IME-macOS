@@ -180,14 +180,33 @@
     if (hanjaEnabled && (keyCode == 36) && (modifiers == NSEventModifierFlagOption)) {
          NSString *composed = [engine composedString];
          if ([composed length] > 0) {
+             // Existing behavior: Convert composed text
              NSArray *candidates = [[DKSTHanjaDictionary sharedDictionary] hanjaForHangul:composed];
+             
+             // Always include the original text as a candidate (like Apple's default IME)
+             NSMutableArray *allCandidates = [NSMutableArray array];
              if (candidates && [candidates count] > 0) {
-                 if (_currentHanjaCandidates) {
-                     [_currentHanjaCandidates release];
-                 }
-                 _currentHanjaCandidates = [candidates retain];
+                 [allCandidates addObjectsFromArray:candidates];
+             }
+             // Add original text (truncate if too long)
+             NSString *originalText = composed;
+             if ([originalText length] > 10) {
+                 originalText = [[originalText substringToIndex:10] stringByAppendingString:@"..."];
+             }
+             [allCandidates addObject:originalText];
+             
+             if ([allCandidates count] > 0) {
+                 _currentHanjaCandidates = [allCandidates retain];
                  
-                 [_candidates setCandidateData:candidates];
+                 // Mark that we're converting composed text (not selected)
+                 _selectedTextRange = NSMakeRange(NSNotFound, 0);
+                 
+                 DKSTLog(@"Candidates count: %lu", (unsigned long)[allCandidates count]);
+                 for (NSUInteger i = 0; i < [allCandidates count]; i++) {
+                     DKSTLog(@"  Candidate[%lu]: '%@' (class: %@)", i, [allCandidates objectAtIndex:i], [[allCandidates objectAtIndex:i] class]);
+                 }
+                 
+                 // Use updateCandidates to trigger data source method candidates:
                  [_candidates updateCandidates];
                  [_candidates show:kIMKLocateCandidatesBelowHint]; 
                  
@@ -198,10 +217,57 @@
                  }
                  return YES;
              }
+         } else {
+             // New behavior: Try to convert selected text
+             NSRange selectedRange = [sender selectedRange];
+             DKSTLog(@"Selected range: location=%lu, length=%lu", (unsigned long)selectedRange.location, (unsigned long)selectedRange.length);
+             
+             if (selectedRange.length > 0 && selectedRange.location != NSNotFound) {
+                 NSAttributedString *selectedAttrString = [sender attributedSubstringFromRange:selectedRange];
+                 NSString *selectedText = [selectedAttrString string];
+                 DKSTLog(@"Selected text: %@", selectedText);
+                 
+                 if (selectedText && [selectedText length] > 0) {
+                     NSArray *candidates = [[DKSTHanjaDictionary sharedDictionary] hanjaForHangul:selectedText];
+                     
+                     // Always include the original text as a candidate
+                     NSMutableArray *allCandidates = [NSMutableArray array];
+                     if (candidates && [candidates count] > 0) {
+                         [allCandidates addObjectsFromArray:candidates];
+                     }
+                     // Add original text (truncate if too long)
+                     NSString *originalText = selectedText;
+                     if ([originalText length] > 10) {
+                         originalText = [[originalText substringToIndex:10] stringByAppendingString:@"..."];
+                     }
+                     [allCandidates addObject:originalText];
+                     
+                     if ([allCandidates count] > 0) {
+                         _currentHanjaCandidates = [allCandidates retain];
+                         
+                         // Store the selected range for later replacement
+                         _selectedTextRange = selectedRange;
+                         
+                         DKSTLog(@"Candidates for '%@': count=%lu", selectedText, (unsigned long)[allCandidates count]);
+                         for (NSUInteger i = 0; i < [allCandidates count]; i++) {
+                             DKSTLog(@"  Candidate[%lu]: '%@' (class: %@)", i, [allCandidates objectAtIndex:i], [[allCandidates objectAtIndex:i] class]);
+                         }
+                         
+                         // Use updateCandidates to trigger data source method candidates:
+                         [_candidates updateCandidates];
+                         [_candidates show:kIMKLocateCandidatesBelowHint];
+                         
+                         // Force select the first candidate
+                         NSInteger firstId = [_candidates candidateIdentifierAtLineNumber:0];
+                         if (firstId != NSNotFound) {
+                             [_candidates selectCandidateWithIdentifier:firstId];
+                         }
+                         return YES;
+                     }
+                 }
+             }
          }
-    }
-
-    // Allow Pass-through for Command/Ctrl/Option
+    }// Allow Pass-through for Command/Ctrl/Option
     // If modifiers have Cmd/Ctrl/Option, pass through. Shift is allowed for processing.
     if ((modifiers & (NSEventModifierFlagCommand | NSEventModifierFlagControl | NSEventModifierFlagOption)) != 0) {
         [self commitComposition:sender];
@@ -442,11 +508,11 @@
 }
 
 // IMKCandidates Data Source
-// IMKCandidates Data Source
 - (NSArray *)candidates:(id)sender {
-    NSString *composed = [engine composedString];
-    if ([composed length] > 0) {
-        return [[DKSTHanjaDictionary sharedDictionary] hanjaForHangul:composed];
+    // Return the cached candidates array
+    if (_currentHanjaCandidates && [_currentHanjaCandidates count] > 0) {
+        DKSTLog(@"candidates: returning %lu items", (unsigned long)[_currentHanjaCandidates count]);
+        return _currentHanjaCandidates;
     }
     return nil;
 }
@@ -470,20 +536,34 @@
     if (selected) {
         NSString *hanja = [[selected componentsSeparatedByString:@" "] firstObject];
         if (hanja && [hanja length] > 0) {
-             // Get the length of the composed Hangul to replace
-             NSString *composed = [engine composedString];
-             NSUInteger length = [composed length];
+             NSRange replacementRange;
              
-             // Insert Hanja, replacing the composed Hangul
-             // replacementRange with location=0 and length=composedLength will replace the marked text
-             [sender insertText:hanja replacementRange:NSMakeRange(0, length)];
-             [engine reset];
+             // Check if we're replacing selected text or composed text
+             if (_selectedTextRange.location != NSNotFound && _selectedTextRange.length > 0) {
+                 // Replacing selected text
+                 replacementRange = _selectedTextRange;
+                 DKSTLog(@"Replacing selected text at range: location=%lu, length=%lu", 
+                        (unsigned long)replacementRange.location, (unsigned long)replacementRange.length);
+             } else {
+                 // Replacing composed text (existing behavior)
+                 NSString *composed = [engine composedString];
+                 NSUInteger length = [composed length];
+                 replacementRange = NSMakeRange(0, length);
+                 DKSTLog(@"Replacing composed text, length=%lu", (unsigned long)length);
+                 [engine reset];
+             }
+             
+             // Insert Hanja, replacing the text
+             [sender insertText:hanja replacementRange:replacementRange];
         } else {
              DKSTLog(@"Failed to extract hanja from '%@'", selected);
         }
     } else {
         DKSTLog(@"No candidate selected to commit");
     }
+    
+    // Reset selected range
+    _selectedTextRange = NSMakeRange(NSNotFound, 0);
     
     [_candidates hide];
     if (_currentHanjaCandidates) {
