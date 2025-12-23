@@ -6,6 +6,8 @@
     IBOutlet NSButton *moaJjikiCheckbox;
     IBOutlet NSButton *fullDeleteCheckbox;
     
+    IBOutlet NSButton *hanjaConversionCheckbox;
+    
     // New Feature
     IBOutlet NSButton *customShiftCheckbox;
     IBOutlet NSTableView *mappingsTableView;
@@ -29,6 +31,7 @@
 - (void)showPreferences;
 - (IBAction)toggleCapsLockSwitch:(id)sender;
 - (IBAction)toggleMoaJjiki:(id)sender;
+- (IBAction)toggleHanjaConversion:(id)sender;
 - (IBAction)toggleFullDelete:(id)sender;
 
 

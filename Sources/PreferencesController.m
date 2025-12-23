@@ -18,7 +18,7 @@
 }
 
 - (id)init {
-    NSRect frame = NSMakeRect(0, 0, 450, 400); 
+    NSRect frame = NSMakeRect(0, 0, 450, 430); 
     NSWindow *window = [[[NSWindow alloc] initWithContentRect:frame
                                                     styleMask:(NSWindowStyleMaskTitled | NSWindowStyleMaskClosable | NSWindowStyleMaskMiniaturizable)
                                                       backing:NSBackingStoreBuffered
@@ -50,7 +50,7 @@
         }
         
         // 1. Caps Lock
-        capsLockSwitchCheckbox = [[[NSButton alloc] initWithFrame:NSMakeRect(20, 360, 400, 24)] autorelease];
+        capsLockSwitchCheckbox = [[[NSButton alloc] initWithFrame:NSMakeRect(20, 390, 400, 24)] autorelease];
         [capsLockSwitchCheckbox setButtonType:NSButtonTypeSwitch];
         [capsLockSwitchCheckbox setTitle:@"Caps Lock을 눌러 입력 언어 전환"];
         [capsLockSwitchCheckbox setTarget:self];
@@ -58,12 +58,20 @@
         [contentView addSubview:capsLockSwitchCheckbox];
 
         // 2. Moa-jjiki
-        moaJjikiCheckbox = [[[NSButton alloc] initWithFrame:NSMakeRect(20, 330, 400, 24)] autorelease];
+        moaJjikiCheckbox = [[[NSButton alloc] initWithFrame:NSMakeRect(20, 360, 400, 24)] autorelease];
         [moaJjikiCheckbox setButtonType:NSButtonTypeSwitch];
         [moaJjikiCheckbox setTitle:@"모아치기 (자모 순서 자동 보정)"];
         [moaJjikiCheckbox setTarget:self];
         [moaJjikiCheckbox setAction:@selector(toggleMoaJjiki:)];
         [contentView addSubview:moaJjikiCheckbox];
+        
+        // 2.5. Hanja Conversion
+        hanjaConversionCheckbox = [[[NSButton alloc] initWithFrame:NSMakeRect(20, 330, 400, 24)] autorelease];
+        [hanjaConversionCheckbox setButtonType:NSButtonTypeSwitch];
+        [hanjaConversionCheckbox setTitle:@"한자 변환 사용 (Option + Enter)"];
+        [hanjaConversionCheckbox setTarget:self];
+        [hanjaConversionCheckbox setAction:@selector(toggleHanjaConversion:)];
+        [contentView addSubview:hanjaConversionCheckbox];
         
         // 3. Custom Shift Enable (Moved Down)
         customShiftCheckbox = [[[NSButton alloc] initWithFrame:NSMakeRect(20, 270, 400, 24)] autorelease];
@@ -160,6 +168,15 @@
     } else {
         BOOL moaEnabled = [defaults boolForKey:@"EnableMoaJjiki"];
         [moaJjikiCheckbox setState:(moaEnabled ? NSControlStateValueOn : NSControlStateValueOff)];
+        [moaJjikiCheckbox setState:(moaEnabled ? NSControlStateValueOn : NSControlStateValueOff)];
+    }
+    
+    // Hanja Conversion Default: YES
+    if ([defaults objectForKey:@"EnableHanja"] == nil) {
+        [hanjaConversionCheckbox setState:NSControlStateValueOn];
+    } else {
+        BOOL hanjaEnabled = [defaults boolForKey:@"EnableHanja"];
+        [hanjaConversionCheckbox setState:(hanjaEnabled ? NSControlStateValueOn : NSControlStateValueOff)];
     }
     
     BOOL fullDelete = [defaults boolForKey:@"FullCharacterDelete"];
@@ -183,6 +200,12 @@
 - (IBAction)toggleMoaJjiki:(id)sender {
     BOOL enabled = ([sender state] == NSControlStateValueOn);
     [[self defaults] setBool:enabled forKey:@"EnableMoaJjiki"];
+    [[self defaults] synchronize];
+}
+
+- (IBAction)toggleHanjaConversion:(id)sender {
+    BOOL enabled = ([sender state] == NSControlStateValueOn);
+    [[self defaults] setBool:enabled forKey:@"EnableHanja"];
     [[self defaults] synchronize];
 }
 

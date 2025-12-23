@@ -172,7 +172,12 @@
 
 
     // Hanja Conversion: Option + Return (keyCode 36)
-    if ((keyCode == 36) && (modifiers == NSEventModifierFlagOption)) {
+    BOOL hanjaEnabled = YES;
+    if ([[NSUserDefaults standardUserDefaults] objectForKey:@"EnableHanja"] != nil) {
+        hanjaEnabled = [[NSUserDefaults standardUserDefaults] boolForKey:@"EnableHanja"];
+    }
+    
+    if (hanjaEnabled && (keyCode == 36) && (modifiers == NSEventModifierFlagOption)) {
          NSString *composed = [engine composedString];
          if ([composed length] > 0) {
              NSArray *candidates = [[DKSTHanjaDictionary sharedDictionary] hanjaForHangul:composed];
