@@ -31,8 +31,16 @@
       _candidates = [[IMKCandidates alloc]
           initWithServer:server
                panelType:kIMKSingleColumnScrollingCandidatePanel];
-      [_candidates
-          setAttributes:@{IMKCandidatesSendServerKeyEventFirst : @YES}];
+
+      // Style attributes to match Apple's Korean IME
+      NSDictionary *styleAttributes = @{
+        IMKCandidatesSendServerKeyEventFirst : @YES,
+        IMKCandidatesOpacityAttributeName : @(1.0),
+        @"IMKCandidatesFont" : [NSFont systemFontOfSize:15.0
+                                                 weight:NSFontWeightRegular]
+      };
+      [_candidates setAttributes:styleAttributes];
+
       [_candidates
           setSelectionKeys:[NSArray arrayWithObjects:@"1", @"2", @"3", @"4",
                                                      @"5", @"6", @"7", @"8",

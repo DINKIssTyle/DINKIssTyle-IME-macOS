@@ -120,12 +120,9 @@ extern NSString *const kDKSTVerboseModeKey;
 #define NSLog_VM(...)
 #endif
 
-// User Request: Debug Logging Toggle
-#define DKST_DEBUG_LOGGING NO
-
-#define DKSTLog(fmt, ...)                                                      \
-  do {                                                                         \
-    if (DKST_DEBUG_LOGGING) {                                                  \
-      NSLog((@"DKST: " fmt), ##__VA_ARGS__);                                   \
-    }                                                                          \
-  } while (0)
+// Debug logging - automatically enabled in DEBUG builds, disabled in RELEASE
+#ifdef DEBUG
+#define DKSTLog(fmt, ...) NSLog((@"DKST: " fmt), ##__VA_ARGS__)
+#else
+#define DKSTLog(...)
+#endif
