@@ -6,9 +6,9 @@
   <img src="docs/Main_img.png" alt="Icon Image" width="128">
 </p>
 
-macOS용 DKST 한글입력기
-macOS 10.15 Catalina+
-Universal Binary
+macOS용 DKST 한글입력기  
+macOS 10.15 Catalina+  
+Universal Binary  
 
 
 ---
