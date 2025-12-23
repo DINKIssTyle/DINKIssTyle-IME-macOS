@@ -1,3 +1,4 @@
+#import <Foundation/Foundation.h>
 extern NSString *const kDKSTBundleID;
 extern NSString *const kDKSTConnection;
 
@@ -97,18 +98,24 @@ extern NSString *const kDKSTUpdateLastCheckKey;
 // For developer
 extern NSString *const kDKSTVerboseModeKey;
 
-#define ANYMODMASK   0xffff0000
-#define LEFTMODMASK  (ANYMODMASK | NX_DEVICELCTLKEYMASK | NX_DEVICELSHIFTKEYMASK | NX_DEVICELCMDKEYMASK | NX_DEVICELALTKEYMASK)
-#define RIGHTMODMASK (ANYMODMASK | NX_DEVICERCTLKEYMASK | NX_DEVICERSHIFTKEYMASK | NX_DEVICERCMDKEYMASK | NX_DEVICERALTKEYMASK)
+#define ANYMODMASK 0xffff0000
+#define LEFTMODMASK                                                            \
+  (ANYMODMASK | NX_DEVICELCTLKEYMASK | NX_DEVICELSHIFTKEYMASK |                \
+   NX_DEVICELCMDKEYMASK | NX_DEVICELALTKEYMASK)
+#define RIGHTMODMASK                                                           \
+  (ANYMODMASK | NX_DEVICERCTLKEYMASK | NX_DEVICERSHIFTKEYMASK |                \
+   NX_DEVICERCMDKEYMASK | NX_DEVICERALTKEYMASK)
 
 #ifdef DEBUG
-#define DLOG(fmt, ...) NSLog((@"%s [Line %d] " fmt), __PRETTY_FUNCTION__, __LINE__, ##__VA_ARGS__);
+#define DLOG(fmt, ...)                                                         \
+  NSLog((@"%s [Line %d] " fmt), __PRETTY_FUNCTION__, __LINE__, ##__VA_ARGS__);
 #else
 #define DLOG(...)
 #endif
 
 #ifdef DEBUG
-#define NSLog_VM(fmt, ...) NSLog((@"%s [Line %d] " fmt), __PRETTY_FUNCTION__, __LINE__, ##__VA_ARGS__);
+#define NSLog_VM(fmt, ...)                                                     \
+  NSLog((@"%s [Line %d] " fmt), __PRETTY_FUNCTION__, __LINE__, ##__VA_ARGS__);
 #else
 #define NSLog_VM(...)
 #endif
@@ -116,8 +123,9 @@ extern NSString *const kDKSTVerboseModeKey;
 // User Request: Debug Logging Toggle
 #define DKST_DEBUG_LOGGING NO
 
-#define DKSTLog(fmt, ...) do { \
-    if (DKST_DEBUG_LOGGING) { \
-        NSLog((@"DKST: " fmt), ##__VA_ARGS__); \
-    } \
-} while(0)
+#define DKSTLog(fmt, ...)                                                      \
+  do {                                                                         \
+    if (DKST_DEBUG_LOGGING) {                                                  \
+      NSLog((@"DKST: " fmt), ##__VA_ARGS__);                                   \
+    }                                                                          \
+  } while (0)
