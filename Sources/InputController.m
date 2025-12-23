@@ -10,6 +10,8 @@
               client:(id)inputClient {
   self = [super initWithServer:server delegate:delegate client:inputClient];
   if (self) {
+    DKSTLog(@"InputController initWithServer: %@ delegate: %@ client: %@",
+            server, delegate, inputClient);
     engine = [[DKSTHangul alloc] init];
     currentMode = [kDKSTHangulMode retain]; // Default to Hangul (Retain)
 
@@ -21,44 +23,62 @@
       @"EnableCustomShift" : @NO
     }];
 
-    // Fix: Check if client is our Preferences App to avoid creating candidates
-    // for it This prevents "zombie" candidate windows when Prefs app is closed
+    // Note: We previously skipped IMKCandidates creation for Preferences app,
+    // but this caused crashes because InputMethodKit internally accesses
+    // _candidates (e.g., calling isVisible) during deactivation.
+    // Always create candidates to satisfy InputMethodKit's expectations.
     NSString *clientBundleID = [inputClient bundleIdentifier];
     BOOL isPreferencesApp = [clientBundleID
         isEqualToString:@"com.dinkisstyle.inputmethod.DKST.preferences"];
-
-    if (!isPreferencesApp) {
-      _candidates = [[IMKCandidates alloc]
-          initWithServer:server
-               panelType:kIMKSingleColumnScrollingCandidatePanel];
-
-      // Style attributes to match Apple's Korean IME
-      NSDictionary *styleAttributes = @{
-        IMKCandidatesSendServerKeyEventFirst : @YES,
-        IMKCandidatesOpacityAttributeName : @(1.0),
-        @"IMKCandidatesFont" : [NSFont systemFontOfSize:15.0
-                                                 weight:NSFontWeightRegular]
-      };
-      [_candidates setAttributes:styleAttributes];
-
-      [_candidates
-          setSelectionKeys:[NSArray arrayWithObjects:@"1", @"2", @"3", @"4",
-                                                     @"5", @"6", @"7", @"8",
-                                                     @"9", nil]];
-    } else {
-      DKSTLog(
-          @"Initialized for Preferences App - Skipping Candidates creation");
-      _candidates = nil;
+    if (isPreferencesApp) {
+      DKSTLog(@"Initialized for Preferences App");
     }
+
+    // Always create IMKCandidates for all clients
+    _candidates = [[IMKCandidates alloc]
+        initWithServer:server
+             panelType:kIMKSingleColumnScrollingCandidatePanel];
+
+    // Style attributes to match Apple's Korean IME
+    NSDictionary *styleAttributes = @{
+      IMKCandidatesSendServerKeyEventFirst : @YES,
+      IMKCandidatesOpacityAttributeName : @(1.0),
+      @"IMKCandidatesFont" : [NSFont systemFontOfSize:15.0
+                                               weight:NSFontWeightRegular]
+    };
+    [_candidates setAttributes:styleAttributes];
+
+    [_candidates
+        setSelectionKeys:[NSArray arrayWithObjects:@"1", @"2", @"3", @"4", @"5",
+                                                   @"6", @"7", @"8", @"9",
+                                                   nil]];
   }
   return self;
 }
 
 - (void)dealloc {
-  [_candidates release];
-  [_currentHanjaCandidates release]; // Fix leak
-  [engine release];
-  [currentMode release]; // Proper cleanup
+  DKSTLog(@"InputController dealloc called");
+
+  // WARNING: Do NOT release _candidates here!
+  // InputMethodKit internally caches a reference to the IMKCandidates object
+  // and may call methods on it (like isVisible) after our dealloc is called.
+  // Releasing it here causes a use-after-free crash in
+  // -[_IMKServerLegacy deactivateServer_CommonWithClientWrapper:controller:]
+  // This is a known issue/workaround for macOS 26 beta InputMethodKit.
+  // The memory will be managed by InputMethodKit.
+
+  if (_currentHanjaCandidates) {
+    [_currentHanjaCandidates release];
+    _currentHanjaCandidates = nil;
+  }
+  if (engine) {
+    [engine release];
+    engine = nil;
+  }
+  if (currentMode) {
+    [currentMode release];
+    currentMode = nil;
+  }
   [super dealloc];
 }
 
@@ -666,6 +686,27 @@
   }
 }
 
+- (void)launchDictEditor:(id)sender {
+  NSString *appPath = [[NSBundle mainBundle] pathForResource:@"DKSTDictEditor"
+                                                      ofType:@"app"];
+  if (appPath) {
+    NSURL *appUrl = [NSURL fileURLWithPath:appPath];
+    NSWorkspaceOpenConfiguration *config =
+        [NSWorkspaceOpenConfiguration configuration];
+    [[NSWorkspace sharedWorkspace]
+        openApplicationAtURL:appUrl
+               configuration:config
+           completionHandler:^(NSRunningApplication *_Nullable app,
+                               NSError *_Nullable error) {
+             if (error) {
+               DKSTLog(@"DKST: Failed to launch DictEditor: %@", error);
+             }
+           }];
+  } else {
+    DKSTLog(@"DKST: DKSTDictEditor.app not found in bundle resources.");
+  }
+}
+
 - (NSMenu *)menu {
   NSMenu *menu = [[[NSMenu alloc] initWithTitle:@"DKST"] autorelease];
 
@@ -675,6 +716,13 @@
                            keyEquivalent:@""] autorelease];
   [prefsItem setTarget:self];
   [menu addItem:prefsItem];
+
+  NSMenuItem *dictEditorItem =
+      [[[NSMenuItem alloc] initWithTitle:@"Dictionary Editor..."
+                                  action:@selector(launchDictEditor:)
+                           keyEquivalent:@""] autorelease];
+  [dictEditorItem setTarget:self];
+  [menu addItem:dictEditorItem];
 
   /* functionality not yet implemented
   NSMenuItem *englishItem = [[[NSMenuItem alloc] initWithTitle:@"English"
