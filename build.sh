@@ -75,7 +75,7 @@ cat > build/DKSTPreferences.app/Contents/Info.plist <<EOF
     <key>CFBundlePackageType</key>
     <string>APPL</string>
     <key>LSMinimumSystemVersion</key>
-    <string>10.13</string>
+    <string>10.15</string>
     <key>NSPrincipalClass</key>
     <string>NSApplication</string>
 </dict>

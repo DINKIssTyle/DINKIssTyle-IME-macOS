@@ -104,6 +104,8 @@
 	</array>
 	<key>tsInputMethodIconFileKey</key>
 	<string>DKST.icns</string>
+	<key>LSMinimumSystemVersion</key>
+	<string>10.15</string>
 
 </dict>
 </plist>
