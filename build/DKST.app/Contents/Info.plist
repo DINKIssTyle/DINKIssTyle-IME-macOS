@@ -65,10 +65,6 @@
 				<true/>
 				<key>tsInputModeIsVisibleKey</key>
 				<true/>
-				<key>tsInputModeKeyEquivalentKey</key>
-				<string>I</string>
-				<key>tsInputModeKeyEquivalentModifiersKey</key>
-				<integer>4608</integer>
 				<key>tsInputModeMenuIconFileKey</key>
 				<string>Hangul.pdf</string>
 				<key>tsInputModePaletteIconFileKey</key>
