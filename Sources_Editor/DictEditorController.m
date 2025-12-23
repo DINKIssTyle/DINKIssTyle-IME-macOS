@@ -40,6 +40,26 @@
   [saveButton setAutoresizingMask:NSViewMinXMargin | NSViewMinYMargin];
   [contentView addSubview:saveButton];
 
+  // Add Button
+  NSButton *addButton =
+      [[NSButton alloc] initWithFrame:NSMakeRect(20, 18, 80, 26)];
+  [addButton setTitle:@"+ Add"];
+  [addButton setBezelStyle:NSBezelStyleRounded];
+  [addButton setTarget:self];
+  [addButton setAction:@selector(addEntry:)];
+  [addButton setAutoresizingMask:NSViewMaxXMargin | NSViewMaxYMargin];
+  [contentView addSubview:addButton];
+
+  // Delete Button
+  NSButton *deleteButton =
+      [[NSButton alloc] initWithFrame:NSMakeRect(105, 18, 80, 26)];
+  [deleteButton setTitle:@"- Delete"];
+  [deleteButton setBezelStyle:NSBezelStyleRounded];
+  [deleteButton setTarget:self];
+  [deleteButton setAction:@selector(deleteEntry:)];
+  [deleteButton setAutoresizingMask:NSViewMaxXMargin | NSViewMaxYMargin];
+  [contentView addSubview:deleteButton];
+
   // Table View
   NSScrollView *scrollView =
       [[NSScrollView alloc] initWithFrame:NSMakeRect(20, 50, 560, 400)];
@@ -69,7 +89,7 @@
 
   // Status Label
   self.statusLabel =
-      [[NSTextField alloc] initWithFrame:NSMakeRect(18, 10, 560, 30)];
+      [[NSTextField alloc] initWithFrame:NSMakeRect(200, 20, 380, 20)];
   [self.statusLabel setEditable:NO];
   [self.statusLabel setBordered:NO];
   [self.statusLabel setBackgroundColor:[NSColor clearColor]];
@@ -300,6 +320,56 @@
     }
   }
   [self.tableView reloadData];
+}
+
+#pragma mark - Add/Delete Entries
+
+- (void)addEntry:(id)sender {
+  // Create a new empty entry
+  NSMutableDictionary *newEntry = [NSMutableDictionary
+      dictionaryWithObjectsAndKeys:@"", @"trigger", @"", @"values", nil];
+
+  // Add to allEntries
+  [self.allEntries addObject:newEntry];
+
+  // If filtering is active, clear it so the new entry is visible
+  [self.searchField setStringValue:@""];
+  self.filteredEntries = [NSMutableArray arrayWithArray:self.allEntries];
+  [self.tableView reloadData];
+
+  // Select and scroll to the new row
+  NSInteger newRow = self.filteredEntries.count - 1;
+  [self.tableView selectRowIndexes:[NSIndexSet indexSetWithIndex:newRow]
+              byExtendingSelection:NO];
+  [self.tableView scrollRowToVisible:newRow];
+
+  // Start editing the trigger column
+  [self.tableView editColumn:0 row:newRow withEvent:nil select:YES];
+}
+
+- (void)deleteEntry:(id)sender {
+  NSInteger selectedRow = [self.tableView selectedRow];
+  if (selectedRow < 0 || selectedRow >= self.filteredEntries.count) {
+    NSBeep();
+    return;
+  }
+
+  // Get the entry to delete
+  NSMutableDictionary *entryToDelete = self.filteredEntries[selectedRow];
+
+  // Remove from both arrays
+  [self.allEntries removeObject:entryToDelete];
+  [self.filteredEntries removeObjectAtIndex:selectedRow];
+
+  [self.tableView reloadData];
+
+  // Select the next row if possible
+  if (self.filteredEntries.count > 0) {
+    NSInteger newSelection =
+        MIN(selectedRow, (NSInteger)self.filteredEntries.count - 1);
+    [self.tableView selectRowIndexes:[NSIndexSet indexSetWithIndex:newSelection]
+                byExtendingSelection:NO];
+  }
 }
 
 #pragma mark - NSTableViewDataSource
