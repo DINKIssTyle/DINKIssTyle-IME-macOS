@@ -48,6 +48,7 @@
 
 - (void)dealloc {
   [_candidates release];
+  [_currentHanjaCandidates release]; // Fix leak
   [engine release];
   [currentMode release]; // Proper cleanup
   [super dealloc];
@@ -97,14 +98,26 @@
     [_candidates hide];
   }
 
+  // Clear any existing Hanja candidates data
+  if (_currentHanjaCandidates) {
+    [_currentHanjaCandidates release];
+    _currentHanjaCandidates = nil;
+  }
+  _currentHanjaIndex = 0;
+
   @try {
     [self commitComposition:sender];
   } @catch (NSException *exception) {
-    DKSTLog(@"Exception in deactivateServer: %@", exception);
+    DKSTLog(@"Exception in deactivateServer (commit): %@", exception);
   }
 
-  // Always call super last
-  [super deactivateServer:sender];
+  // Always call super last, wrapped in try-catch to prevent crash
+  @
+  try {
+    [super deactivateServer:sender];
+  } @catch (NSException *exception) {
+    DKSTLog(@"Exception in deactivateServer (super): %@", exception);
+  }
 }
 
 - (BOOL)handleEvent:(NSEvent *)event client:(id)sender {
