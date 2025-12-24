@@ -1,23 +1,46 @@
 # Dictionary Editor에 관하여
-Dictionary Editor는 본래 한자 입력(대치) 기능을 한자 입력보다는 다른 용도로 쓰기 위해 도입되었습니다.
----
-## 편집기의 사용방법
-<p align="center">
-  <img src="docs/DKST_dict_01.png" width="90%">
-</p>
-- DKST 입력기로 변환 된 메뉴바에서 Dictionary Editor를 클릭해 실행할 수 있습니다.
-<p align="center">
-  <img src="docs/DKST_dict_02.png" width="90%">
-</p>
-- Dictionary Editor는 /Library/Input Methods/DKST.app/Contents/Resources/hanja.txt 또는 ~/Library/Input Methods/DKST.app/Contents/Resources/hanja.txt 을 편집합니다. 편집중인 파일은 하단에 표시됩니다.
-- 검색을 통해 이미 입력되어 있는 트리거 글자/단어 또는 값을 검색할 수 있습니다.
-- 행의 추가와 삭제는 하단 좌측 +Add 와 -Delete 버튼을 이용하여 할수 있습니다.
-- 편집이 끝나면 Save버튼을 눌러 파일을 저장합니다. 그러나 위치의 특성상 관리자 비밀번호 입력 후 저장하며, 사전 데이타의 반영을 위해 DKST를 강제종료 시킵니다. macOS는 사용중인 IME가 종료되면 1~2초 이내에 다시 활성화 시킵니다.
 
+**Dictionary Editor**는 본래 *한자 입력(대치) 기능*을 위해 존재하던 사전 파일을,  
+한자 입력 목적이 아닌 **다른 용도의 입력 확장 기능**으로 활용하기 위해 도입되었습니다.
+
+---
+
+## 편집기의 사용 방법
+
+- DKST 입력기로 전환된 **메뉴바**에서 **Dictionary Editor**를 클릭하여 실행할 수 있습니다.
+<p align="center">
+  <img src="docs/DKST_dict_01.png">
+</p>
+
+<p align="center">
+  <img src="docs/DKST_dict_02.png">
+</p>
+
+- Dictionary Editor는 아래 경로 중 하나의 `hanja.txt` 파일을 편집합니다.
+  - `/Library/Input Methods/DKST.app/Contents/Resources/hanja.txt`
+  - `~/Library/Input Methods/DKST.app/Contents/Resources/hanja.txt`
+- 현재 편집 중인 파일 경로는 **하단에 표시**됩니다.
+- **검색 기능**을 통해 이미 등록된 트리거 글자/단어 또는 값을 빠르게 찾을 수 있습니다.
+- 행 추가 및 삭제는 좌측 하단의 **+ Add**, **- Delete** 버튼을 사용합니다.
+- 편집이 완료되면 **Save** 버튼을 눌러 저장합니다.
+  - 파일 위치 특성상 **관리자 비밀번호 입력**이 필요합니다.
+  - 사전 데이터 반영을 위해 **DKST 입력기를 강제 종료**합니다.
+  - macOS는 사용 중인 IME가 종료되면 **1~2초 이내 자동으로 재활성화**됩니다.
+
+---
 
 ## 한자 입력 기능을 이용한 활용
+
 <p align="center">
-  <img src="docs/DKST_dict_03.png" width="90%">
+  <img src="docs/DKST_dict_03.png">
 </p>
-- 트리거에 있는 글자를 입력하고, 커밋이 완료되기 전에 옵션+엔터(우측 쉬프트 위에 위치한)을 눌러 후보창을 띄우고 방향키로 원하는 값으로 이동하여 엔터 또는 스페이스바를 이용해 입력할 수 있습니다. 물론 이 과정은 마우스 커서를 이용할 수도 있습니다.
-- 단어의 경우 트리거가 되는 단어를 (블록)선택한 후에 옵션+엔터를 눌러 위와 동일한 방법으로 사용합니다. 
+
+- 트리거 글자를 입력한 뒤, **커밋되기 전에**
+  **Option + Enter**  
+  (우측 Shift 키 위에 위치한 Enter 키)을 눌러 **후보창**을 띄웁니다.
+- 방향키로 원하는 항목을 선택한 후:
+  - **Enter** 또는 **Space** 키로 입력할 수 있습니다.
+- 이 과정은 **마우스 커서**를 이용해도 동일하게 사용할 수 있습니다.
+- **단어 단위 트리거**의 경우:
+  - 트리거 단어를 **드래그하여 선택(블록 지정)** 한 뒤
+  - **Option + Enter**를 눌러 동일한 방식으로 사용할 수 있습니다.
