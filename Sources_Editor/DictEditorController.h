@@ -22,4 +22,6 @@
 @property(strong) NSTextField *statusLabel;
 @property(strong) NSSearchField *searchField;
 
+- (void)showAboutWindow:(id)sender;
+
 @end

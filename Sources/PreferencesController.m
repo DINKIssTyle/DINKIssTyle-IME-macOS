@@ -69,7 +69,7 @@
         // 2.5. Hanja Conversion
         hanjaConversionCheckbox = [[[NSButton alloc] initWithFrame:NSMakeRect(20, 330, 400, 24)] autorelease];
         [hanjaConversionCheckbox setButtonType:NSButtonTypeSwitch];
-        [hanjaConversionCheckbox setTitle:@"한자 변환 사용 (Option + Enter)"];
+        [hanjaConversionCheckbox setTitle:@"사전 변환 사용 (Option + Enter)"];
         [hanjaConversionCheckbox setTarget:self];
         [hanjaConversionCheckbox setAction:@selector(toggleHanjaConversion:)];
         [contentView addSubview:hanjaConversionCheckbox];

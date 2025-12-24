@@ -17,7 +17,7 @@
                            NSWindowStyleMaskMiniaturizable)
                   backing:NSBackingStoreBuffered
                     defer:NO];
-  [self.window setTitle:@"DKST Hanja Dictionary Editor"];
+  [self.window setTitle:@"DKST Dictionary Editor"];
   [self.window center];
 
   // 2. Create UI Elements
@@ -422,11 +422,35 @@
   }
 
   [entry setObject:newValue forKey:tableColumn.identifier];
-
+  
   // Refilter if currently searching?
   // If we edit a cell and it no longer matches the filter, should it vanish?
   // Usually it's better to keep it until the next search change, or reload.
   // We will keep it simple for now (no auto-refilter on edit).
+}
+
+- (void)showAboutWindow:(id)sender {
+  NSAlert *alert = [[NSAlert alloc] init];
+  [alert setIcon:[NSImage imageNamed:NSImageNameApplicationIcon]];
+  [alert setMessageText:@"DKST Dictionary Editor"];
+  
+  // Use compilation date as build date
+  NSString *buildDate = [NSString stringWithUTF8String:__DATE__];
+  // Removed parentheses around date as requested
+  NSString *infoText = [NSString stringWithFormat:@"build %@\n(C) 2025 DINKI'ssTyle", buildDate];
+  
+  // Use a centered NSTextField as accessory view to ensure center alignment
+  NSTextField *label = [[NSTextField alloc] initWithFrame:NSMakeRect(0, 0, 300, 34)];
+  [label setStringValue:infoText];
+  [label setEditable:NO];
+  [label setBezeled:NO];
+  [label setDrawsBackground:NO];
+  [label setAlignment:NSTextAlignmentCenter];
+  [label setFont:[NSFont systemFontOfSize:[NSFont smallSystemFontSize]]];
+  [label setTextColor:[NSColor labelColor]];
+  
+  [alert setAccessoryView:label];
+  [alert runModal];
 }
 
 @end

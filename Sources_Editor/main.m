@@ -24,7 +24,17 @@ int main(int argc, const char *argv[]) {
     [app setMainMenu:menubar];
 
     NSMenu *appMenu = [[NSMenu alloc] init];
-    NSString *appName = [[NSProcessInfo processInfo] processName];
+    // Use manual name for the menu items (Does not affect actual process/file name)
+    NSString *appName = @"DKST Dictionary Editor";
+    
+    // About Menu Item
+    NSMenuItem *aboutMenuItem = [[NSMenuItem alloc] initWithTitle:[NSString stringWithFormat:@"About %@", appName]
+                                                           action:@selector(showAboutWindow:)
+                                                    keyEquivalent:@""];
+    [aboutMenuItem setTarget:controller];
+    [appMenu addItem:aboutMenuItem];
+    [appMenu addItem:[NSMenuItem separatorItem]];
+
     NSString *quitTitle = [@"Quit " stringByAppendingString:appName];
     NSMenuItem *quitMenuItem =
         [[NSMenuItem alloc] initWithTitle:quitTitle
