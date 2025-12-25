@@ -62,7 +62,7 @@ case $CHOICE in
         if [ "$HANJA_PRESERVED" = true ] && [ -f "$HANJA_BACKUP" ]; then
             echo "사용자 hanja.txt 파일 복원 중..."
             sudo cp "$HANJA_BACKUP" "$HANJA_FILE"
-            rm -f "$HANJA_BACKUP"
+            sudo rm -f "$HANJA_BACKUP"
         fi
         
         # 2. xattr 실행 (격리 해제)
