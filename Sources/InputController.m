@@ -20,7 +20,8 @@
       @"EnableCapsLockSwitch" : @NO,
       @"EnableMoaJjiki" : @YES,
       @"FullCharacterDelete" : @NO,
-      @"EnableCustomShift" : @NO
+      @"EnableCustomShift" : @NO,
+      kDKSTMarkedTextAppBundleIDsKey : DKSTDefaultMarkedTextAppBundleIDs()
     }];
 
     // Note: We previously skipped IMKCandidates creation for Preferences app,
@@ -39,6 +40,8 @@
         initWithServer:server
              panelType:kIMKSingleColumnScrollingCandidatePanel];
     _lastClientSyncTime = 0;
+    _directInputComposedLength = 0;
+    _useMarkedTextForClient = NO;
 
     // Style attributes to match Apple's Korean IME
     NSDictionary *styleAttributes = @{
@@ -83,6 +86,76 @@
   [super dealloc];
 }
 
+- (NSRange)directInputReplacementRange:(id)sender {
+  if (_directInputComposedLength == 0 || !sender) {
+    return NSMakeRange(NSNotFound, NSNotFound);
+  }
+
+  @try {
+    NSRange selectedRange = [sender selectedRange];
+    if (selectedRange.location != NSNotFound &&
+        selectedRange.length == 0 &&
+        selectedRange.location >= _directInputComposedLength) {
+      return NSMakeRange(selectedRange.location - _directInputComposedLength,
+                         _directInputComposedLength);
+    }
+  } @catch (NSException *exception) {
+    DKSTLog(@"Exception in directInputReplacementRange: %@", exception);
+  }
+
+  return NSMakeRange(NSNotFound, NSNotFound);
+}
+
+- (BOOL)shouldUseMarkedTextForClient:(id)sender {
+  NSString *bundleID = nil;
+
+  @try {
+    if (sender && [sender respondsToSelector:@selector(bundleIdentifier)]) {
+      bundleID = [sender bundleIdentifier];
+    }
+    if (!bundleID && [[self client] respondsToSelector:@selector(bundleIdentifier)]) {
+      bundleID = [[self client] bundleIdentifier];
+    }
+  } @catch (NSException *exception) {
+    DKSTLog(@"Exception getting client bundle id: %@", exception);
+    return YES;
+  }
+
+  if (![bundleID length]) {
+    return YES;
+  }
+
+  NSArray *bundleIDs =
+      [[NSUserDefaults standardUserDefaults] arrayForKey:kDKSTMarkedTextAppBundleIDsKey];
+  if (![bundleIDs count]) {
+    bundleIDs = DKSTDefaultMarkedTextAppBundleIDs();
+  }
+
+  for (NSString *markedBundleID in bundleIDs) {
+    NSString *trimmed = [markedBundleID
+        stringByTrimmingCharactersInSet:[NSCharacterSet whitespaceAndNewlineCharacterSet]];
+    if ([trimmed length] > 0 && [bundleID isEqualToString:trimmed]) {
+      return YES;
+    }
+  }
+
+  @try {
+    if (![sender respondsToSelector:@selector(selectedRange)]) {
+      return YES;
+    }
+    NSRange selectedRange = [sender selectedRange];
+    if (selectedRange.location == NSNotFound) {
+      return YES;
+    }
+  } @catch (NSException *exception) {
+    DKSTLog(@"Exception checking selected range for direct input: %@",
+            exception);
+    return YES;
+  }
+
+  return NO;
+}
+
 - (void)syncInputClient:(id)sender force:(BOOL)force {
   if (!sender) {
     return;
@@ -95,11 +168,23 @@
 
   @try {
     [sender overrideKeyboardWithKeyboardNamed:kUSKeylayout];
-    [sender selectInputMode:currentMode];
+    if (force) {
+      [sender selectInputMode:currentMode];
+    }
     _lastClientSyncTime = now;
   } @catch (NSException *exception) {
     DKSTLog(@"Exception in syncInputClient: %@", exception);
   }
+}
+
+- (void)applyUserPreferences {
+  NSUserDefaults *defaults = [NSUserDefaults standardUserDefaults];
+
+  BOOL moaEnabled = [defaults boolForKey:@"EnableMoaJjiki"];
+  [engine setMoaJjikiEnabled:moaEnabled];
+
+  BOOL fullDelete = [defaults boolForKey:@"FullCharacterDelete"];
+  [engine setFullCharacterDelete:fullDelete];
 }
 
 // MARK: - Input Method Kit Methods
@@ -120,17 +205,12 @@
 
   [self syncInputClient:sender force:YES];
 
-  // Apply Preferences
-  BOOL moaEnabled =
-      [[NSUserDefaults standardUserDefaults] boolForKey:@"EnableMoaJjiki"];
-  [engine setMoaJjikiEnabled:moaEnabled];
-
-  BOOL fullDelete =
-      [[NSUserDefaults standardUserDefaults] boolForKey:@"FullCharacterDelete"];
-  [engine setFullCharacterDelete:fullDelete];
+  [self applyUserPreferences];
+  _useMarkedTextForClient = [self shouldUseMarkedTextForClient:sender];
 
   // Ensure clean state and force Hangul mode on activation
   [engine reset];
+  _directInputComposedLength = 0;
 }
 
 - (void)deactivateServer:(id)sender {
@@ -179,6 +259,8 @@
   // keyboard override/input-mode state. Reassert it during normal event flow so
   // the user does not need to force a deactivate/activate cycle with Spotlight.
   [self syncInputClient:sender force:NO];
+  [self applyUserPreferences];
+  _useMarkedTextForClient = [self shouldUseMarkedTextForClient:sender];
 
   // Process Candidate Navigation (Arrow keys, Enter, Space, numbers)
   if ([_candidates isVisible]) {
@@ -365,8 +447,10 @@
       if ([allCandidates count] > 0) {
         _currentHanjaCandidates = [allCandidates retain];
 
-        // Mark that we're converting composed text (not selected)
-        _selectedTextRange = NSMakeRange(NSNotFound, 0);
+        NSRange directRange = [self directInputReplacementRange:sender];
+        _selectedTextRange =
+            (directRange.location != NSNotFound) ? directRange
+                                                 : NSMakeRange(NSNotFound, 0);
 
         DKSTLog(@"Candidates count: %lu", (unsigned long)[allCandidates count]);
         for (NSUInteger i = 0; i < [allCandidates count]; i++) {
@@ -465,7 +549,11 @@
   // Backspace Handling (keyCode 51)
   if (keyCode == 51) {
     if ([engine backspace]) {
-      [self updateComposition:sender];
+      if (_useMarkedTextForClient) {
+        [self updateComposition:sender];
+      } else {
+        [self updateDirectComposition:sender];
+      }
       return YES;
     } else {
       return NO;
@@ -580,15 +668,16 @@
       [_candidates hide];
     }
 
-    // If engine produced a commit string, commit it first
-    NSString *commit = [engine commitString];
-    if ([commit length] > 0) {
-      [sender insertText:commit
-          replacementRange:NSMakeRange(NSNotFound, NSNotFound)];
+    if (_useMarkedTextForClient) {
+      NSString *commit = [engine commitString];
+      if ([commit length] > 0) {
+        [sender insertText:commit
+            replacementRange:NSMakeRange(NSNotFound, NSNotFound)];
+      }
+      [self updateComposition:sender];
+    } else {
+      [self updateDirectComposition:sender];
     }
-
-    // Update preedit
-    [self updateComposition:sender];
     return YES;
   } else {
     // Not processed (e.g. non-hangul key)
@@ -637,11 +726,40 @@
   }
 }
 
+- (void)updateDirectComposition:(id)sender {
+  NSString *commit = [engine commitString];
+  NSString *composed = [engine composedString];
+  NSMutableString *replacement = [NSMutableString string];
+
+  if ([commit length] > 0) {
+    [replacement appendString:commit];
+  }
+  if ([composed length] > 0) {
+    [replacement appendString:composed];
+  }
+
+  NSRange replacementRange = [self directInputReplacementRange:sender];
+  if ([replacement length] > 0 || replacementRange.location != NSNotFound) {
+    [sender insertText:replacement replacementRange:replacementRange];
+  }
+
+  _directInputComposedLength = [composed length];
+}
+
 - (void)commitComposition:(id)sender {
   // If Candidate window is visible, we are likely in the middle of choosing a
   // Hanja. Committing now would flush the Hangul and result in double insertion
   // when Hanja is picked.
   if ([_candidates isVisible]) {
+    return;
+  }
+
+  if (_directInputComposedLength > 0) {
+    [engine reset];
+    _directInputComposedLength = 0;
+    [sender setMarkedText:@""
+           selectionRange:NSMakeRange(0, 0)
+         replacementRange:NSMakeRange(NSNotFound, NSNotFound)];
     return;
   }
 
@@ -678,11 +796,11 @@
     NSString *newMode = (NSString *)value;
     if (newMode) {
       // Proper MRC retain/release
-      if (currentMode != newMode) {
+      if (![currentMode isEqualToString:newMode]) {
         [currentMode release];
         currentMode = [newMode retain];
+        [self commitComposition:sender];
       }
-      [self commitComposition:sender];
     }
   }
 }
@@ -830,16 +948,24 @@
                 (unsigned long)replacementRange.location,
                 (unsigned long)replacementRange.length);
       } else {
-        // Replacing composed text (existing behavior)
-        NSString *composed = [engine composedString];
-        NSUInteger length = [composed length];
-        replacementRange = NSMakeRange(0, length);
-        DKSTLog(@"Replacing composed text, length=%lu", (unsigned long)length);
-        [engine reset];
+        if (_directInputComposedLength > 0) {
+          replacementRange = [self directInputReplacementRange:sender];
+          DKSTLog(@"Replacing direct input text: location=%lu, length=%lu",
+                  (unsigned long)replacementRange.location,
+                  (unsigned long)replacementRange.length);
+        } else {
+          // Replacing marked text (legacy behavior)
+          NSString *composed = [engine composedString];
+          NSUInteger length = [composed length];
+          replacementRange = NSMakeRange(0, length);
+          DKSTLog(@"Replacing marked text, length=%lu", (unsigned long)length);
+        }
       }
 
       // Insert Hanja, replacing the text
       [sender insertText:hanja replacementRange:replacementRange];
+      [engine reset];
+      _directInputComposedLength = 0;
     } else {
       DKSTLog(@"Failed to extract hanja from '%@'", selected);
     }

@@ -19,7 +19,7 @@
 }
 
 - (id)init {
-    NSRect frame = NSMakeRect(0, 0, 450, 430); 
+    NSRect frame = NSMakeRect(0, 0, 520, 620); 
     NSWindow *window = [[[NSWindow alloc] initWithContentRect:frame
                                                     styleMask:(NSWindowStyleMaskTitled | NSWindowStyleMaskClosable | NSWindowStyleMaskMiniaturizable)
                                                       backing:NSBackingStoreBuffered
@@ -49,9 +49,25 @@
                 [mappingDict setObject:@"" forKey:key];
             }
         }
+
+        NSArray *savedMarkedTextApps = [[self defaults] arrayForKey:kDKSTMarkedTextAppBundleIDsKey];
+        if ([savedMarkedTextApps count] > 0) {
+            markedTextAppBundleIDs = [savedMarkedTextApps mutableCopy];
+            for (NSString *bundleID in DKSTDefaultMarkedTextAppBundleIDs()) {
+                if (![markedTextAppBundleIDs containsObject:bundleID]) {
+                    [markedTextAppBundleIDs addObject:bundleID];
+                }
+            }
+            [[self defaults] setObject:markedTextAppBundleIDs forKey:kDKSTMarkedTextAppBundleIDsKey];
+            [[self defaults] synchronize];
+        } else {
+            markedTextAppBundleIDs = [[NSMutableArray alloc] initWithArray:DKSTDefaultMarkedTextAppBundleIDs()];
+            [[self defaults] setObject:markedTextAppBundleIDs forKey:kDKSTMarkedTextAppBundleIDsKey];
+            [[self defaults] synchronize];
+        }
         
         // 1. Caps Lock
-        capsLockSwitchCheckbox = [[[NSButton alloc] initWithFrame:NSMakeRect(20, 390, 400, 24)] autorelease];
+        capsLockSwitchCheckbox = [[[NSButton alloc] initWithFrame:NSMakeRect(20, 580, 460, 24)] autorelease];
         [capsLockSwitchCheckbox setButtonType:NSButtonTypeSwitch];
         [capsLockSwitchCheckbox setTitle:@"Caps Lock을 눌러 입력 언어 전환"];
         [capsLockSwitchCheckbox setTarget:self];
@@ -59,7 +75,7 @@
         [contentView addSubview:capsLockSwitchCheckbox];
 
         // 2. Moa-jjiki
-        moaJjikiCheckbox = [[[NSButton alloc] initWithFrame:NSMakeRect(20, 360, 400, 24)] autorelease];
+        moaJjikiCheckbox = [[[NSButton alloc] initWithFrame:NSMakeRect(20, 550, 460, 24)] autorelease];
         [moaJjikiCheckbox setButtonType:NSButtonTypeSwitch];
         [moaJjikiCheckbox setTitle:@"모아치기 (자모 순서 자동 보정)"];
         [moaJjikiCheckbox setTarget:self];
@@ -67,7 +83,7 @@
         [contentView addSubview:moaJjikiCheckbox];
         
         // 2.5. Hanja Conversion
-        hanjaConversionCheckbox = [[[NSButton alloc] initWithFrame:NSMakeRect(20, 330, 400, 24)] autorelease];
+        hanjaConversionCheckbox = [[[NSButton alloc] initWithFrame:NSMakeRect(20, 520, 460, 24)] autorelease];
         [hanjaConversionCheckbox setButtonType:NSButtonTypeSwitch];
         [hanjaConversionCheckbox setTitle:@"사전 변환 사용 (Option + Enter)"];
         [hanjaConversionCheckbox setTarget:self];
@@ -75,7 +91,7 @@
         [contentView addSubview:hanjaConversionCheckbox];
         
         // 3. Custom Shift Enable (Moved Down)
-        customShiftCheckbox = [[[NSButton alloc] initWithFrame:NSMakeRect(20, 270, 400, 24)] autorelease];
+        customShiftCheckbox = [[[NSButton alloc] initWithFrame:NSMakeRect(20, 460, 460, 24)] autorelease];
         [customShiftCheckbox setButtonType:NSButtonTypeSwitch];
         [customShiftCheckbox setTitle:@"쉬프트키 + 단자음/단모음 사용자화 사용"];
         [customShiftCheckbox setTarget:self];
@@ -83,7 +99,7 @@
         [contentView addSubview:customShiftCheckbox];
         
         // 5. Full Character Delete (Moved Up)
-        fullDeleteCheckbox = [[[NSButton alloc] initWithFrame:NSMakeRect(20, 300, 400, 24)] autorelease];
+        fullDeleteCheckbox = [[[NSButton alloc] initWithFrame:NSMakeRect(20, 490, 460, 24)] autorelease];
         [fullDeleteCheckbox setButtonType:NSButtonTypeSwitch];
         [fullDeleteCheckbox setTitle:@"글자 단위로 삭제"];
         [fullDeleteCheckbox setTarget:self];
@@ -91,12 +107,12 @@
         [contentView addSubview:fullDeleteCheckbox];
 
         // 4. Table Scroll View
-        NSScrollView *scrollView = [[[NSScrollView alloc] initWithFrame:NSMakeRect(20, 40, 410, 220)] autorelease];
+        NSScrollView *scrollView = [[[NSScrollView alloc] initWithFrame:NSMakeRect(20, 230, 480, 220)] autorelease];
         [scrollView setBorderType:NSBezelBorder];
         [scrollView setHasVerticalScroller:YES];
         
         // Table View
-        mappingsTableView = [[[NSTableView alloc] initWithFrame:NSMakeRect(0, 0, 410, 270)] autorelease];
+        mappingsTableView = [[[NSTableView alloc] initWithFrame:NSMakeRect(0, 0, 480, 270)] autorelease];
         
         // Columns
         NSTableColumn *keyCol = [[[NSTableColumn alloc] initWithIdentifier:@"Key"] autorelease];
@@ -116,9 +132,46 @@
         
         [scrollView setDocumentView:mappingsTableView];
         [contentView addSubview:scrollView];
+
+        NSTextField *markedLabel = [[[NSTextField alloc] initWithFrame:NSMakeRect(20, 200, 480, 20)] autorelease];
+        [markedLabel setStringValue:@"밑줄 조합 방식으로 사용할 앱 Bundle ID"];
+        [markedLabel setBezeled:NO];
+        [markedLabel setDrawsBackground:NO];
+        [markedLabel setEditable:NO];
+        [markedLabel setSelectable:NO];
+        [markedLabel setFont:[NSFont boldSystemFontOfSize:12]];
+        [contentView addSubview:markedLabel];
+
+        NSScrollView *markedScrollView = [[[NSScrollView alloc] initWithFrame:NSMakeRect(20, 50, 480, 145)] autorelease];
+        [markedScrollView setBorderType:NSBezelBorder];
+        [markedScrollView setHasVerticalScroller:YES];
+
+        markedTextAppsTableView = [[[NSTableView alloc] initWithFrame:NSMakeRect(0, 0, 480, 145)] autorelease];
+        NSTableColumn *bundleCol = [[[NSTableColumn alloc] initWithIdentifier:@"BundleID"] autorelease];
+        [[bundleCol headerCell] setStringValue:@"Bundle ID"];
+        [bundleCol setWidth:460];
+        [bundleCol setEditable:YES];
+        [markedTextAppsTableView addTableColumn:bundleCol];
+        [markedTextAppsTableView setDataSource:self];
+        [markedTextAppsTableView setDelegate:self];
+
+        [markedScrollView setDocumentView:markedTextAppsTableView];
+        [contentView addSubview:markedScrollView];
+
+        addMarkedTextAppButton = [[[NSButton alloc] initWithFrame:NSMakeRect(20, 20, 80, 24)] autorelease];
+        [addMarkedTextAppButton setTitle:@"추가"];
+        [addMarkedTextAppButton setTarget:self];
+        [addMarkedTextAppButton setAction:@selector(addMarkedTextApp:)];
+        [contentView addSubview:addMarkedTextAppButton];
+
+        removeMarkedTextAppButton = [[[NSButton alloc] initWithFrame:NSMakeRect(108, 20, 80, 24)] autorelease];
+        [removeMarkedTextAppButton setTitle:@"삭제"];
+        [removeMarkedTextAppButton setTarget:self];
+        [removeMarkedTextAppButton setAction:@selector(removeMarkedTextApp:)];
+        [contentView addSubview:removeMarkedTextAppButton];
         
         // 6. Copyright Label
-        NSTextField *copyrightLabel = [[[NSTextField alloc] initWithFrame:NSMakeRect(20, 10, 410, 18)] autorelease];
+        NSTextField *copyrightLabel = [[[NSTextField alloc] initWithFrame:NSMakeRect(210, 24, 290, 18)] autorelease];
         [copyrightLabel setStringValue:@"(C) 2025 DINKI'ssTyle"];
         [copyrightLabel setBezeled:NO];
         [copyrightLabel setDrawsBackground:NO];
@@ -138,6 +191,7 @@
 - (void)dealloc {
     [mappingKeys release];
     [mappingDict release];
+    [markedTextAppBundleIDs release];
     [super dealloc];
 }
 
@@ -188,6 +242,7 @@
     [mappingsTableView setEnabled:shiftEnabled]; // Disable table if feature off
     
     [mappingsTableView reloadData];
+    [markedTextAppsTableView reloadData];
 }
 
 // MARK: - Actions
@@ -223,13 +278,74 @@
     [self refreshState];
 }
 
+- (void)saveMarkedTextAppBundleIDs {
+    NSMutableArray *cleaned = [NSMutableArray array];
+    for (NSString *bundleID in markedTextAppBundleIDs) {
+        NSString *trimmed = [bundleID stringByTrimmingCharactersInSet:[NSCharacterSet whitespaceAndNewlineCharacterSet]];
+        if ([trimmed length] > 0 && ![cleaned containsObject:trimmed]) {
+            [cleaned addObject:trimmed];
+        }
+    }
+
+    [markedTextAppBundleIDs setArray:cleaned];
+    [[self defaults] setObject:markedTextAppBundleIDs forKey:kDKSTMarkedTextAppBundleIDsKey];
+    [[self defaults] synchronize];
+    [markedTextAppsTableView reloadData];
+}
+
+- (IBAction)addMarkedTextApp:(id)sender {
+    NSOpenPanel *panel = [NSOpenPanel openPanel];
+    [panel setCanChooseFiles:YES];
+    [panel setCanChooseDirectories:NO];
+    [panel setAllowsMultipleSelection:YES];
+    [panel setAllowedFileTypes:[NSArray arrayWithObject:@"app"]];
+    [panel setPrompt:@"선택"];
+    [panel setMessage:@".app 번들을 선택하세요."];
+
+    NSInteger result = [panel runModal];
+    if (result != NSModalResponseOK) {
+        return;
+    }
+
+    BOOL added = NO;
+    for (NSURL *url in [panel URLs]) {
+        NSBundle *bundle = [NSBundle bundleWithURL:url];
+        NSString *bundleID = [bundle bundleIdentifier];
+        if ([bundleID length] > 0 && ![markedTextAppBundleIDs containsObject:bundleID]) {
+            [markedTextAppBundleIDs addObject:bundleID];
+            added = YES;
+        }
+    }
+
+    if (added) {
+        [self saveMarkedTextAppBundleIDs];
+        NSInteger row = [markedTextAppBundleIDs count] - 1;
+        [markedTextAppsTableView selectRowIndexes:[NSIndexSet indexSetWithIndex:row] byExtendingSelection:NO];
+    }
+}
+
+- (IBAction)removeMarkedTextApp:(id)sender {
+    NSInteger row = [markedTextAppsTableView selectedRow];
+    if (row >= 0 && row < [markedTextAppBundleIDs count]) {
+        [markedTextAppBundleIDs removeObjectAtIndex:row];
+        [self saveMarkedTextAppBundleIDs];
+    }
+}
+
 // MARK: - TableView DataSource
 
 - (NSInteger)numberOfRowsInTableView:(NSTableView *)tableView {
+    if (tableView == markedTextAppsTableView) {
+        return [markedTextAppBundleIDs count];
+    }
     return [mappingKeys count];
 }
 
 - (id)tableView:(NSTableView *)tableView objectValueForTableColumn:(NSTableColumn *)tableColumn row:(NSInteger)row {
+    if (tableView == markedTextAppsTableView) {
+        return [markedTextAppBundleIDs objectAtIndex:row];
+    }
+
     NSString *key = [mappingKeys objectAtIndex:row];
     if ([[tableColumn identifier] isEqualToString:@"Key"]) {
         return key;
@@ -239,6 +355,15 @@
 }
 
 - (void)tableView:(NSTableView *)tableView setObjectValue:(id)object forTableColumn:(NSTableColumn *)tableColumn row:(NSInteger)row {
+    if (tableView == markedTextAppsTableView) {
+        NSString *newValue = [(NSString *)object stringByTrimmingCharactersInSet:[NSCharacterSet whitespaceAndNewlineCharacterSet]];
+        if ([newValue length] > 0 && row >= 0 && row < [markedTextAppBundleIDs count]) {
+            [markedTextAppBundleIDs replaceObjectAtIndex:row withObject:newValue];
+            [self saveMarkedTextAppBundleIDs];
+        }
+        return;
+    }
+
     if ([[tableColumn identifier] isEqualToString:@"Output"]) {
         NSString *key = [mappingKeys objectAtIndex:row];
         NSString *newValue = (NSString *)object;

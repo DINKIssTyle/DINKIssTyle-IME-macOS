@@ -11,9 +11,13 @@
     // New Feature
     IBOutlet NSButton *customShiftCheckbox;
     IBOutlet NSTableView *mappingsTableView;
+    IBOutlet NSTableView *markedTextAppsTableView;
+    IBOutlet NSButton *addMarkedTextAppButton;
+    IBOutlet NSButton *removeMarkedTextAppButton;
     
     NSMutableArray *mappingKeys;
     NSMutableDictionary *mappingDict;
+    NSMutableArray *markedTextAppBundleIDs;
     
     // Internal Hangul support for Prefs
     DKSTHangul *uiEngine;
@@ -33,6 +37,8 @@
 - (IBAction)toggleMoaJjiki:(id)sender;
 - (IBAction)toggleHanjaConversion:(id)sender;
 - (IBAction)toggleFullDelete:(id)sender;
+- (IBAction)addMarkedTextApp:(id)sender;
+- (IBAction)removeMarkedTextApp:(id)sender;
 
 
 @end
