@@ -38,6 +38,7 @@
     _candidates = [[IMKCandidates alloc]
         initWithServer:server
              panelType:kIMKSingleColumnScrollingCandidatePanel];
+    _lastClientSyncTime = 0;
 
     // Style attributes to match Apple's Korean IME
     NSDictionary *styleAttributes = @{
@@ -82,6 +83,25 @@
   [super dealloc];
 }
 
+- (void)syncInputClient:(id)sender force:(BOOL)force {
+  if (!sender) {
+    return;
+  }
+
+  NSTimeInterval now = [NSDate timeIntervalSinceReferenceDate];
+  if (!force && _lastClientSyncTime > 0 && now - _lastClientSyncTime < 0.5) {
+    return;
+  }
+
+  @try {
+    [sender overrideKeyboardWithKeyboardNamed:kUSKeylayout];
+    [sender selectInputMode:currentMode];
+    _lastClientSyncTime = now;
+  } @catch (NSException *exception) {
+    DKSTLog(@"Exception in syncInputClient: %@", exception);
+  }
+}
+
 // MARK: - Input Method Kit Methods
 
 - (void)activateServer:(id)sender {
@@ -98,12 +118,7 @@
   // Always call super first
   [super activateServer:sender];
 
-  @try {
-    [sender overrideKeyboardWithKeyboardNamed:@"com.apple.keylayout.US"];
-    [sender selectInputMode:currentMode];
-  } @catch (NSException *exception) {
-    DKSTLog(@"Exception in activateServer: %@", exception);
-  }
+  [self syncInputClient:sender force:YES];
 
   // Apply Preferences
   BOOL moaEnabled =
@@ -159,6 +174,11 @@
   if ([event type] != NSEventTypeKeyDown) {
     return NO;
   }
+
+  // Remote desktop sessions can occasionally leave the IMK client in a stale
+  // keyboard override/input-mode state. Reassert it during normal event flow so
+  // the user does not need to force a deactivate/activate cycle with Spotlight.
+  [self syncInputClient:sender force:NO];
 
   // Process Candidate Navigation (Arrow keys, Enter, Space, numbers)
   if ([_candidates isVisible]) {

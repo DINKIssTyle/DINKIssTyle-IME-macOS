@@ -9,9 +9,11 @@
   NSArray *_currentHanjaCandidates;
   NSInteger _currentHanjaIndex; // Track selection index manually
   NSRange _selectedTextRange;   // For selected text Hanja conversion
+  NSTimeInterval _lastClientSyncTime;
 }
 
 - (void)updateComposition:(id)sender;
 - (void)commitComposition:(id)sender;
+- (void)syncInputClient:(id)sender force:(BOOL)force;
 
 @end
