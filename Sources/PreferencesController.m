@@ -90,8 +90,15 @@
         [hanjaConversionCheckbox setAction:@selector(toggleHanjaConversion:)];
         [contentView addSubview:hanjaConversionCheckbox];
         
+        useMarkedTextForAllAppsCheckbox = [[[NSButton alloc] initWithFrame:NSMakeRect(20, 460, 460, 24)] autorelease];
+        [useMarkedTextForAllAppsCheckbox setButtonType:NSButtonTypeSwitch];
+        [useMarkedTextForAllAppsCheckbox setTitle:@"모든 앱에서 밑줄 조합 방식 사용"];
+        [useMarkedTextForAllAppsCheckbox setTarget:self];
+        [useMarkedTextForAllAppsCheckbox setAction:@selector(toggleUseMarkedTextForAllApps:)];
+        [contentView addSubview:useMarkedTextForAllAppsCheckbox];
+
         // 3. Custom Shift Enable (Moved Down)
-        customShiftCheckbox = [[[NSButton alloc] initWithFrame:NSMakeRect(20, 460, 460, 24)] autorelease];
+        customShiftCheckbox = [[[NSButton alloc] initWithFrame:NSMakeRect(20, 430, 460, 24)] autorelease];
         [customShiftCheckbox setButtonType:NSButtonTypeSwitch];
         [customShiftCheckbox setTitle:@"쉬프트키 + 단자음/단모음 사용자화 사용"];
         [customShiftCheckbox setTarget:self];
@@ -107,7 +114,7 @@
         [contentView addSubview:fullDeleteCheckbox];
 
         // 4. Table Scroll View
-        NSScrollView *scrollView = [[[NSScrollView alloc] initWithFrame:NSMakeRect(20, 230, 480, 220)] autorelease];
+        NSScrollView *scrollView = [[[NSScrollView alloc] initWithFrame:NSMakeRect(20, 230, 480, 190)] autorelease];
         [scrollView setBorderType:NSBezelBorder];
         [scrollView setHasVerticalScroller:YES];
         
@@ -236,6 +243,9 @@
     
     BOOL fullDelete = [defaults boolForKey:@"FullCharacterDelete"];
     [fullDeleteCheckbox setState:(fullDelete ? NSControlStateValueOn : NSControlStateValueOff)];
+
+    BOOL useMarkedTextForAllApps = [defaults boolForKey:kDKSTUseMarkedTextForAllAppsKey];
+    [useMarkedTextForAllAppsCheckbox setState:(useMarkedTextForAllApps ? NSControlStateValueOn : NSControlStateValueOff)];
     
     BOOL shiftEnabled = [defaults boolForKey:@"EnableCustomShift"];
     [customShiftCheckbox setState:(shiftEnabled ? NSControlStateValueOn : NSControlStateValueOff)];
@@ -268,6 +278,12 @@
 - (IBAction)toggleFullDelete:(id)sender {
     BOOL enabled = ([sender state] == NSControlStateValueOn);
     [[self defaults] setBool:enabled forKey:@"FullCharacterDelete"];
+    [[self defaults] synchronize];
+}
+
+- (IBAction)toggleUseMarkedTextForAllApps:(id)sender {
+    BOOL enabled = ([sender state] == NSControlStateValueOn);
+    [[self defaults] setBool:enabled forKey:kDKSTUseMarkedTextForAllAppsKey];
     [[self defaults] synchronize];
 }
 

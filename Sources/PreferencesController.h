@@ -5,6 +5,7 @@
     IBOutlet NSButton *capsLockSwitchCheckbox;
     IBOutlet NSButton *moaJjikiCheckbox;
     IBOutlet NSButton *fullDeleteCheckbox;
+    IBOutlet NSButton *useMarkedTextForAllAppsCheckbox;
     
     IBOutlet NSButton *hanjaConversionCheckbox;
     
@@ -37,6 +38,7 @@
 - (IBAction)toggleMoaJjiki:(id)sender;
 - (IBAction)toggleHanjaConversion:(id)sender;
 - (IBAction)toggleFullDelete:(id)sender;
+- (IBAction)toggleUseMarkedTextForAllApps:(id)sender;
 - (IBAction)addMarkedTextApp:(id)sender;
 - (IBAction)removeMarkedTextApp:(id)sender;
 

@@ -21,6 +21,7 @@
       @"EnableMoaJjiki" : @YES,
       @"FullCharacterDelete" : @NO,
       @"EnableCustomShift" : @NO,
+      kDKSTUseMarkedTextForAllAppsKey : @NO,
       kDKSTMarkedTextAppBundleIDsKey : DKSTDefaultMarkedTextAppBundleIDs()
     }];
 
@@ -107,6 +108,11 @@
 }
 
 - (BOOL)shouldUseMarkedTextForClient:(id)sender {
+  if ([[NSUserDefaults standardUserDefaults]
+          boolForKey:kDKSTUseMarkedTextForAllAppsKey]) {
+    return YES;
+  }
+
   NSString *bundleID = nil;
 
   @try {
