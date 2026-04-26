@@ -25,6 +25,7 @@ extern NSString *const kDKSTHangulKeyboardKey;
 extern NSString *const kDKSTHangulOrderCorrectionKey;
 extern NSString *const kDKSTQwertyEmulationEnableKey;
 extern NSString *const kDKSTMarkedTextAppBundleIDsKey;
+extern NSString *const kDKSTUseMarkedTextForAllAppsKey;
 
 NSArray *DKSTDefaultMarkedTextAppBundleIDs(void);
 

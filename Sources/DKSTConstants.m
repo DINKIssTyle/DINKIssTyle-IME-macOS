@@ -30,6 +30,7 @@ NSString *const kDKSTHangulKeyboardKey = @"DKSTHangulKeyboard";
 NSString *const kDKSTHangulOrderCorrectionKey = @"DKSTHangulOrderCorrection";
 NSString *const kDKSTQwertyEmulationEnableKey = @"DKSTQwertyEmulationEnable";
 NSString *const kDKSTMarkedTextAppBundleIDsKey = @"DKSTMarkedTextAppBundleIDs";
+NSString *const kDKSTUseMarkedTextForAllAppsKey = @"DKSTUseMarkedTextForAllApps";
 
 NSArray *DKSTDefaultMarkedTextAppBundleIDs(void) {
   return [NSArray
