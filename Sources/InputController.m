@@ -43,6 +43,8 @@
     _lastClientSyncTime = 0;
     _directInputComposedLength = 0;
     _directInputComposedRange = NSMakeRange(NSNotFound, 0);
+    _markedReplacementRange = NSMakeRange(NSNotFound, 0);
+    _forcedMarkedTextBundleIDs = [[NSMutableSet alloc] init];
     _useMarkedTextForClient = NO;
 
     // Style attributes to match Apple's Korean IME
@@ -85,7 +87,38 @@
     [currentMode release];
     currentMode = nil;
   }
+  if (_forcedMarkedTextBundleIDs) {
+    [_forcedMarkedTextBundleIDs release];
+    _forcedMarkedTextBundleIDs = nil;
+  }
   [super dealloc];
+}
+
+- (NSString *)bundleIdentifierForClient:(id)sender {
+  NSString *bundleID = nil;
+
+  @try {
+    if (sender && [sender respondsToSelector:@selector(bundleIdentifier)]) {
+      bundleID = [sender bundleIdentifier];
+    }
+    if (!bundleID && [[self client] respondsToSelector:@selector(bundleIdentifier)]) {
+      bundleID = [[self client] bundleIdentifier];
+    }
+  } @catch (NSException *exception) {
+    DKSTLog(@"Exception getting client bundle id: %@", exception);
+  }
+
+  return bundleID;
+}
+
+- (void)forceMarkedTextForClient:(id)sender reason:(NSString *)reason {
+  NSString *bundleID = [self bundleIdentifierForClient:sender];
+  if ([bundleID length] > 0) {
+    [_forcedMarkedTextBundleIDs addObject:bundleID];
+  }
+  _useMarkedTextForClient = YES;
+  DKSTLog(@"Forcing marked text for %@: %@", bundleID ?: @"unknown client",
+          reason);
 }
 
 - (NSRange)directInputReplacementRange:(id)sender {
@@ -108,27 +141,38 @@
   return _directInputComposedRange;
 }
 
+- (NSRange)compositionReplacementRange:(id)sender {
+  if (_selectedTextRange.location != NSNotFound &&
+      _selectedTextRange.length > 0) {
+    return _selectedTextRange;
+  }
+  if (_directInputComposedLength > 0) {
+    return [self directInputReplacementRange:sender];
+  }
+  if (_markedReplacementRange.location != NSNotFound) {
+    return _markedReplacementRange;
+  }
+
+  NSString *composed = [engine composedString];
+  if ([composed length] > 0) {
+    return NSMakeRange(0, [composed length]);
+  }
+  return NSMakeRange(NSNotFound, 0);
+}
+
 - (BOOL)shouldUseMarkedTextForClient:(id)sender {
   if ([[NSUserDefaults standardUserDefaults]
           boolForKey:kDKSTUseMarkedTextForAllAppsKey]) {
     return YES;
   }
 
-  NSString *bundleID = nil;
+  NSString *bundleID = [self bundleIdentifierForClient:sender];
 
-  @try {
-    if (sender && [sender respondsToSelector:@selector(bundleIdentifier)]) {
-      bundleID = [sender bundleIdentifier];
-    }
-    if (!bundleID && [[self client] respondsToSelector:@selector(bundleIdentifier)]) {
-      bundleID = [[self client] bundleIdentifier];
-    }
-  } @catch (NSException *exception) {
-    DKSTLog(@"Exception getting client bundle id: %@", exception);
+  if (![bundleID length]) {
     return YES;
   }
 
-  if (![bundleID length]) {
+  if ([_forcedMarkedTextBundleIDs containsObject:bundleID]) {
     return YES;
   }
 
@@ -253,6 +297,7 @@
   [engine reset];
   _directInputComposedLength = 0;
   _directInputComposedRange = NSMakeRange(NSNotFound, 0);
+  _markedReplacementRange = NSMakeRange(NSNotFound, 0);
 }
 
 - (void)deactivateServer:(id)sender {
@@ -485,12 +530,15 @@
       [allCandidates addObject:originalText];
 
       if ([allCandidates count] > 0) {
+        if (_currentHanjaCandidates) {
+          [_currentHanjaCandidates release];
+        }
         _currentHanjaCandidates = [allCandidates retain];
 
-        NSRange directRange = [self directInputReplacementRange:sender];
-        _selectedTextRange =
-            (directRange.location != NSNotFound) ? directRange
-                                                 : NSMakeRange(NSNotFound, 0);
+        _selectedTextRange = [self compositionReplacementRange:sender];
+        if (_useMarkedTextForClient) {
+          _markedReplacementRange = _selectedTextRange;
+        }
 
         DKSTLog(@"Candidates count: %lu", (unsigned long)[allCandidates count]);
         for (NSUInteger i = 0; i < [allCandidates count]; i++) {
@@ -542,10 +590,14 @@
           [allCandidates addObject:originalText];
 
           if ([allCandidates count] > 0) {
+            if (_currentHanjaCandidates) {
+              [_currentHanjaCandidates release];
+            }
             _currentHanjaCandidates = [allCandidates retain];
 
             // Store the selected range for later replacement
             _selectedTextRange = selectedRange;
+            _markedReplacementRange = selectedRange;
 
             DKSTLog(@"Candidates for '%@': count=%lu", selectedText,
                     (unsigned long)[allCandidates count]);
@@ -590,16 +642,17 @@
   if (keyCode == 51) {
     if ([engine backspace]) {
       if (_useMarkedTextForClient) {
-        [self updateComposition:sender];
+        [self updateInlineForClient:sender];
       } else {
         NSString *composedAfterBackspace = [engine composedString];
         if ([composedAfterBackspace length] == 0 &&
             _directInputComposedLength > 0) {
           _directInputComposedLength = 0;
           _directInputComposedRange = NSMakeRange(NSNotFound, 0);
+          _markedReplacementRange = NSMakeRange(NSNotFound, 0);
           return NO;
         }
-        [self updateDirectComposition:sender];
+        [self updateInlineForClient:sender];
       }
       return YES;
     } else {
@@ -721,9 +774,9 @@
         [sender insertText:commit
             replacementRange:NSMakeRange(NSNotFound, NSNotFound)];
       }
-      [self updateComposition:sender];
+      [self updateInlineForClient:sender];
     } else {
-      [self updateDirectComposition:sender];
+      [self updateInlineForClient:sender];
     }
     return YES;
   } else {
@@ -731,7 +784,7 @@
 
     if ([self isHangulKeyCode:keyCode]) {
       DKSTLog(@"Blocked unprocessed Hangul keyCode=%d", keyCode);
-      [self updateComposition:sender];
+      [self updateInlineForClient:sender];
       return YES;
     }
 
@@ -771,11 +824,12 @@
 
     [sender setMarkedText:attrString
            selectionRange:NSMakeRange([composed length], 0)
-         replacementRange:NSMakeRange(NSNotFound, NSNotFound)];
+         replacementRange:_markedReplacementRange];
   } else {
     [sender setMarkedText:@""
            selectionRange:NSMakeRange(0, 0)
          replacementRange:NSMakeRange(NSNotFound, NSNotFound)];
+    _markedReplacementRange = NSMakeRange(NSNotFound, 0);
   }
 }
 
@@ -810,12 +864,49 @@
     [sender insertText:replacement replacementRange:replacementRange];
   }
 
+  NSUInteger expectedLocation = NSNotFound;
+  if (replacementStart != NSNotFound) {
+    expectedLocation = replacementStart + commitLength + composedLength;
+  }
+
+  if (expectedLocation != NSNotFound && composedLength > 0) {
+    @try {
+      NSRange selectedRange = [sender selectedRange];
+      if (selectedRange.location == NSNotFound ||
+          selectedRange.location != expectedLocation) {
+        [self forceMarkedTextForClient:sender
+                                reason:@"direct insert cursor mismatch"];
+        DKSTLog(@"Keeping current direct composition; marked text starts on next composition update");
+      }
+    } @catch (NSException *exception) {
+      DKSTLog(@"Exception checking direct insert result: %@", exception);
+      [self forceMarkedTextForClient:sender
+                              reason:@"direct insert selectedRange exception"];
+    }
+  }
+
   _directInputComposedLength = composedLength;
   if (composedLength > 0 && replacementStart != NSNotFound) {
     _directInputComposedRange =
         NSMakeRange(replacementStart + commitLength, composedLength);
   } else {
     _directInputComposedRange = NSMakeRange(NSNotFound, 0);
+  }
+  _markedReplacementRange = NSMakeRange(NSNotFound, 0);
+}
+
+- (void)updateInlineForClient:(id)sender {
+  _useMarkedTextForClient = [self shouldUseMarkedTextForClient:sender];
+  if (_useMarkedTextForClient) {
+    if (_markedReplacementRange.location == NSNotFound &&
+        _directInputComposedRange.location != NSNotFound) {
+      _markedReplacementRange = _directInputComposedRange;
+    }
+    _directInputComposedLength = 0;
+    _directInputComposedRange = NSMakeRange(NSNotFound, 0);
+    [self updateComposition:sender];
+  } else {
+    [self updateDirectComposition:sender];
   }
 }
 
@@ -831,6 +922,7 @@
     [engine reset];
     _directInputComposedLength = 0;
     _directInputComposedRange = NSMakeRange(NSNotFound, 0);
+    _markedReplacementRange = NSMakeRange(NSNotFound, 0);
     [sender setMarkedText:@""
            selectionRange:NSMakeRange(0, 0)
          replacementRange:NSMakeRange(NSNotFound, NSNotFound)];
@@ -862,6 +954,7 @@
   [engine reset];
   _directInputComposedLength = 0;
   _directInputComposedRange = NSMakeRange(NSNotFound, 0);
+  _markedReplacementRange = NSMakeRange(NSNotFound, 0);
   [sender setMarkedText:@""
          selectionRange:NSMakeRange(0, 0)
        replacementRange:NSMakeRange(NSNotFound, NSNotFound)];
@@ -1024,18 +1117,10 @@
                 (unsigned long)replacementRange.location,
                 (unsigned long)replacementRange.length);
       } else {
-        if (_directInputComposedLength > 0) {
-          replacementRange = [self directInputReplacementRange:sender];
-          DKSTLog(@"Replacing direct input text: location=%lu, length=%lu",
-                  (unsigned long)replacementRange.location,
-                  (unsigned long)replacementRange.length);
-        } else {
-          // Replacing marked text (legacy behavior)
-          NSString *composed = [engine composedString];
-          NSUInteger length = [composed length];
-          replacementRange = NSMakeRange(0, length);
-          DKSTLog(@"Replacing marked text, length=%lu", (unsigned long)length);
-        }
+        replacementRange = [self compositionReplacementRange:sender];
+        DKSTLog(@"Replacing composition text: location=%lu, length=%lu",
+                (unsigned long)replacementRange.location,
+                (unsigned long)replacementRange.length);
       }
 
       // Insert Hanja, replacing the text
@@ -1043,6 +1128,7 @@
       [engine reset];
       _directInputComposedLength = 0;
       _directInputComposedRange = NSMakeRange(NSNotFound, 0);
+      _markedReplacementRange = NSMakeRange(NSNotFound, 0);
     } else {
       DKSTLog(@"Failed to extract hanja from '%@'", selected);
     }
@@ -1052,6 +1138,7 @@
 
   // Reset selected range
   _selectedTextRange = NSMakeRange(NSNotFound, 0);
+  _markedReplacementRange = NSMakeRange(NSNotFound, 0);
   _currentHanjaIndex = 0; // Reset index
 
   [_candidates hide];
