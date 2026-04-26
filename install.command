@@ -29,10 +29,10 @@ function clear_build_app_quarantine() {
 # --- 화면 출력 및 메뉴 ---
 clear
 echo "=========================================="
-echo "      DKST 한국어 입력기 설치 도우미      "
+echo "      DKST 한글 입력기 설치 도우미      "
 echo "=========================================="
-echo "1. DKST 한국어 입력기 설치 (Install)"
-echo "2. DKST 한국어 입력기 제거 (Uninstall)"
+echo "1. DKST 한글 입력기 설치 (Install)"
+echo "2. DKST 한글 입력기 제거 (Uninstall)"
 echo "3. 설치 도우미 닫기 (Exit)"
 echo "=========================================="
 read -p "원하는 작업의 번호를 입력하세요 [1-3]: " CHOICE
