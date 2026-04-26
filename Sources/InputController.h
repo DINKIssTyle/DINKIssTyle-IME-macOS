@@ -14,6 +14,8 @@
   NSRange _directInputComposedRange;
   NSRange _markedReplacementRange;
   NSMutableSet *_forcedMarkedTextBundleIDs;
+  id _lastInputClient;
+  NSRange _lastClientSelectedRange;
   BOOL _useMarkedTextForClient;
 }
 
@@ -23,6 +25,10 @@
 - (void)commitComposition:(id)sender;
 - (void)applyUserPreferences;
 - (void)syncInputClient:(id)sender force:(BOOL)force;
+- (void)resetCompositionState;
+- (BOOL)hasPendingComposition;
+- (void)rememberSelectedRangeForClient:(id)sender;
+- (void)prepareForInputClient:(id)sender;
 - (NSRange)directInputReplacementRange:(id)sender;
 - (NSRange)compositionReplacementRange:(id)sender;
 - (NSString *)textBeforeCursorForClient:(id)sender

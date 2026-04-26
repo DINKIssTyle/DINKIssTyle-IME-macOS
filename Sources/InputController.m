@@ -46,6 +46,8 @@
     _directInputComposedRange = NSMakeRange(NSNotFound, 0);
     _markedReplacementRange = NSMakeRange(NSNotFound, 0);
     _forcedMarkedTextBundleIDs = [[NSMutableSet alloc] init];
+    _lastInputClient = inputClient;
+    _lastClientSelectedRange = NSMakeRange(NSNotFound, 0);
     _useMarkedTextForClient = NO;
 
     // Style attributes to match Apple's Korean IME
@@ -416,6 +418,91 @@
   }
 }
 
+- (void)resetCompositionState {
+  [engine reset];
+  _directInputComposedLength = 0;
+  _directInputComposedRange = NSMakeRange(NSNotFound, 0);
+  _markedReplacementRange = NSMakeRange(NSNotFound, 0);
+  _selectedTextRange = NSMakeRange(NSNotFound, 0);
+  _lastClientSelectedRange = NSMakeRange(NSNotFound, 0);
+  _currentHanjaIndex = 0;
+}
+
+- (BOOL)hasPendingComposition {
+  return [[engine composedString] length] > 0 ||
+          _directInputComposedLength > 0 ||
+          _markedReplacementRange.location != NSNotFound;
+}
+
+- (void)rememberSelectedRangeForClient:(id)sender {
+  if (!sender || ![sender respondsToSelector:@selector(selectedRange)]) {
+    _lastClientSelectedRange = NSMakeRange(NSNotFound, 0);
+    return;
+  }
+
+  @try {
+    _lastClientSelectedRange = [sender selectedRange];
+  } @catch (NSException *exception) {
+    DKSTLog(@"Exception remembering selected range: %@", exception);
+    _lastClientSelectedRange = NSMakeRange(NSNotFound, 0);
+  }
+}
+
+- (void)prepareForInputClient:(id)sender {
+  if (!sender) {
+    return;
+  }
+
+  if (_lastInputClient && _lastInputClient != sender) {
+    DKSTLog(@"Input client changed; clearing pending composition");
+
+    @try {
+      if ([_candidates isVisible]) {
+        [_candidates hide];
+      }
+    } @catch (NSException *exception) {
+      DKSTLog(@"Exception hiding candidates on client change: %@", exception);
+    }
+
+    @try {
+      [self commitComposition:_lastInputClient];
+    } @catch (NSException *exception) {
+      DKSTLog(@"Exception committing previous client composition: %@",
+              exception);
+      [self resetCompositionState];
+    }
+
+    @try {
+      [sender setMarkedText:@""
+             selectionRange:NSMakeRange(0, 0)
+           replacementRange:NSMakeRange(NSNotFound, NSNotFound)];
+    } @catch (NSException *exception) {
+      DKSTLog(@"Exception clearing new client marked text: %@", exception);
+    }
+  }
+
+  if ([self hasPendingComposition] &&
+      _lastClientSelectedRange.location != NSNotFound &&
+      [sender respondsToSelector:@selector(selectedRange)]) {
+    @try {
+      NSRange selectedRange = [sender selectedRange];
+      if (selectedRange.location != NSNotFound &&
+          !NSEqualRanges(selectedRange, _lastClientSelectedRange)) {
+        DKSTLog(@"Selection changed during composition; clearing pending composition");
+        [self resetCompositionState];
+        [sender setMarkedText:@""
+               selectionRange:NSMakeRange(0, 0)
+             replacementRange:NSMakeRange(NSNotFound, NSNotFound)];
+      }
+    } @catch (NSException *exception) {
+      DKSTLog(@"Exception checking selected range on client prepare: %@",
+              exception);
+    }
+  }
+
+  _lastInputClient = sender;
+}
+
 - (void)applyUserPreferences {
   NSUserDefaults *defaults = [NSUserDefaults standardUserDefaults];
 
@@ -442,16 +529,14 @@
   // Always call super first
   [super activateServer:sender];
 
+  _lastInputClient = sender;
   [self syncInputClient:sender force:YES];
 
   [self applyUserPreferences];
   _useMarkedTextForClient = [self shouldUseMarkedTextForClient:sender];
 
   // Ensure clean state and force Hangul mode on activation
-  [engine reset];
-  _directInputComposedLength = 0;
-  _directInputComposedRange = NSMakeRange(NSNotFound, 0);
-  _markedReplacementRange = NSMakeRange(NSNotFound, 0);
+  [self resetCompositionState];
 }
 
 - (void)deactivateServer:(id)sender {
@@ -495,6 +580,8 @@
   if ([event type] != NSEventTypeKeyDown) {
     return NO;
   }
+
+  [self prepareForInputClient:sender];
 
   // Do not reselect/override the input client while handling a text key. Doing
   // so can race the current event and let the first Roman character leak.
@@ -874,11 +961,13 @@
     [sender setMarkedText:attrString
            selectionRange:NSMakeRange([composed length], 0)
          replacementRange:_markedReplacementRange];
+    [self rememberSelectedRangeForClient:sender];
   } else {
     [sender setMarkedText:@""
            selectionRange:NSMakeRange(0, 0)
          replacementRange:NSMakeRange(NSNotFound, NSNotFound)];
     _markedReplacementRange = NSMakeRange(NSNotFound, 0);
+    [self rememberSelectedRangeForClient:sender];
   }
 }
 
@@ -942,6 +1031,7 @@
     _directInputComposedRange = NSMakeRange(NSNotFound, 0);
   }
   _markedReplacementRange = NSMakeRange(NSNotFound, 0);
+  [self rememberSelectedRangeForClient:sender];
 }
 
 - (void)updateInlineForClient:(id)sender {
@@ -975,6 +1065,7 @@
     [sender setMarkedText:@""
            selectionRange:NSMakeRange(0, 0)
          replacementRange:NSMakeRange(NSNotFound, NSNotFound)];
+    [self rememberSelectedRangeForClient:sender];
     return;
   }
 
@@ -1007,6 +1098,7 @@
   [sender setMarkedText:@""
          selectionRange:NSMakeRange(0, 0)
        replacementRange:NSMakeRange(NSNotFound, NSNotFound)];
+  [self rememberSelectedRangeForClient:sender];
 }
 
 - (void)setValue:(id)value forTag:(long)tag client:(id)sender {
