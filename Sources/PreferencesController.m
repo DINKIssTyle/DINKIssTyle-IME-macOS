@@ -66,13 +66,14 @@
             [[self defaults] synchronize];
         }
         
-        // 1. Caps Lock
-        capsLockSwitchCheckbox = [[[NSButton alloc] initWithFrame:NSMakeRect(20, 610, 460, 24)] autorelease];
-        [capsLockSwitchCheckbox setButtonType:NSButtonTypeSwitch];
-        [capsLockSwitchCheckbox setTitle:@"Caps Lock을 눌러 입력 언어 전환"];
-        [capsLockSwitchCheckbox setTarget:self];
-        [capsLockSwitchCheckbox setAction:@selector(toggleCapsLockSwitch:)];
-        [contentView addSubview:capsLockSwitchCheckbox];
+        NSTextField *capsLockInfoLabel = [[[NSTextField alloc] initWithFrame:NSMakeRect(20, 610, 460, 24)] autorelease];
+        [capsLockInfoLabel setStringValue:@"Caps Lock 입력 언어 전환은 macOS 키보드 설정을 따릅니다."];
+        [capsLockInfoLabel setEditable:NO];
+        [capsLockInfoLabel setSelectable:NO];
+        [capsLockInfoLabel setBezeled:NO];
+        [capsLockInfoLabel setDrawsBackground:NO];
+        [capsLockInfoLabel setTextColor:[NSColor secondaryLabelColor]];
+        [contentView addSubview:capsLockInfoLabel];
 
         // 2. Moa-jjiki
         moaJjikiCheckbox = [[[NSButton alloc] initWithFrame:NSMakeRect(20, 580, 460, 24)] autorelease];
@@ -228,9 +229,6 @@
 - (void)refreshState {
     NSUserDefaults *defaults = [self defaults];
     
-    BOOL capsEnabled = [defaults boolForKey:@"EnableCapsLockSwitch"];
-    [capsLockSwitchCheckbox setState:(capsEnabled ? NSControlStateValueOn : NSControlStateValueOff)];
-    
     // Moa-chigi Default: YES
     if ([defaults objectForKey:@"EnableMoaJjiki"] == nil) {
         [moaJjikiCheckbox setState:NSControlStateValueOn];
@@ -271,12 +269,6 @@
 }
 
 // MARK: - Actions
-
-- (IBAction)toggleCapsLockSwitch:(id)sender {
-    BOOL enabled = ([sender state] == NSControlStateValueOn);
-    [[self defaults] setBool:enabled forKey:@"EnableCapsLockSwitch"];
-    [[self defaults] synchronize];
-}
 
 - (IBAction)toggleMoaJjiki:(id)sender {
     BOOL enabled = ([sender state] == NSControlStateValueOn);

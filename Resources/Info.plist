@@ -70,7 +70,7 @@
 				<key>tsInputModePaletteIconFileKey</key>
 				<string>Hangul.pdf</string>
 				<key>tsInputModePrimaryInScriptKey</key>
-				<false/>
+				<true/>
 				<key>tsInputModeScriptKey</key>
 				<string>smKorean</string>
 			</dict>
@@ -95,12 +95,15 @@
 	<string>MainMenu</string>
 	<key>NSPrincipalClass</key>
 	<string>NSApplication</string>
+	<key>TICapsLockLanguageSwitchCapable</key>
+	<true/>
+	<key>TISInputSourceID</key>
+	<string>com.dinkisstyle.inputmethod.DKST</string>
 	<key>TISIntendedLanguage</key>
 	<string>ko</string>
 	<key>tsInputMethodCharacterRepertoireKey</key>
 	<array>
-		<string>Latn</string>
-		<string>Kor</string>
+		<string>Hang</string>
 	</array>
 	<key>tsInputMethodIconFileKey</key>
 	<string>DKST.icns</string>

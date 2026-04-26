@@ -2,7 +2,6 @@
 #import <Cocoa/Cocoa.h>
 
 @interface PreferencesController : NSWindowController <NSTableViewDataSource, NSTableViewDelegate, NSWindowDelegate> {
-    IBOutlet NSButton *capsLockSwitchCheckbox;
     IBOutlet NSButton *moaJjikiCheckbox;
     IBOutlet NSButton *fullDeleteCheckbox;
     IBOutlet NSButton *useMarkedTextForAllAppsCheckbox;
@@ -35,7 +34,6 @@
 
 + (PreferencesController *)sharedController;
 - (void)showPreferences;
-- (IBAction)toggleCapsLockSwitch:(id)sender;
 - (IBAction)toggleMoaJjiki:(id)sender;
 - (IBAction)toggleHanjaConversion:(id)sender;
 - (IBAction)toggleAppleHanjaDictionary:(id)sender;

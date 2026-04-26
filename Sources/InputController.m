@@ -17,7 +17,6 @@
 
     // Set default preference
     [[NSUserDefaults standardUserDefaults] registerDefaults:@{
-      @"EnableCapsLockSwitch" : @NO,
       @"EnableMoaJjiki" : @YES,
       @"FullCharacterDelete" : @NO,
       @"EnableCustomShift" : @NO,
