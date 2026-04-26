@@ -25,18 +25,9 @@ Universal Binary
 - 기타 앱에서 한글이 단축키를 가로채지 않도록 합니다.
 
 
-
-
-
----
-**설치방법**
-<p align="center">
-  <img src="docs/install.sh.png" alt="Example Image" width="800">
-</p>
-
-- [마지막 릴리즈](https://github.com/DINKIssTyle/DINKIssTyle-IME-macOS/releases) 를 다운로드 하세요.
-- 압축을 풀고, 터미널에서 chmod +x 다운로드받은위치/install.command 를 실행하세요.
-- install.command 더블클릭 해서 실행합니다.
-
-***이 프로젝트의 기본적인 한국어 입력기 구조는 바람입력기를 참고해서 작성되었습니다.***
-***https://baramim.blogspot.com/***  
+**설치 방법**
+1. 터미널을 엽니다.
+2. 아래 코드를 복사해서 붙여넣고 실행합니다.
+```
+/bin/bash -c "$(curl -fsSL https://raw.githubusercontent.com/DINKIssTyle/DINKIssTyle-IME-macOS/main/install.sh)"
+```

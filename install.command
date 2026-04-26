@@ -2,6 +2,7 @@
 
 # --- 설정 및 경로 ---
 SCRIPT_DIR="$( cd "$( dirname "${BASH_SOURCE[0]}" )" && pwd )"
+BUILD_DIR="${SCRIPT_DIR}/build"
 SOURCE_APP="${SCRIPT_DIR}/build/DKST.app"
 DEST_DIR="/Library/Input Methods"
 DEST_APP="${DEST_DIR}/DKST.app"
@@ -13,6 +14,16 @@ function kill_dkst_process() {
     # pkill로 이름이 포함된 프로세스 강제 종료 (-9)
     # 2>/dev/null: 에러 메시지 숨김 / || true: 프로세스가 없어도 계속 진행
     sudo pkill -9 -f "$PROCESS_NAME" 2>/dev/null || true
+}
+
+# --- 함수: 빌드된 모든 앱 번들의 격리 속성 제거 ---
+function clear_build_app_quarantine() {
+    echo "빌드 폴더의 앱 번들 확장 속성(quarantine) 제거 중..."
+
+    while IFS= read -r -d '' APP_BUNDLE; do
+        echo " - ${APP_BUNDLE}"
+        xattr -cr "$APP_BUNDLE"
+    done < <(find "$BUILD_DIR" -type d -name "*.app" -print0)
 }
 
 # --- 화면 출력 및 메뉴 ---
@@ -41,8 +52,11 @@ case $CHOICE in
         fi
 
         echo "관리자 권한이 필요합니다. 비밀번호를 입력해주세요."
+
+        # 0. 빌드 폴더 안의 모든 앱 번들 격리 해제
+        clear_build_app_quarantine
         
-        # 0. 기존 hanja.txt 백업 (사용자 수정본 보존)
+        # 1. 기존 hanja.txt 백업 (사용자 수정본 보존)
         HANJA_FILE="${DEST_APP}/Contents/Resources/hanja.txt"
         HANJA_BACKUP="/tmp/hanja_backup_$$.txt"
         if [ -f "$HANJA_FILE" ]; then
@@ -53,23 +67,23 @@ case $CHOICE in
             HANJA_PRESERVED=false
         fi
         
-        # 1. 기존 파일 정리 및 새 파일 복사
+        # 2. 기존 파일 정리 및 새 파일 복사
         echo "기존 앱 파일 제거 및 새 파일 복사 중..."
         sudo rm -rf "$DEST_APP"
         sudo cp -R "$SOURCE_APP" "$DEST_DIR/"
         
-        # 1.5. 백업한 hanja.txt 복원
+        # 2.5. 백업한 hanja.txt 복원
         if [ "$HANJA_PRESERVED" = true ] && [ -f "$HANJA_BACKUP" ]; then
             echo "사용자 hanja.txt 파일 복원 중..."
             sudo cp "$HANJA_BACKUP" "$HANJA_FILE"
             rm -f "$HANJA_BACKUP"
         fi
         
-        # 2. xattr 실행 (격리 해제)
-        echo "확장 속성(quarantine) 제거 중..."
+        # 3. 설치된 앱 번들 격리 해제
+        echo "설치된 앱 번들 확장 속성(quarantine) 제거 중..."
         sudo xattr -cr "$DEST_APP"
         
-        # 3. [순서 변경됨] 설치 완료 후 프로세스 종료
+        # 4. [순서 변경됨] 설치 완료 후 프로세스 종료
         kill_dkst_process
         
         echo "[설치 완료]"
