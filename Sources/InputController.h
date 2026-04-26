@@ -11,6 +11,7 @@
   NSRange _selectedTextRange;   // For selected text Hanja conversion
   NSTimeInterval _lastClientSyncTime;
   NSUInteger _directInputComposedLength;
+  NSRange _directInputComposedRange;
   BOOL _useMarkedTextForClient;
 }
 
@@ -21,5 +22,6 @@
 - (void)syncInputClient:(id)sender force:(BOOL)force;
 - (NSRange)directInputReplacementRange:(id)sender;
 - (BOOL)shouldUseMarkedTextForClient:(id)sender;
+- (BOOL)isHangulKeyCode:(unsigned short)keyCode;
 
 @end

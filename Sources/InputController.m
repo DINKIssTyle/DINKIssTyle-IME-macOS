@@ -42,6 +42,7 @@
              panelType:kIMKSingleColumnScrollingCandidatePanel];
     _lastClientSyncTime = 0;
     _directInputComposedLength = 0;
+    _directInputComposedRange = NSMakeRange(NSNotFound, 0);
     _useMarkedTextForClient = NO;
 
     // Style attributes to match Apple's Korean IME
@@ -89,7 +90,7 @@
 
 - (NSRange)directInputReplacementRange:(id)sender {
   if (_directInputComposedLength == 0 || !sender) {
-    return NSMakeRange(NSNotFound, NSNotFound);
+    return _directInputComposedRange;
   }
 
   @try {
@@ -104,7 +105,7 @@
     DKSTLog(@"Exception in directInputReplacementRange: %@", exception);
   }
 
-  return NSMakeRange(NSNotFound, NSNotFound);
+  return _directInputComposedRange;
 }
 
 - (BOOL)shouldUseMarkedTextForClient:(id)sender {
@@ -162,6 +163,40 @@
   return NO;
 }
 
+- (BOOL)isHangulKeyCode:(unsigned short)keyCode {
+  switch (keyCode) {
+  case 0:  // a
+  case 1:  // s
+  case 2:  // d
+  case 3:  // f
+  case 4:  // h
+  case 5:  // g
+  case 6:  // z
+  case 7:  // x
+  case 8:  // c
+  case 9:  // v
+  case 11: // b
+  case 12: // q
+  case 13: // w
+  case 14: // e
+  case 15: // r
+  case 16: // y
+  case 17: // t
+  case 31: // o
+  case 32: // u
+  case 34: // i
+  case 35: // p
+  case 37: // l
+  case 38: // j
+  case 40: // k
+  case 45: // n
+  case 46: // m
+    return YES;
+  default:
+    return NO;
+  }
+}
+
 - (void)syncInputClient:(id)sender force:(BOOL)force {
   if (!sender) {
     return;
@@ -217,6 +252,7 @@
   // Ensure clean state and force Hangul mode on activation
   [engine reset];
   _directInputComposedLength = 0;
+  _directInputComposedRange = NSMakeRange(NSNotFound, 0);
 }
 
 - (void)deactivateServer:(id)sender {
@@ -261,10 +297,8 @@
     return NO;
   }
 
-  // Remote desktop sessions can occasionally leave the IMK client in a stale
-  // keyboard override/input-mode state. Reassert it during normal event flow so
-  // the user does not need to force a deactivate/activate cycle with Spotlight.
-  [self syncInputClient:sender force:NO];
+  // Do not reselect/override the input client while handling a text key. Doing
+  // so can race the current event and let the first Roman character leak.
   [self applyUserPreferences];
   _useMarkedTextForClient = [self shouldUseMarkedTextForClient:sender];
 
@@ -558,6 +592,13 @@
       if (_useMarkedTextForClient) {
         [self updateComposition:sender];
       } else {
+        NSString *composedAfterBackspace = [engine composedString];
+        if ([composedAfterBackspace length] == 0 &&
+            _directInputComposedLength > 0) {
+          _directInputComposedLength = 0;
+          _directInputComposedRange = NSMakeRange(NSNotFound, 0);
+          return NO;
+        }
         [self updateDirectComposition:sender];
       }
       return YES;
@@ -688,6 +729,12 @@
   } else {
     // Not processed (e.g. non-hangul key)
 
+    if ([self isHangulKeyCode:keyCode]) {
+      DKSTLog(@"Blocked unprocessed Hangul keyCode=%d", keyCode);
+      [self updateComposition:sender];
+      return YES;
+    }
+
     // If Candidate window is visible, we might be navigating.
     // With SendServerKeyEventFirst = NO, we should only hit this if candidates
     // didn't handle it.
@@ -735,21 +782,41 @@
 - (void)updateDirectComposition:(id)sender {
   NSString *commit = [engine commitString];
   NSString *composed = [engine composedString];
+  NSUInteger commitLength = [commit length];
+  NSUInteger composedLength = [composed length];
   NSMutableString *replacement = [NSMutableString string];
 
-  if ([commit length] > 0) {
+  if (commitLength > 0) {
     [replacement appendString:commit];
   }
-  if ([composed length] > 0) {
+  if (composedLength > 0) {
     [replacement appendString:composed];
   }
 
   NSRange replacementRange = [self directInputReplacementRange:sender];
+  NSUInteger replacementStart = replacementRange.location;
+  if (replacementStart == NSNotFound) {
+    @try {
+      NSRange selectedRange = [sender selectedRange];
+      if (selectedRange.location != NSNotFound && selectedRange.length == 0) {
+        replacementStart = selectedRange.location;
+      }
+    } @catch (NSException *exception) {
+      DKSTLog(@"Exception getting insertion location: %@", exception);
+    }
+  }
+
   if ([replacement length] > 0 || replacementRange.location != NSNotFound) {
     [sender insertText:replacement replacementRange:replacementRange];
   }
 
-  _directInputComposedLength = [composed length];
+  _directInputComposedLength = composedLength;
+  if (composedLength > 0 && replacementStart != NSNotFound) {
+    _directInputComposedRange =
+        NSMakeRange(replacementStart + commitLength, composedLength);
+  } else {
+    _directInputComposedRange = NSMakeRange(NSNotFound, 0);
+  }
 }
 
 - (void)commitComposition:(id)sender {
@@ -763,6 +830,7 @@
   if (_directInputComposedLength > 0) {
     [engine reset];
     _directInputComposedLength = 0;
+    _directInputComposedRange = NSMakeRange(NSNotFound, 0);
     [sender setMarkedText:@""
            selectionRange:NSMakeRange(0, 0)
          replacementRange:NSMakeRange(NSNotFound, NSNotFound)];
@@ -792,6 +860,8 @@
   }
 
   [engine reset];
+  _directInputComposedLength = 0;
+  _directInputComposedRange = NSMakeRange(NSNotFound, 0);
   [sender setMarkedText:@""
          selectionRange:NSMakeRange(0, 0)
        replacementRange:NSMakeRange(NSNotFound, NSNotFound)];
@@ -972,6 +1042,7 @@
       [sender insertText:hanja replacementRange:replacementRange];
       [engine reset];
       _directInputComposedLength = 0;
+      _directInputComposedRange = NSMakeRange(NSNotFound, 0);
     } else {
       DKSTLog(@"Failed to extract hanja from '%@'", selected);
     }
