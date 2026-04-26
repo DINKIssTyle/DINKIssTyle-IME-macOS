@@ -25,6 +25,14 @@
 - (void)syncInputClient:(id)sender force:(BOOL)force;
 - (NSRange)directInputReplacementRange:(id)sender;
 - (NSRange)compositionReplacementRange:(id)sender;
+- (NSString *)textBeforeCursorForClient:(id)sender
+                                  limit:(NSUInteger)limit
+                                  range:(NSRange *)outRange;
+- (NSString *)hangulTextForHanjaConversion:(id)sender
+                                      range:(NSRange *)outRange;
+- (BOOL)showHanjaCandidatesForText:(NSString *)text
+                   replacementRange:(NSRange)replacementRange
+                             client:(id)sender;
 - (NSString *)bundleIdentifierForClient:(id)sender;
 - (void)forceMarkedTextForClient:(id)sender reason:(NSString *)reason;
 - (BOOL)shouldUseMarkedTextForClient:(id)sender;

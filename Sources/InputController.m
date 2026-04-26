@@ -22,6 +22,7 @@
       @"FullCharacterDelete" : @NO,
       @"EnableCustomShift" : @NO,
       kDKSTUseMarkedTextForAllAppsKey : @NO,
+      kDKSTUseAppleHanjaDictionaryKey : @YES,
       kDKSTMarkedTextAppBundleIDsKey : DKSTDefaultMarkedTextAppBundleIDs()
     }];
 
@@ -158,6 +159,159 @@
     return NSMakeRange(0, [composed length]);
   }
   return NSMakeRange(NSNotFound, 0);
+}
+
+- (NSString *)textBeforeCursorForClient:(id)sender
+                                  limit:(NSUInteger)limit
+                                  range:(NSRange *)outRange {
+  if (outRange) {
+    *outRange = NSMakeRange(NSNotFound, 0);
+  }
+  if (!sender || ![sender respondsToSelector:@selector(selectedRange)] ||
+      ![sender respondsToSelector:@selector(attributedSubstringFromRange:)]) {
+    return nil;
+  }
+
+  @try {
+    NSRange selectedRange = [sender selectedRange];
+    if (selectedRange.location == NSNotFound || selectedRange.length > 0) {
+      return nil;
+    }
+
+    NSUInteger length = MIN(limit, selectedRange.location);
+    if (length == 0) {
+      return nil;
+    }
+
+    NSRange contextRange = NSMakeRange(selectedRange.location - length, length);
+    NSAttributedString *contextAttr =
+        [sender attributedSubstringFromRange:contextRange];
+    NSString *context = [contextAttr string];
+    if ([context length] == 0) {
+      return nil;
+    }
+
+    if (outRange) {
+      *outRange = contextRange;
+    }
+    return context;
+  } @catch (NSException *exception) {
+    DKSTLog(@"textBeforeCursorForClient failed: %@", exception);
+    return nil;
+  }
+}
+
+- (NSString *)hangulTextForHanjaConversion:(id)sender
+                                      range:(NSRange *)outRange {
+  if (outRange) {
+    *outRange = NSMakeRange(NSNotFound, 0);
+  }
+
+  @try {
+    if ([sender respondsToSelector:@selector(selectedRange)] &&
+        [sender respondsToSelector:@selector(attributedSubstringFromRange:)]) {
+      NSRange selectedRange = [sender selectedRange];
+      if (selectedRange.location != NSNotFound && selectedRange.length > 0) {
+        NSAttributedString *selectedAttr =
+            [sender attributedSubstringFromRange:selectedRange];
+        NSString *selectedText = [selectedAttr string];
+        if ([selectedText length] > 0) {
+          if (outRange) {
+            *outRange = selectedRange;
+          }
+          return selectedText;
+        }
+      }
+    }
+  } @catch (NSException *exception) {
+    DKSTLog(@"selected text Hanja target lookup failed: %@", exception);
+  }
+
+  NSRange contextRange = NSMakeRange(NSNotFound, 0);
+  NSString *context = [self textBeforeCursorForClient:sender
+                                                limit:20
+                                                range:&contextRange];
+  if ([context length] > 0) {
+    NSUInteger suffixStart = [context length];
+    while (suffixStart > 0) {
+      unichar c = [context characterAtIndex:suffixStart - 1];
+      if (c < 0xAC00 || c > 0xD7A3) {
+        break;
+      }
+      suffixStart--;
+    }
+
+    NSString *hangulSuffix = [context substringFromIndex:suffixStart];
+    for (NSUInteger start = 0; start < [hangulSuffix length]; start++) {
+      NSString *candidateText = [hangulSuffix substringFromIndex:start];
+      NSArray *matches =
+          [[DKSTHanjaDictionary sharedDictionary] hanjaForHangul:candidateText];
+      if ([matches count] > 0) {
+        NSRange range = NSMakeRange(contextRange.location + suffixStart + start,
+                                    [candidateText length]);
+        if (outRange) {
+          *outRange = range;
+        }
+        return candidateText;
+      }
+    }
+  }
+
+  NSString *composed = [engine composedString];
+  if ([composed length] > 0) {
+    if (outRange) {
+      *outRange = [self compositionReplacementRange:sender];
+    }
+    return composed;
+  }
+
+  return nil;
+}
+
+- (BOOL)showHanjaCandidatesForText:(NSString *)text
+                   replacementRange:(NSRange)replacementRange
+                             client:(id)sender {
+  if ([text length] == 0 || replacementRange.location == NSNotFound ||
+      replacementRange.length == 0) {
+    return NO;
+  }
+
+  NSArray *candidates =
+      [[DKSTHanjaDictionary sharedDictionary] hanjaForHangul:text];
+
+  NSMutableArray *allCandidates = [NSMutableArray array];
+  if ([candidates count] > 0) {
+    [allCandidates addObjectsFromArray:candidates];
+  }
+
+  NSString *originalText = text;
+  if ([originalText length] > 10) {
+    originalText =
+        [[originalText substringToIndex:10] stringByAppendingString:@"..."];
+  }
+  [allCandidates addObject:originalText];
+
+  if (_currentHanjaCandidates) {
+    [_currentHanjaCandidates release];
+  }
+  _currentHanjaCandidates = [allCandidates retain];
+  _selectedTextRange = replacementRange;
+  _markedReplacementRange = replacementRange;
+
+  DKSTLog(@"Candidates for '%@': count=%lu range=(%lu,%lu)", text,
+          (unsigned long)[allCandidates count],
+          (unsigned long)replacementRange.location,
+          (unsigned long)replacementRange.length);
+
+  [_candidates updateCandidates];
+  [_candidates show:kIMKLocateCandidatesBelowHint];
+
+  _currentHanjaIndex = 0;
+  NSInteger firstId = [_candidates candidateIdentifierAtLineNumber:0];
+  if (firstId != NSNotFound) {
+    [_candidates selectCandidateWithIdentifier:firstId];
+  }
+  return YES;
 }
 
 - (BOOL)shouldUseMarkedTextForClient:(id)sender {
@@ -509,118 +663,13 @@
 
   if (hanjaEnabled && (keyCode == 36) &&
       (modifiers == NSEventModifierFlagOption)) {
-    NSString *composed = [engine composedString];
-    if ([composed length] > 0) {
-      // Existing behavior: Convert composed text
-      NSArray *candidates =
-          [[DKSTHanjaDictionary sharedDictionary] hanjaForHangul:composed];
-
-      // Always include the original text as a candidate (like Apple's default
-      // IME)
-      NSMutableArray *allCandidates = [NSMutableArray array];
-      if (candidates && [candidates count] > 0) {
-        [allCandidates addObjectsFromArray:candidates];
-      }
-      // Add original text (truncate if too long)
-      NSString *originalText = composed;
-      if ([originalText length] > 10) {
-        originalText =
-            [[originalText substringToIndex:10] stringByAppendingString:@"..."];
-      }
-      [allCandidates addObject:originalText];
-
-      if ([allCandidates count] > 0) {
-        if (_currentHanjaCandidates) {
-          [_currentHanjaCandidates release];
-        }
-        _currentHanjaCandidates = [allCandidates retain];
-
-        _selectedTextRange = [self compositionReplacementRange:sender];
-        if (_useMarkedTextForClient) {
-          _markedReplacementRange = _selectedTextRange;
-        }
-
-        DKSTLog(@"Candidates count: %lu", (unsigned long)[allCandidates count]);
-        for (NSUInteger i = 0; i < [allCandidates count]; i++) {
-          DKSTLog(@"  Candidate[%lu]: '%@' (class: %@)", i,
-                  [allCandidates objectAtIndex:i],
-                  [[allCandidates objectAtIndex:i] class]);
-        }
-
-        // Use updateCandidates to trigger data source method candidates:
-        [_candidates updateCandidates];
-        [_candidates show:kIMKLocateCandidatesBelowHint];
-
-        // Force select the first candidate (index 0)
-        _currentHanjaIndex = 0; // Initialize index
-        NSInteger firstId = [_candidates candidateIdentifierAtLineNumber:0];
-        if (firstId != NSNotFound) {
-          [_candidates selectCandidateWithIdentifier:firstId];
-        }
-        return YES;
-      }
-    } else {
-      // New behavior: Try to convert selected text
-      NSRange selectedRange = [sender selectedRange];
-      DKSTLog(@"Selected range: location=%lu, length=%lu",
-              (unsigned long)selectedRange.location,
-              (unsigned long)selectedRange.length);
-
-      if (selectedRange.length > 0 && selectedRange.location != NSNotFound) {
-        NSAttributedString *selectedAttrString =
-            [sender attributedSubstringFromRange:selectedRange];
-        NSString *selectedText = [selectedAttrString string];
-        DKSTLog(@"Selected text: %@", selectedText);
-
-        if (selectedText && [selectedText length] > 0) {
-          NSArray *candidates = [[DKSTHanjaDictionary sharedDictionary]
-              hanjaForHangul:selectedText];
-
-          // Always include the original text as a candidate
-          NSMutableArray *allCandidates = [NSMutableArray array];
-          if (candidates && [candidates count] > 0) {
-            [allCandidates addObjectsFromArray:candidates];
-          }
-          // Add original text (truncate if too long)
-          NSString *originalText = selectedText;
-          if ([originalText length] > 10) {
-            originalText = [[originalText substringToIndex:10]
-                stringByAppendingString:@"..."];
-          }
-          [allCandidates addObject:originalText];
-
-          if ([allCandidates count] > 0) {
-            if (_currentHanjaCandidates) {
-              [_currentHanjaCandidates release];
-            }
-            _currentHanjaCandidates = [allCandidates retain];
-
-            // Store the selected range for later replacement
-            _selectedTextRange = selectedRange;
-            _markedReplacementRange = selectedRange;
-
-            DKSTLog(@"Candidates for '%@': count=%lu", selectedText,
-                    (unsigned long)[allCandidates count]);
-            for (NSUInteger i = 0; i < [allCandidates count]; i++) {
-              DKSTLog(@"  Candidate[%lu]: '%@' (class: %@)", i,
-                      [allCandidates objectAtIndex:i],
-                      [[allCandidates objectAtIndex:i] class]);
-            }
-
-            // Use updateCandidates to trigger data source method candidates:
-            [_candidates updateCandidates];
-            [_candidates show:kIMKLocateCandidatesBelowHint];
-
-            // Force select the first candidate
-            _currentHanjaIndex = 0; // Initialize index
-            NSInteger firstId = [_candidates candidateIdentifierAtLineNumber:0];
-            if (firstId != NSNotFound) {
-              [_candidates selectCandidateWithIdentifier:firstId];
-            }
-            return YES;
-          }
-        }
-      }
+    NSRange conversionRange = NSMakeRange(NSNotFound, 0);
+    NSString *conversionText =
+        [self hangulTextForHanjaConversion:sender range:&conversionRange];
+    if ([self showHanjaCandidatesForText:conversionText
+                        replacementRange:conversionRange
+                                  client:sender]) {
+      return YES;
     }
   } // Allow Pass-through for Command/Ctrl/Option
   // If modifiers have Cmd/Ctrl/Option, pass through. Shift is allowed for
