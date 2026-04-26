@@ -22,6 +22,7 @@
       @"FullCharacterDelete" : @NO,
       @"EnableCustomShift" : @NO,
       kDKSTUseMarkedTextForAllAppsKey : @NO,
+      kDKSTUseAppleHanjaDictionaryKey : @YES,
       kDKSTMarkedTextAppBundleIDsKey : DKSTDefaultMarkedTextAppBundleIDs()
     }];
 

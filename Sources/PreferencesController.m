@@ -19,7 +19,7 @@
 }
 
 - (id)init {
-    NSRect frame = NSMakeRect(0, 0, 520, 620); 
+    NSRect frame = NSMakeRect(0, 0, 520, 650);
     NSWindow *window = [[[NSWindow alloc] initWithContentRect:frame
                                                     styleMask:(NSWindowStyleMaskTitled | NSWindowStyleMaskClosable | NSWindowStyleMaskMiniaturizable)
                                                       backing:NSBackingStoreBuffered
@@ -67,7 +67,7 @@
         }
         
         // 1. Caps Lock
-        capsLockSwitchCheckbox = [[[NSButton alloc] initWithFrame:NSMakeRect(20, 580, 460, 24)] autorelease];
+        capsLockSwitchCheckbox = [[[NSButton alloc] initWithFrame:NSMakeRect(20, 610, 460, 24)] autorelease];
         [capsLockSwitchCheckbox setButtonType:NSButtonTypeSwitch];
         [capsLockSwitchCheckbox setTitle:@"Caps Lock을 눌러 입력 언어 전환"];
         [capsLockSwitchCheckbox setTarget:self];
@@ -75,7 +75,7 @@
         [contentView addSubview:capsLockSwitchCheckbox];
 
         // 2. Moa-jjiki
-        moaJjikiCheckbox = [[[NSButton alloc] initWithFrame:NSMakeRect(20, 550, 460, 24)] autorelease];
+        moaJjikiCheckbox = [[[NSButton alloc] initWithFrame:NSMakeRect(20, 580, 460, 24)] autorelease];
         [moaJjikiCheckbox setButtonType:NSButtonTypeSwitch];
         [moaJjikiCheckbox setTitle:@"모아치기 (자모 순서 자동 보정)"];
         [moaJjikiCheckbox setTarget:self];
@@ -83,12 +83,19 @@
         [contentView addSubview:moaJjikiCheckbox];
         
         // 2.5. Hanja Conversion
-        hanjaConversionCheckbox = [[[NSButton alloc] initWithFrame:NSMakeRect(20, 520, 460, 24)] autorelease];
+        hanjaConversionCheckbox = [[[NSButton alloc] initWithFrame:NSMakeRect(20, 550, 460, 24)] autorelease];
         [hanjaConversionCheckbox setButtonType:NSButtonTypeSwitch];
         [hanjaConversionCheckbox setTitle:@"사전 변환 사용 (Option + Enter)"];
         [hanjaConversionCheckbox setTarget:self];
         [hanjaConversionCheckbox setAction:@selector(toggleHanjaConversion:)];
         [contentView addSubview:hanjaConversionCheckbox];
+
+        appleHanjaDictionaryCheckbox = [[[NSButton alloc] initWithFrame:NSMakeRect(20, 520, 460, 24)] autorelease];
+        [appleHanjaDictionaryCheckbox setButtonType:NSButtonTypeSwitch];
+        [appleHanjaDictionaryCheckbox setTitle:@"Apple 시스템 한자 사전도 후보에 사용"];
+        [appleHanjaDictionaryCheckbox setTarget:self];
+        [appleHanjaDictionaryCheckbox setAction:@selector(toggleAppleHanjaDictionary:)];
+        [contentView addSubview:appleHanjaDictionaryCheckbox];
         
         useMarkedTextForAllAppsCheckbox = [[[NSButton alloc] initWithFrame:NSMakeRect(20, 460, 460, 24)] autorelease];
         [useMarkedTextForAllAppsCheckbox setButtonType:NSButtonTypeSwitch];
@@ -105,7 +112,7 @@
         [customShiftCheckbox setAction:@selector(toggleCustomShift:)];
         [contentView addSubview:customShiftCheckbox];
         
-        // 5. Full Character Delete (Moved Up)
+        // 5. Full Character Delete
         fullDeleteCheckbox = [[[NSButton alloc] initWithFrame:NSMakeRect(20, 490, 460, 24)] autorelease];
         [fullDeleteCheckbox setButtonType:NSButtonTypeSwitch];
         [fullDeleteCheckbox setTitle:@"글자 단위로 삭제"];
@@ -240,6 +247,14 @@
         BOOL hanjaEnabled = [defaults boolForKey:@"EnableHanja"];
         [hanjaConversionCheckbox setState:(hanjaEnabled ? NSControlStateValueOn : NSControlStateValueOff)];
     }
+
+    // Apple Hanja Dictionary Default: YES
+    if ([defaults objectForKey:kDKSTUseAppleHanjaDictionaryKey] == nil) {
+        [appleHanjaDictionaryCheckbox setState:NSControlStateValueOn];
+    } else {
+        BOOL useAppleHanjaDictionary = [defaults boolForKey:kDKSTUseAppleHanjaDictionaryKey];
+        [appleHanjaDictionaryCheckbox setState:(useAppleHanjaDictionary ? NSControlStateValueOn : NSControlStateValueOff)];
+    }
     
     BOOL fullDelete = [defaults boolForKey:@"FullCharacterDelete"];
     [fullDeleteCheckbox setState:(fullDelete ? NSControlStateValueOn : NSControlStateValueOff)];
@@ -272,6 +287,12 @@
 - (IBAction)toggleHanjaConversion:(id)sender {
     BOOL enabled = ([sender state] == NSControlStateValueOn);
     [[self defaults] setBool:enabled forKey:@"EnableHanja"];
+    [[self defaults] synchronize];
+}
+
+- (IBAction)toggleAppleHanjaDictionary:(id)sender {
+    BOOL enabled = ([sender state] == NSControlStateValueOn);
+    [[self defaults] setBool:enabled forKey:kDKSTUseAppleHanjaDictionaryKey];
     [[self defaults] synchronize];
 }
 

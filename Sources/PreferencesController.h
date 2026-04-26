@@ -8,6 +8,7 @@
     IBOutlet NSButton *useMarkedTextForAllAppsCheckbox;
     
     IBOutlet NSButton *hanjaConversionCheckbox;
+    IBOutlet NSButton *appleHanjaDictionaryCheckbox;
     
     // New Feature
     IBOutlet NSButton *customShiftCheckbox;
@@ -37,6 +38,7 @@
 - (IBAction)toggleCapsLockSwitch:(id)sender;
 - (IBAction)toggleMoaJjiki:(id)sender;
 - (IBAction)toggleHanjaConversion:(id)sender;
+- (IBAction)toggleAppleHanjaDictionary:(id)sender;
 - (IBAction)toggleFullDelete:(id)sender;
 - (IBAction)toggleUseMarkedTextForAllApps:(id)sender;
 - (IBAction)addMarkedTextApp:(id)sender;
