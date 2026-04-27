@@ -895,6 +895,11 @@
   // Process Candidate Navigation (Arrow keys, Enter, Space, numbers)
 
   // Process Hangul
+  NSUInteger previousComposedLength = 0;
+  if (_useMarkedTextForClient) {
+    previousComposedLength = [[engine composedString] length];
+  }
+
   BOOL processed = [engine processCode:keyCode modifiers:[event modifierFlags]];
 
   if (processed) {
@@ -907,8 +912,9 @@
     if (_useMarkedTextForClient) {
       NSString *commit = [engine commitString];
       if ([commit length] > 0) {
-        [sender insertText:commit
-            replacementRange:NSMakeRange(NSNotFound, NSNotFound)];
+        [self commitMarkedText:commit
+        previousComposedLength:previousComposedLength
+                        client:sender];
       }
       [self updateInlineForClient:sender];
     } else {
@@ -945,6 +951,30 @@
     [self commitComposition:sender];
     return NO;
   }
+}
+
+- (void)commitMarkedText:(NSString *)commit
+    previousComposedLength:(NSUInteger)previousComposedLength
+                    client:(id)sender {
+  if ([commit length] == 0) {
+    return;
+  }
+
+  NSRange replacementRange = NSMakeRange(NSNotFound, NSNotFound);
+  if (previousComposedLength > 0) {
+    replacementRange = NSMakeRange(0, previousComposedLength);
+  }
+
+  @try {
+    [sender insertText:commit replacementRange:replacementRange];
+  } @catch (NSException *exception) {
+    DKSTLog(@"Exception committing marked text: %@", exception);
+    [sender insertText:commit
+        replacementRange:NSMakeRange(NSNotFound, NSNotFound)];
+  }
+
+  _markedReplacementRange = NSMakeRange(NSNotFound, 0);
+  [self rememberSelectedRangeForClient:sender];
 }
 
 - (void)updateComposition:(id)sender {

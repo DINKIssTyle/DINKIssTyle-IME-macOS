@@ -22,6 +22,9 @@
 - (void)updateComposition:(id)sender;
 - (void)updateDirectComposition:(id)sender;
 - (void)updateInlineForClient:(id)sender;
+- (void)commitMarkedText:(NSString *)commit
+    previousComposedLength:(NSUInteger)previousComposedLength
+                    client:(id)sender;
 - (void)commitComposition:(id)sender;
 - (void)applyUserPreferences;
 - (void)syncInputClient:(id)sender force:(BOOL)force;
