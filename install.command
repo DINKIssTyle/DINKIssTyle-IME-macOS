@@ -149,6 +149,7 @@ if [ "$SHOW_MESSAGE" = true ]; then
     echo " 작업이 완료되었습니다."
     echo " 설정 방법은 Github README의 [사용 설정 방법]을 참고해주세요."
     echo " https://github.com/DINKIssTyle/DINKIssTyle-IME-macOS "
+    echo " 중요! 처음 설치하신 경우 로그아웃/로그인 또는 재부팅해주세요."
     echo " 업그레이드의 경우 DKST 한글 입력기가 자동으로 재실행됩니다."
     echo "******************************************************"
 fi
