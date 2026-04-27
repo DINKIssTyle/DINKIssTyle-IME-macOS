@@ -80,6 +80,8 @@
 			<!-- <string>com.dinkisstyle.inputmethod.DKST.english</string> -->
 			<string>com.dinkisstyle.inputmethod.DKST.hangul</string>
 		</array>
+		<key>TISUnifiedUIForInputMethodEnabling</key>
+		<true/>
 	</dict>
 	<key>InputMethodConnectionName</key>
 	<string>DKST_1_Connection</string>
@@ -106,7 +108,7 @@
 		<string>Hang</string>
 	</array>
 	<key>tsInputMethodIconFileKey</key>
-	<string>DKST.icns</string>
+	<string>Hangul.pdf</string>
 	<key>LSMinimumSystemVersion</key>
 	<string>10.15</string>
 
