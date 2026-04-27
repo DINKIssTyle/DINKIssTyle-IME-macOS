@@ -480,7 +480,8 @@
     }
   }
 
-  if ([self hasPendingComposition] &&
+  BOOL usesMarkedText = [self shouldUseMarkedTextForClient:sender];
+  if (!usesMarkedText && [self hasPendingComposition] &&
       _lastClientSelectedRange.location != NSNotFound &&
       [sender respondsToSelector:@selector(selectedRange)]) {
     @try {
