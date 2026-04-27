@@ -31,37 +31,115 @@ function clear_build_app_quarantine() {
 }
 
 # --- 함수: DKST 입력 소스 등록 ---
-function ensure_dkst_input_source_enabled() {
-    local input_sources
+function delete_dkst_entries_from_array() {
+    local temp_plist="$1"
+    local array_name="$2"
+    local index
+    local bundle_id
+    local input_mode
+    local changed=false
 
-    input_sources="$(defaults read com.apple.HIToolbox AppleEnabledInputSources 2>/dev/null || true)"
-
-    if printf '%s\n' "$input_sources" | grep -Fq "$DKST_INPUT_MODE"; then
-        echo "DKST 입력기 항목이 이미 등록되어 있습니다."
-        return 0
-    fi
-
-    echo "macOS 입력 소스 목록에 DKST 입력기를 등록 중..."
-    if ! defaults write com.apple.HIToolbox AppleEnabledInputSources -array-add "
-<dict>
-    <key>Bundle ID</key>
-    <string>${DKST_BUNDLE_ID}</string>
-    <key>Input Mode</key>
-    <string>${DKST_INPUT_MODE}</string>
-    <key>InputSourceKind</key>
-    <string>Input Mode</string>
-</dict>"; then
-        echo "오류: DKST 입력기 자동 등록에 실패했습니다."
+    if ! /usr/libexec/PlistBuddy -c "Print :${array_name}" "$temp_plist" >/dev/null 2>&1; then
         return 1
     fi
 
-    input_sources="$(defaults read com.apple.HIToolbox AppleEnabledInputSources 2>/dev/null || true)"
-    if printf '%s\n' "$input_sources" | grep -Fq "$DKST_INPUT_MODE"; then
-        echo "DKST 입력기 자동 등록이 완료되었습니다."
+    index=0
+    while /usr/libexec/PlistBuddy -c "Print :${array_name}:${index}" "$temp_plist" >/dev/null 2>&1; do
+        bundle_id="$(/usr/libexec/PlistBuddy -c "Print :${array_name}:${index}:Bundle\ ID" "$temp_plist" 2>/dev/null || true)"
+        input_mode="$(/usr/libexec/PlistBuddy -c "Print :${array_name}:${index}:Input\ Mode" "$temp_plist" 2>/dev/null || true)"
+
+        if [ "$bundle_id" = "$DKST_BUNDLE_ID" ] || [ "$input_mode" = "$DKST_INPUT_MODE" ]; then
+            /usr/libexec/PlistBuddy -c "Delete :${array_name}:${index}" "$temp_plist"
+            changed=true
+            continue
+        fi
+
+        index=$((index + 1))
+    done
+
+    [ "$changed" = true ]
+}
+
+function count_dkst_entries_in_array() {
+    local temp_plist="$1"
+    local array_name="$2"
+    local index
+    local bundle_id
+    local input_mode
+    local count=0
+
+    if ! /usr/libexec/PlistBuddy -c "Print :${array_name}" "$temp_plist" >/dev/null 2>&1; then
+        echo 0
+        return
+    fi
+
+    index=0
+    while /usr/libexec/PlistBuddy -c "Print :${array_name}:${index}" "$temp_plist" >/dev/null 2>&1; do
+        bundle_id="$(/usr/libexec/PlistBuddy -c "Print :${array_name}:${index}:Bundle\ ID" "$temp_plist" 2>/dev/null || true)"
+        input_mode="$(/usr/libexec/PlistBuddy -c "Print :${array_name}:${index}:Input\ Mode" "$temp_plist" 2>/dev/null || true)"
+
+        if [ "$bundle_id" = "$DKST_BUNDLE_ID" ] || [ "$input_mode" = "$DKST_INPUT_MODE" ]; then
+            count=$((count + 1))
+        fi
+
+        index=$((index + 1))
+    done
+
+    echo "$count"
+}
+
+function import_hitoolbox_plist() {
+    local temp_plist="$1"
+
+    if defaults import com.apple.HIToolbox "$temp_plist"; then
+        killall cfprefsd 2>/dev/null || true
         return 0
     fi
 
-    echo "오류: DKST 입력기 자동 등록 결과를 확인하지 못했습니다."
+    return 1
+}
+
+function ensure_dkst_input_source_enabled() {
+    local temp_plist
+    local index
+    local enabled_count
+
+    temp_plist="$(mktemp "${TMPDIR:-/tmp}/dkst-hitoolbox.XXXXXX")"
+
+    if ! defaults export com.apple.HIToolbox "$temp_plist" 2>/dev/null; then
+        echo "오류: macOS 입력 소스 목록을 확인하지 못했습니다."
+        rm -f "$temp_plist"
+        return 1
+    fi
+
+    delete_dkst_entries_from_array "$temp_plist" "AppleEnabledInputSources" || true
+    delete_dkst_entries_from_array "$temp_plist" "AppleSelectedInputSources" || true
+    delete_dkst_entries_from_array "$temp_plist" "AppleInputSourceHistory" || true
+
+    if ! /usr/libexec/PlistBuddy -c "Print :AppleEnabledInputSources" "$temp_plist" >/dev/null 2>&1; then
+        /usr/libexec/PlistBuddy -c "Add :AppleEnabledInputSources array" "$temp_plist"
+    fi
+
+    index=0
+    while /usr/libexec/PlistBuddy -c "Print :AppleEnabledInputSources:${index}" "$temp_plist" >/dev/null 2>&1; do
+        index=$((index + 1))
+    done
+
+    echo "macOS 입력 소스 목록에 DKST 입력기를 등록 중..."
+    /usr/libexec/PlistBuddy -c "Add :AppleEnabledInputSources:${index} dict" "$temp_plist"
+    /usr/libexec/PlistBuddy -c "Add :AppleEnabledInputSources:${index}:Bundle\ ID string ${DKST_BUNDLE_ID}" "$temp_plist"
+    /usr/libexec/PlistBuddy -c "Add :AppleEnabledInputSources:${index}:Input\ Mode string ${DKST_INPUT_MODE}" "$temp_plist"
+    /usr/libexec/PlistBuddy -c "Add :AppleEnabledInputSources:${index}:InputSourceKind string 'Input Mode'" "$temp_plist"
+
+    enabled_count="$(count_dkst_entries_in_array "$temp_plist" "AppleEnabledInputSources")"
+    if [ "$enabled_count" -eq 1 ] && import_hitoolbox_plist "$temp_plist"; then
+        echo "DKST 입력기 자동 등록이 완료되었습니다."
+        rm -f "$temp_plist"
+        return 0
+    fi
+
+    echo "오류: DKST 입력기 자동 등록에 실패했습니다."
+    rm -f "$temp_plist"
     return 1
 }
 
@@ -72,7 +150,7 @@ function remove_dkst_input_source_if_enabled() {
     local input_mode
     local removed
 
-    temp_plist="$(mktemp "${TMPDIR:-/tmp}/dkst-hitoolbox.XXXXXX.plist")"
+    temp_plist="$(mktemp "${TMPDIR:-/tmp}/dkst-hitoolbox.XXXXXX")"
     removed=false
 
     if ! defaults export com.apple.HIToolbox "$temp_plist" 2>/dev/null; then
@@ -81,21 +159,12 @@ function remove_dkst_input_source_if_enabled() {
         return
     fi
 
-    index=0
-    while /usr/libexec/PlistBuddy -c "Print :AppleEnabledInputSources:${index}" "$temp_plist" >/dev/null 2>&1; do
-        input_mode="$(/usr/libexec/PlistBuddy -c "Print :AppleEnabledInputSources:${index}:Input\ Mode" "$temp_plist" 2>/dev/null || true)"
-
-        if [ "$input_mode" = "$DKST_INPUT_MODE" ]; then
-            /usr/libexec/PlistBuddy -c "Delete :AppleEnabledInputSources:${index}" "$temp_plist"
-            removed=true
-            continue
-        fi
-
-        index=$((index + 1))
-    done
+    delete_dkst_entries_from_array "$temp_plist" "AppleEnabledInputSources" && removed=true
+    delete_dkst_entries_from_array "$temp_plist" "AppleSelectedInputSources" && removed=true
+    delete_dkst_entries_from_array "$temp_plist" "AppleInputSourceHistory" && removed=true
 
     if [ "$removed" = true ]; then
-        defaults import com.apple.HIToolbox "$temp_plist"
+        import_hitoolbox_plist "$temp_plist"
         echo "macOS 입력 소스 목록에서 DKST 입력기를 제거했습니다."
     else
         echo "macOS 입력 소스 목록에 DKST 입력기 항목이 없습니다."
