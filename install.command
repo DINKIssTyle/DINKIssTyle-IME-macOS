@@ -7,10 +7,6 @@ SOURCE_APP="${SCRIPT_DIR}/build/DKST.app"
 DEST_DIR="/Library/Input Methods"
 DEST_APP="${DEST_DIR}/DKST.app"
 PROCESS_NAME="DKST"
-DKST_BUNDLE_ID="com.dinkisstyle.inputmethod.DKST"
-DKST_INPUT_MODE="com.dinkisstyle.inputmethod.DKST.hangul"
-ACTION_RESULT=""
-REGISTRATION_RESULT=""
 
 # --- 함수: 프로세스 종료 ---
 function kill_dkst_process() {
@@ -28,149 +24,6 @@ function clear_build_app_quarantine() {
         echo " - ${APP_BUNDLE}"
         xattr -cr "$APP_BUNDLE"
     done < <(find "$BUILD_DIR" -type d -name "*.app" -print0)
-}
-
-# --- 함수: DKST 입력 소스 등록 ---
-function delete_dkst_entries_from_array() {
-    local temp_plist="$1"
-    local array_name="$2"
-    local index
-    local bundle_id
-    local input_mode
-    local changed=false
-
-    if ! /usr/libexec/PlistBuddy -c "Print :${array_name}" "$temp_plist" >/dev/null 2>&1; then
-        return 1
-    fi
-
-    index=0
-    while /usr/libexec/PlistBuddy -c "Print :${array_name}:${index}" "$temp_plist" >/dev/null 2>&1; do
-        bundle_id="$(/usr/libexec/PlistBuddy -c "Print :${array_name}:${index}:Bundle\ ID" "$temp_plist" 2>/dev/null || true)"
-        input_mode="$(/usr/libexec/PlistBuddy -c "Print :${array_name}:${index}:Input\ Mode" "$temp_plist" 2>/dev/null || true)"
-
-        if [ "$bundle_id" = "$DKST_BUNDLE_ID" ] || [ "$input_mode" = "$DKST_INPUT_MODE" ]; then
-            /usr/libexec/PlistBuddy -c "Delete :${array_name}:${index}" "$temp_plist"
-            changed=true
-            continue
-        fi
-
-        index=$((index + 1))
-    done
-
-    [ "$changed" = true ]
-}
-
-function count_dkst_entries_in_array() {
-    local temp_plist="$1"
-    local array_name="$2"
-    local index
-    local bundle_id
-    local input_mode
-    local count=0
-
-    if ! /usr/libexec/PlistBuddy -c "Print :${array_name}" "$temp_plist" >/dev/null 2>&1; then
-        echo 0
-        return
-    fi
-
-    index=0
-    while /usr/libexec/PlistBuddy -c "Print :${array_name}:${index}" "$temp_plist" >/dev/null 2>&1; do
-        bundle_id="$(/usr/libexec/PlistBuddy -c "Print :${array_name}:${index}:Bundle\ ID" "$temp_plist" 2>/dev/null || true)"
-        input_mode="$(/usr/libexec/PlistBuddy -c "Print :${array_name}:${index}:Input\ Mode" "$temp_plist" 2>/dev/null || true)"
-
-        if [ "$bundle_id" = "$DKST_BUNDLE_ID" ] || [ "$input_mode" = "$DKST_INPUT_MODE" ]; then
-            count=$((count + 1))
-        fi
-
-        index=$((index + 1))
-    done
-
-    echo "$count"
-}
-
-function import_hitoolbox_plist() {
-    local temp_plist="$1"
-
-    if defaults import com.apple.HIToolbox "$temp_plist"; then
-        killall cfprefsd 2>/dev/null || true
-        return 0
-    fi
-
-    return 1
-}
-
-function ensure_dkst_input_source_enabled() {
-    local temp_plist
-    local index
-    local enabled_count
-
-    temp_plist="$(mktemp "${TMPDIR:-/tmp}/dkst-hitoolbox.XXXXXX")"
-
-    if ! defaults export com.apple.HIToolbox "$temp_plist" 2>/dev/null; then
-        echo "오류: macOS 입력 소스 목록을 확인하지 못했습니다."
-        rm -f "$temp_plist"
-        return 1
-    fi
-
-    delete_dkst_entries_from_array "$temp_plist" "AppleEnabledInputSources" || true
-    delete_dkst_entries_from_array "$temp_plist" "AppleSelectedInputSources" || true
-    delete_dkst_entries_from_array "$temp_plist" "AppleInputSourceHistory" || true
-
-    if ! /usr/libexec/PlistBuddy -c "Print :AppleEnabledInputSources" "$temp_plist" >/dev/null 2>&1; then
-        /usr/libexec/PlistBuddy -c "Add :AppleEnabledInputSources array" "$temp_plist"
-    fi
-
-    index=0
-    while /usr/libexec/PlistBuddy -c "Print :AppleEnabledInputSources:${index}" "$temp_plist" >/dev/null 2>&1; do
-        index=$((index + 1))
-    done
-
-    echo "macOS 입력 소스 목록에 DKST 입력기를 등록 중..."
-    /usr/libexec/PlistBuddy -c "Add :AppleEnabledInputSources:${index} dict" "$temp_plist"
-    /usr/libexec/PlistBuddy -c "Add :AppleEnabledInputSources:${index}:Bundle\ ID string ${DKST_BUNDLE_ID}" "$temp_plist"
-    /usr/libexec/PlistBuddy -c "Add :AppleEnabledInputSources:${index}:Input\ Mode string ${DKST_INPUT_MODE}" "$temp_plist"
-    /usr/libexec/PlistBuddy -c "Add :AppleEnabledInputSources:${index}:InputSourceKind string 'Input Mode'" "$temp_plist"
-
-    enabled_count="$(count_dkst_entries_in_array "$temp_plist" "AppleEnabledInputSources")"
-    if [ "$enabled_count" -eq 1 ] && import_hitoolbox_plist "$temp_plist"; then
-        echo "DKST 입력기 자동 등록이 완료되었습니다."
-        rm -f "$temp_plist"
-        return 0
-    fi
-
-    echo "오류: DKST 입력기 자동 등록에 실패했습니다."
-    rm -f "$temp_plist"
-    return 1
-}
-
-# --- 함수: DKST 입력 소스 제거 ---
-function remove_dkst_input_source_if_enabled() {
-    local temp_plist
-    local index
-    local input_mode
-    local removed
-
-    temp_plist="$(mktemp "${TMPDIR:-/tmp}/dkst-hitoolbox.XXXXXX")"
-    removed=false
-
-    if ! defaults export com.apple.HIToolbox "$temp_plist" 2>/dev/null; then
-        echo "macOS 입력 소스 목록을 확인하지 못했습니다."
-        rm -f "$temp_plist"
-        return
-    fi
-
-    delete_dkst_entries_from_array "$temp_plist" "AppleEnabledInputSources" && removed=true
-    delete_dkst_entries_from_array "$temp_plist" "AppleSelectedInputSources" && removed=true
-    delete_dkst_entries_from_array "$temp_plist" "AppleInputSourceHistory" && removed=true
-
-    if [ "$removed" = true ]; then
-        import_hitoolbox_plist "$temp_plist"
-        echo "macOS 입력 소스 목록에서 DKST 입력기를 제거했습니다."
-    else
-        echo "macOS 입력 소스 목록에 DKST 입력기 항목이 없습니다."
-    fi
-
-    rm -f "$temp_plist"
 }
 
 # --- 화면 출력 및 메뉴 ---
@@ -210,8 +63,6 @@ case $CHOICE in
     1)
         echo ""
         echo "[설치 시작]"
-        ACTION_RESULT="install_failed"
-        REGISTRATION_RESULT="failed"
         
         # 소스 파일 존재 여부 확인
         if [ ! -d "$SOURCE_APP" ]; then
@@ -236,63 +87,33 @@ case $CHOICE in
         else
             HANJA_PRESERVED=false
         fi
-        
-        INSTALL_FAILED=false
 
         # 2. 기존 파일 정리 및 새 파일 복사
         echo "기존 앱 파일 제거 및 새 파일 복사 중..."
-        if ! sudo rm -rf "$DEST_APP"; then
-            echo "오류: 기존 앱 파일 제거에 실패했습니다."
-            INSTALL_FAILED=true
-        elif ! sudo cp -R "$SOURCE_APP" "$DEST_DIR/"; then
-            echo "오류: 새 앱 파일 복사에 실패했습니다."
-            INSTALL_FAILED=true
-        fi
+        sudo rm -rf "$DEST_APP"
+        sudo cp -R "$SOURCE_APP" "$DEST_DIR/"
         
         # 2.5. 백업한 hanja.txt 복원
-        if [ "$INSTALL_FAILED" = false ] && [ "$HANJA_PRESERVED" = true ] && [ -f "$HANJA_BACKUP" ]; then
+        if [ "$HANJA_PRESERVED" = true ] && [ -f "$HANJA_BACKUP" ]; then
             echo "사용자 hanja.txt 파일 복원 중..."
             sudo cp "$HANJA_BACKUP" "$HANJA_FILE"
             rm -f "$HANJA_BACKUP"
         fi
         
         # 3. 설치된 앱 번들 격리 해제
-        if [ "$INSTALL_FAILED" = false ]; then
-            echo "설치된 앱 번들 확장 속성(quarantine) 제거 중..."
-        fi
-
-        if [ "$INSTALL_FAILED" = false ] && ! sudo xattr -cr "$DEST_APP"; then
-            echo "오류: 설치된 앱 번들 확장 속성 제거에 실패했습니다."
-            INSTALL_FAILED=true
-        fi
-
-        if [ "$INSTALL_FAILED" = false ]; then
-            ACTION_RESULT="install_success"
-
-            # 3.5. 현재 사용자 입력 소스 목록에 DKST 등록
-            if ensure_dkst_input_source_enabled; then
-                REGISTRATION_RESULT="success"
-            else
-                REGISTRATION_RESULT="failed"
-            fi
-        fi
+        echo "설치된 앱 번들 확장 속성(quarantine) 제거 중..."
+        sudo xattr -cr "$DEST_APP"
         
         # 4. [순서 변경됨] 설치 완료 후 프로세스 종료
         kill_dkst_process
         
-        if [ "$ACTION_RESULT" = "install_success" ]; then
-            echo "[설치 완료]"
-        else
-            echo "[설치 실패]"
-        fi
+        echo "[설치 완료]"
         SHOW_MESSAGE=true
         ;;
         
     2)
         echo ""
         echo "[제거 시작]"
-        ACTION_RESULT="uninstall_success"
-        REGISTRATION_RESULT=""
         echo "관리자 권한이 필요합니다. 비밀번호를 입력해주세요."
         
         # 1. 파일 제거 수행
@@ -302,11 +123,8 @@ case $CHOICE in
         else
             echo "설치된 입력기 파일이 없습니다."
         fi
-
-        # 2. 현재 사용자 입력 소스 목록에서 DKST 제거
-        remove_dkst_input_source_if_enabled
         
-        # 3. [순서 변경됨] 제거 완료 후 프로세스 종료
+        # 2. [순서 변경됨] 제거 완료 후 프로세스 종료
         kill_dkst_process
         
         echo "[제거 완료]"
@@ -329,14 +147,8 @@ if [ "$SHOW_MESSAGE" = true ]; then
     echo ""
     echo "******************************************************"
     echo " 작업이 완료되었습니다."
-    if [ "$ACTION_RESULT" = "install_success" ] && [ "$REGISTRATION_RESULT" = "success" ]; then
-        echo " DKST 한글 입력기 설치 및 등록이 완료되었습니다."
-    elif [ "$ACTION_RESULT" = "install_success" ] && [ "$REGISTRATION_RESULT" = "failed" ]; then
-        echo " DKST 한글 입력기 설치는 성공했지만, 자동 등록이 실패했습니다."
-    elif [ "$ACTION_RESULT" = "install_failed" ]; then
-        echo " DKST 한글 입력기 설치에 실패했습니다."
-    elif [ "$ACTION_RESULT" = "uninstall_success" ]; then
-        echo " DKST 한글 입력기 제거가 완료되었습니다."
-    fi
+    echo " 설정 방법은 Github README의 [사용 설정 방법]을 참고해주세요."
+    echo " https://github.com/DINKIssTyle/DINKIssTyle-IME-macOS "
+    echo " 업그레이드의 경우 DKST 한글 입력기가 자동으로 재실행됩니다."
     echo "******************************************************"
 fi
