@@ -66,17 +66,8 @@
             [[self defaults] synchronize];
         }
         
-        NSTextField *capsLockInfoLabel = [[[NSTextField alloc] initWithFrame:NSMakeRect(20, 610, 460, 24)] autorelease];
-        [capsLockInfoLabel setStringValue:@"Caps Lock 입력 언어 전환은 macOS 키보드 설정을 따릅니다."];
-        [capsLockInfoLabel setEditable:NO];
-        [capsLockInfoLabel setSelectable:NO];
-        [capsLockInfoLabel setBezeled:NO];
-        [capsLockInfoLabel setDrawsBackground:NO];
-        [capsLockInfoLabel setTextColor:[NSColor secondaryLabelColor]];
-        [contentView addSubview:capsLockInfoLabel];
-
         // 2. Moa-jjiki
-        moaJjikiCheckbox = [[[NSButton alloc] initWithFrame:NSMakeRect(20, 580, 460, 24)] autorelease];
+        moaJjikiCheckbox = [[[NSButton alloc] initWithFrame:NSMakeRect(20, 610, 460, 24)] autorelease];
         [moaJjikiCheckbox setButtonType:NSButtonTypeSwitch];
         [moaJjikiCheckbox setTitle:@"모아치기 (자모 순서 자동 보정)"];
         [moaJjikiCheckbox setTarget:self];
@@ -84,21 +75,21 @@
         [contentView addSubview:moaJjikiCheckbox];
         
         // 2.5. Hanja Conversion
-        hanjaConversionCheckbox = [[[NSButton alloc] initWithFrame:NSMakeRect(20, 550, 460, 24)] autorelease];
+        hanjaConversionCheckbox = [[[NSButton alloc] initWithFrame:NSMakeRect(20, 580, 460, 24)] autorelease];
         [hanjaConversionCheckbox setButtonType:NSButtonTypeSwitch];
         [hanjaConversionCheckbox setTitle:@"사전 변환 사용 (Option + Enter)"];
         [hanjaConversionCheckbox setTarget:self];
         [hanjaConversionCheckbox setAction:@selector(toggleHanjaConversion:)];
         [contentView addSubview:hanjaConversionCheckbox];
 
-        appleHanjaDictionaryCheckbox = [[[NSButton alloc] initWithFrame:NSMakeRect(20, 520, 460, 24)] autorelease];
+        appleHanjaDictionaryCheckbox = [[[NSButton alloc] initWithFrame:NSMakeRect(20, 550, 460, 24)] autorelease];
         [appleHanjaDictionaryCheckbox setButtonType:NSButtonTypeSwitch];
         [appleHanjaDictionaryCheckbox setTitle:@"Apple 시스템 한자 사전도 후보에 사용"];
         [appleHanjaDictionaryCheckbox setTarget:self];
         [appleHanjaDictionaryCheckbox setAction:@selector(toggleAppleHanjaDictionary:)];
         [contentView addSubview:appleHanjaDictionaryCheckbox];
         
-        useMarkedTextForAllAppsCheckbox = [[[NSButton alloc] initWithFrame:NSMakeRect(20, 460, 460, 24)] autorelease];
+        useMarkedTextForAllAppsCheckbox = [[[NSButton alloc] initWithFrame:NSMakeRect(20, 490, 460, 24)] autorelease];
         [useMarkedTextForAllAppsCheckbox setButtonType:NSButtonTypeSwitch];
         [useMarkedTextForAllAppsCheckbox setTitle:@"모든 앱에서 밑줄 조합 방식 사용"];
         [useMarkedTextForAllAppsCheckbox setTarget:self];
@@ -106,7 +97,7 @@
         [contentView addSubview:useMarkedTextForAllAppsCheckbox];
 
         // 3. Custom Shift Enable (Moved Down)
-        customShiftCheckbox = [[[NSButton alloc] initWithFrame:NSMakeRect(20, 430, 460, 24)] autorelease];
+        customShiftCheckbox = [[[NSButton alloc] initWithFrame:NSMakeRect(20, 460, 460, 24)] autorelease];
         [customShiftCheckbox setButtonType:NSButtonTypeSwitch];
         [customShiftCheckbox setTitle:@"쉬프트키 + 단자음/단모음 사용자화 사용"];
         [customShiftCheckbox setTarget:self];
@@ -114,7 +105,7 @@
         [contentView addSubview:customShiftCheckbox];
         
         // 5. Full Character Delete
-        fullDeleteCheckbox = [[[NSButton alloc] initWithFrame:NSMakeRect(20, 490, 460, 24)] autorelease];
+        fullDeleteCheckbox = [[[NSButton alloc] initWithFrame:NSMakeRect(20, 520, 460, 24)] autorelease];
         [fullDeleteCheckbox setButtonType:NSButtonTypeSwitch];
         [fullDeleteCheckbox setTitle:@"글자 단위로 삭제"];
         [fullDeleteCheckbox setTarget:self];
@@ -122,7 +113,7 @@
         [contentView addSubview:fullDeleteCheckbox];
 
         // 4. Table Scroll View
-        NSScrollView *scrollView = [[[NSScrollView alloc] initWithFrame:NSMakeRect(20, 230, 480, 190)] autorelease];
+        NSScrollView *scrollView = [[[NSScrollView alloc] initWithFrame:NSMakeRect(20, 260, 480, 190)] autorelease];
         [scrollView setBorderType:NSBezelBorder];
         [scrollView setHasVerticalScroller:YES];
         
@@ -148,7 +139,7 @@
         [scrollView setDocumentView:mappingsTableView];
         [contentView addSubview:scrollView];
 
-        NSTextField *markedLabel = [[[NSTextField alloc] initWithFrame:NSMakeRect(20, 200, 480, 20)] autorelease];
+        NSTextField *markedLabel = [[[NSTextField alloc] initWithFrame:NSMakeRect(20, 225, 480, 20)] autorelease];
         [markedLabel setStringValue:@"밑줄 조합 방식으로 사용할 앱 Bundle ID"];
         [markedLabel setBezeled:NO];
         [markedLabel setDrawsBackground:NO];
@@ -157,7 +148,7 @@
         [markedLabel setFont:[NSFont boldSystemFontOfSize:12]];
         [contentView addSubview:markedLabel];
 
-        NSScrollView *markedScrollView = [[[NSScrollView alloc] initWithFrame:NSMakeRect(20, 50, 480, 145)] autorelease];
+        NSScrollView *markedScrollView = [[[NSScrollView alloc] initWithFrame:NSMakeRect(20, 70, 480, 145)] autorelease];
         [markedScrollView setBorderType:NSBezelBorder];
         [markedScrollView setHasVerticalScroller:YES];
 
@@ -173,29 +164,50 @@
         [markedScrollView setDocumentView:markedTextAppsTableView];
         [contentView addSubview:markedScrollView];
 
-        addMarkedTextAppButton = [[[NSButton alloc] initWithFrame:NSMakeRect(20, 20, 80, 24)] autorelease];
+        addMarkedTextAppButton = [[[NSButton alloc] initWithFrame:NSMakeRect(20, 35, 80, 24)] autorelease];
         [addMarkedTextAppButton setTitle:@"추가"];
         [addMarkedTextAppButton setTarget:self];
         [addMarkedTextAppButton setAction:@selector(addMarkedTextApp:)];
         [contentView addSubview:addMarkedTextAppButton];
 
-        removeMarkedTextAppButton = [[[NSButton alloc] initWithFrame:NSMakeRect(108, 20, 80, 24)] autorelease];
+        removeMarkedTextAppButton = [[[NSButton alloc] initWithFrame:NSMakeRect(108, 35, 80, 24)] autorelease];
         [removeMarkedTextAppButton setTitle:@"삭제"];
         [removeMarkedTextAppButton setTarget:self];
         [removeMarkedTextAppButton setAction:@selector(removeMarkedTextApp:)];
         [contentView addSubview:removeMarkedTextAppButton];
         
-        // 6. Copyright Label
-        NSTextField *copyrightLabel = [[[NSTextField alloc] initWithFrame:NSMakeRect(210, 24, 290, 18)] autorelease];
-        [copyrightLabel setStringValue:@"(C) 2025 DINKI'ssTyle"];
-        [copyrightLabel setBezeled:NO];
-        [copyrightLabel setDrawsBackground:NO];
-        [copyrightLabel setEditable:NO];
-        [copyrightLabel setSelectable:NO];
-        [copyrightLabel setAlignment:NSTextAlignmentCenter];
-        [copyrightLabel setTextColor:[NSColor secondaryLabelColor]];
-        [copyrightLabel setFont:[NSFont systemFontOfSize:11]];
-        [contentView addSubview:copyrightLabel];
+        // 6. Copyright Link
+        NSTextView *copyrightView = [[[NSTextView alloc] initWithFrame:NSMakeRect(20, 2, 480, 18)] autorelease];
+        [copyrightView setEditable:NO];
+        [copyrightView setSelectable:YES];
+        [copyrightView setDrawsBackground:NO];
+        [copyrightView setTextContainerInset:NSMakeSize(0, 0)];
+        [[copyrightView textContainer] setLineFragmentPadding:0];
+
+        NSString *copyrightText = @"Copyright © 2026 DINKI'ssTyle. | macOS용 DKST 한글입력기 Github.";
+        NSString *linkText = @"macOS용 DKST 한글입력기 Github.";
+        NSMutableParagraphStyle *copyrightParagraphStyle = [[[NSMutableParagraphStyle alloc] init] autorelease];
+        [copyrightParagraphStyle setAlignment:NSTextAlignmentCenter];
+
+        NSMutableAttributedString *copyrightString =
+            [[[NSMutableAttributedString alloc] initWithString:copyrightText
+                                                    attributes:@{
+                                                        NSFontAttributeName: [NSFont systemFontOfSize:11],
+                                                        NSForegroundColorAttributeName: [NSColor secondaryLabelColor],
+                                                        NSParagraphStyleAttributeName: copyrightParagraphStyle
+                                                    }] autorelease];
+
+        NSRange linkRange = [copyrightText rangeOfString:linkText];
+        if (linkRange.location != NSNotFound) {
+            [copyrightString addAttributes:@{
+                NSLinkAttributeName: [NSURL URLWithString:@"https://github.com/DINKIssTyle/DINKIssTyle-IME-macOS"],
+                NSForegroundColorAttributeName: [NSColor linkColor],
+                NSUnderlineStyleAttributeName: @(NSUnderlineStyleSingle)
+            } range:linkRange];
+        }
+
+        [[copyrightView textStorage] setAttributedString:copyrightString];
+        [contentView addSubview:copyrightView];
         
         // Initial State
         [self refreshState];

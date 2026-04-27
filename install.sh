@@ -3,6 +3,29 @@ set -euo pipefail
 
 REPO="DINKIssTyle/DINKIssTyle-IME-macOS"
 API_URL="https://api.github.com/repos/${REPO}/releases?per_page=1"
+MIN_MACOS_MAJOR=10
+MIN_MACOS_MINOR=15
+
+if [ "$(uname -s)" != "Darwin" ]; then
+    echo "오류: 지원되지 않는 운영체제입니다. DKST 한글 입력기는 macOS 10.15 Catalina 이상에서만 설치할 수 있습니다."
+    exit 1
+fi
+
+if ! MACOS_VERSION="$(sw_vers -productVersion 2>/dev/null)"; then
+    echo "오류: macOS 버전을 확인하지 못했습니다. DKST 한글 입력기는 macOS 10.15 Catalina 이상에서만 설치할 수 있습니다."
+    exit 1
+fi
+
+MACOS_MAJOR="${MACOS_VERSION%%.*}"
+MACOS_REMAINDER="${MACOS_VERSION#*.}"
+MACOS_MINOR="${MACOS_REMAINDER%%.*}"
+
+if [ "$MACOS_MAJOR" -lt "$MIN_MACOS_MAJOR" ] \
+    || { [ "$MACOS_MAJOR" -eq "$MIN_MACOS_MAJOR" ] && [ "$MACOS_MINOR" -lt "$MIN_MACOS_MINOR" ]; }; then
+    echo "오류: 지원되지 않는 macOS 버전입니다. 현재 버전: ${MACOS_VERSION}"
+    echo "DKST 한글 입력기는 macOS 10.15 Catalina 이상에서만 설치할 수 있습니다."
+    exit 1
+fi
 
 WORK_DIR="$(mktemp -d "${TMPDIR:-/tmp}/dkst-install.XXXXXX")"
 ARCHIVE_PATH="${WORK_DIR}/source.zip"

@@ -7,6 +7,10 @@ SOURCE_APP="${SCRIPT_DIR}/build/DKST.app"
 DEST_DIR="/Library/Input Methods"
 DEST_APP="${DEST_DIR}/DKST.app"
 PROCESS_NAME="DKST"
+DKST_BUNDLE_ID="com.dinkisstyle.inputmethod.DKST"
+DKST_INPUT_MODE="com.dinkisstyle.inputmethod.DKST.hangul"
+ACTION_RESULT=""
+REGISTRATION_RESULT=""
 
 # --- 함수: 프로세스 종료 ---
 function kill_dkst_process() {
@@ -24,6 +28,80 @@ function clear_build_app_quarantine() {
         echo " - ${APP_BUNDLE}"
         xattr -cr "$APP_BUNDLE"
     done < <(find "$BUILD_DIR" -type d -name "*.app" -print0)
+}
+
+# --- 함수: DKST 입력 소스 등록 ---
+function ensure_dkst_input_source_enabled() {
+    local input_sources
+
+    input_sources="$(defaults read com.apple.HIToolbox AppleEnabledInputSources 2>/dev/null || true)"
+
+    if printf '%s\n' "$input_sources" | grep -Fq "$DKST_INPUT_MODE"; then
+        echo "DKST 입력기 항목이 이미 등록되어 있습니다."
+        return 0
+    fi
+
+    echo "macOS 입력 소스 목록에 DKST 입력기를 등록 중..."
+    if ! defaults write com.apple.HIToolbox AppleEnabledInputSources -array-add "
+<dict>
+    <key>Bundle ID</key>
+    <string>${DKST_BUNDLE_ID}</string>
+    <key>Input Mode</key>
+    <string>${DKST_INPUT_MODE}</string>
+    <key>InputSourceKind</key>
+    <string>Input Mode</string>
+</dict>"; then
+        echo "오류: DKST 입력기 자동 등록에 실패했습니다."
+        return 1
+    fi
+
+    input_sources="$(defaults read com.apple.HIToolbox AppleEnabledInputSources 2>/dev/null || true)"
+    if printf '%s\n' "$input_sources" | grep -Fq "$DKST_INPUT_MODE"; then
+        echo "DKST 입력기 자동 등록이 완료되었습니다."
+        return 0
+    fi
+
+    echo "오류: DKST 입력기 자동 등록 결과를 확인하지 못했습니다."
+    return 1
+}
+
+# --- 함수: DKST 입력 소스 제거 ---
+function remove_dkst_input_source_if_enabled() {
+    local temp_plist
+    local index
+    local input_mode
+    local removed
+
+    temp_plist="$(mktemp "${TMPDIR:-/tmp}/dkst-hitoolbox.XXXXXX.plist")"
+    removed=false
+
+    if ! defaults export com.apple.HIToolbox "$temp_plist" 2>/dev/null; then
+        echo "macOS 입력 소스 목록을 확인하지 못했습니다."
+        rm -f "$temp_plist"
+        return
+    fi
+
+    index=0
+    while /usr/libexec/PlistBuddy -c "Print :AppleEnabledInputSources:${index}" "$temp_plist" >/dev/null 2>&1; do
+        input_mode="$(/usr/libexec/PlistBuddy -c "Print :AppleEnabledInputSources:${index}:Input\ Mode" "$temp_plist" 2>/dev/null || true)"
+
+        if [ "$input_mode" = "$DKST_INPUT_MODE" ]; then
+            /usr/libexec/PlistBuddy -c "Delete :AppleEnabledInputSources:${index}" "$temp_plist"
+            removed=true
+            continue
+        fi
+
+        index=$((index + 1))
+    done
+
+    if [ "$removed" = true ]; then
+        defaults import com.apple.HIToolbox "$temp_plist"
+        echo "macOS 입력 소스 목록에서 DKST 입력기를 제거했습니다."
+    else
+        echo "macOS 입력 소스 목록에 DKST 입력기 항목이 없습니다."
+    fi
+
+    rm -f "$temp_plist"
 }
 
 # --- 화면 출력 및 메뉴 ---
@@ -63,6 +141,8 @@ case $CHOICE in
     1)
         echo ""
         echo "[설치 시작]"
+        ACTION_RESULT="install_failed"
+        REGISTRATION_RESULT="failed"
         
         # 소스 파일 존재 여부 확인
         if [ ! -d "$SOURCE_APP" ]; then
@@ -88,32 +168,62 @@ case $CHOICE in
             HANJA_PRESERVED=false
         fi
         
+        INSTALL_FAILED=false
+
         # 2. 기존 파일 정리 및 새 파일 복사
         echo "기존 앱 파일 제거 및 새 파일 복사 중..."
-        sudo rm -rf "$DEST_APP"
-        sudo cp -R "$SOURCE_APP" "$DEST_DIR/"
+        if ! sudo rm -rf "$DEST_APP"; then
+            echo "오류: 기존 앱 파일 제거에 실패했습니다."
+            INSTALL_FAILED=true
+        elif ! sudo cp -R "$SOURCE_APP" "$DEST_DIR/"; then
+            echo "오류: 새 앱 파일 복사에 실패했습니다."
+            INSTALL_FAILED=true
+        fi
         
         # 2.5. 백업한 hanja.txt 복원
-        if [ "$HANJA_PRESERVED" = true ] && [ -f "$HANJA_BACKUP" ]; then
+        if [ "$INSTALL_FAILED" = false ] && [ "$HANJA_PRESERVED" = true ] && [ -f "$HANJA_BACKUP" ]; then
             echo "사용자 hanja.txt 파일 복원 중..."
             sudo cp "$HANJA_BACKUP" "$HANJA_FILE"
             rm -f "$HANJA_BACKUP"
         fi
         
         # 3. 설치된 앱 번들 격리 해제
-        echo "설치된 앱 번들 확장 속성(quarantine) 제거 중..."
-        sudo xattr -cr "$DEST_APP"
+        if [ "$INSTALL_FAILED" = false ]; then
+            echo "설치된 앱 번들 확장 속성(quarantine) 제거 중..."
+        fi
+
+        if [ "$INSTALL_FAILED" = false ] && ! sudo xattr -cr "$DEST_APP"; then
+            echo "오류: 설치된 앱 번들 확장 속성 제거에 실패했습니다."
+            INSTALL_FAILED=true
+        fi
+
+        if [ "$INSTALL_FAILED" = false ]; then
+            ACTION_RESULT="install_success"
+
+            # 3.5. 현재 사용자 입력 소스 목록에 DKST 등록
+            if ensure_dkst_input_source_enabled; then
+                REGISTRATION_RESULT="success"
+            else
+                REGISTRATION_RESULT="failed"
+            fi
+        fi
         
         # 4. [순서 변경됨] 설치 완료 후 프로세스 종료
         kill_dkst_process
         
-        echo "[설치 완료]"
+        if [ "$ACTION_RESULT" = "install_success" ]; then
+            echo "[설치 완료]"
+        else
+            echo "[설치 실패]"
+        fi
         SHOW_MESSAGE=true
         ;;
         
     2)
         echo ""
         echo "[제거 시작]"
+        ACTION_RESULT="uninstall_success"
+        REGISTRATION_RESULT=""
         echo "관리자 권한이 필요합니다. 비밀번호를 입력해주세요."
         
         # 1. 파일 제거 수행
@@ -123,8 +233,11 @@ case $CHOICE in
         else
             echo "설치된 입력기 파일이 없습니다."
         fi
+
+        # 2. 현재 사용자 입력 소스 목록에서 DKST 제거
+        remove_dkst_input_source_if_enabled
         
-        # 2. [순서 변경됨] 제거 완료 후 프로세스 종료
+        # 3. [순서 변경됨] 제거 완료 후 프로세스 종료
         kill_dkst_process
         
         echo "[제거 완료]"
@@ -147,7 +260,14 @@ if [ "$SHOW_MESSAGE" = true ]; then
     echo ""
     echo "******************************************************"
     echo " 작업이 완료되었습니다."
-    echo " 프로세스가 종료되었습니다. 시스템이 자동으로 재실행하거나"
-    echo " [로그아웃 후 다시 로그인]하면 적용됩니다."
+    if [ "$ACTION_RESULT" = "install_success" ] && [ "$REGISTRATION_RESULT" = "success" ]; then
+        echo " DKST 한글 입력기 설치 및 등록이 완료되었습니다."
+    elif [ "$ACTION_RESULT" = "install_success" ] && [ "$REGISTRATION_RESULT" = "failed" ]; then
+        echo " DKST 한글 입력기 설치는 성공했지만, 자동 등록이 실패했습니다."
+    elif [ "$ACTION_RESULT" = "install_failed" ]; then
+        echo " DKST 한글 입력기 설치에 실패했습니다."
+    elif [ "$ACTION_RESULT" = "uninstall_success" ]; then
+        echo " DKST 한글 입력기 제거가 완료되었습니다."
+    fi
     echo "******************************************************"
 fi
