@@ -1,6 +1,7 @@
 # macOS용 DKST 한글입력기 환경설정 설명
 
-<div align="center" style="width:500px;"><img src="docs/DKST_Preferences.png" alt="DKST Preferences"></div>
+<p align="center">
+<img src="docs/DKST_Preferences.png" width="600"></p>
 
 * **모아치기 (자모 순서 자동 보정)**: 자음과 모음의 입력 순서에 상관없이 글자를 완성하는 옵션입니다. 빠르게 타이핑할때 오타를 줄일 수 있습니다.
 

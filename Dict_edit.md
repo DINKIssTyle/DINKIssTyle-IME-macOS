@@ -9,11 +9,10 @@
 
 - DKST 입력기로 전환된 **메뉴바**에서 **Dictionary Editor**를 클릭하여 실행할 수 있습니다.
 <p align="center">
-  <img src="docs/DKST_dict_01.png">
-</p>
+<img src="docs/DKST_dict_01.png" width="250"></p>
 
 <p align="center">
-  <img src="docs/DKST_dict_02.png">
+  <img src="docs/DKST_dict_02.png" width="600">
 </p>
 
 - Dictionary Editor는 아래 경로 중 하나의 `hanja.txt` 파일을 편집합니다.
@@ -32,7 +31,7 @@
 ## 한자 입력 기능을 이용한 활용
 
 <p align="center">
-  <img src="docs/DKST_dict_03.png">
+  <img src="docs/DKST_dict_03.png" width="250">
 </p>
 
 - 트리거 글자를 입력한 뒤, **커밋되기 전에**
