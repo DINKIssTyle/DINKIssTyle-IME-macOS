@@ -1,7 +1,6 @@
 #import "InputController.h"
 #import "DKSTConstants.h"
 #import "DKSTHanjaDictionary.h"
-#import "PreferencesController.h"
 
 @implementation InputController
 
@@ -48,6 +47,17 @@
     _lastInputClient = inputClient;
     _lastClientSelectedRange = NSMakeRange(NSNotFound, 0);
     _useMarkedTextForClient = NO;
+    _hanjaEnabled = YES;
+    _markedTextCommittedPrefix = [[NSMutableString alloc] init];
+    _hanjaMarkedPrefixLength = 0;
+    _hanjaReplacementUsesMarkedPrefix = NO;
+
+    [self reloadUserPreferences];
+    [[NSNotificationCenter defaultCenter]
+        addObserver:self
+           selector:@selector(preferencesDidChange:)
+               name:NSUserDefaultsDidChangeNotification
+             object:nil];
 
     // Style attributes to match Apple's Korean IME
     NSDictionary *styleAttributes = @{
@@ -93,6 +103,19 @@
     [_forcedMarkedTextBundleIDs release];
     _forcedMarkedTextBundleIDs = nil;
   }
+  if (_customShiftMappings) {
+    [_customShiftMappings release];
+    _customShiftMappings = nil;
+  }
+  if (_markedTextBundleIDSet) {
+    [_markedTextBundleIDSet release];
+    _markedTextBundleIDSet = nil;
+  }
+  if (_markedTextCommittedPrefix) {
+    [_markedTextCommittedPrefix release];
+    _markedTextCommittedPrefix = nil;
+  }
+  [[NSNotificationCenter defaultCenter] removeObserver:self];
   [super dealloc];
 }
 
@@ -204,6 +227,9 @@
 
 - (NSString *)hangulTextForHanjaConversion:(id)sender
                                       range:(NSRange *)outRange {
+  _hanjaMarkedPrefixLength = 0;
+  _hanjaReplacementUsesMarkedPrefix = NO;
+
   if (outRange) {
     *outRange = NSMakeRange(NSNotFound, 0);
   }
@@ -226,6 +252,31 @@
     }
   } @catch (NSException *exception) {
     DKSTLog(@"selected text Hanja target lookup failed: %@", exception);
+  }
+
+  NSString *composed = [engine composedString];
+  if (_useMarkedTextForClient && [composed length] > 0 &&
+      [_markedTextCommittedPrefix length] > 0) {
+    NSString *markedText =
+        [_markedTextCommittedPrefix stringByAppendingString:composed];
+    for (NSUInteger start = 0; start < [markedText length]; start++) {
+      NSString *candidateText = [markedText substringFromIndex:start];
+      NSArray *matches =
+          [[DKSTHanjaDictionary sharedDictionary] hanjaForHangul:candidateText];
+      if ([matches count] > 0) {
+        if (outRange) {
+          NSRange compositionRange = [self compositionReplacementRange:sender];
+          *outRange = NSMakeRange(compositionRange.location,
+                                  [candidateText length]);
+        }
+        _hanjaMarkedPrefixLength =
+            [candidateText length] > [composed length]
+                ? [candidateText length] - [composed length]
+                : 0;
+        _hanjaReplacementUsesMarkedPrefix = (_hanjaMarkedPrefixLength > 0);
+        return candidateText;
+      }
+    }
   }
 
   NSRange contextRange = NSMakeRange(NSNotFound, 0);
@@ -258,7 +309,6 @@
     }
   }
 
-  NSString *composed = [engine composedString];
   if ([composed length] > 0) {
     if (outRange) {
       *outRange = [self compositionReplacementRange:sender];
@@ -316,8 +366,7 @@
 }
 
 - (BOOL)shouldUseMarkedTextForClient:(id)sender {
-  if ([[NSUserDefaults standardUserDefaults]
-          boolForKey:kDKSTUseMarkedTextForAllAppsKey]) {
+  if (_useMarkedTextForAllApps) {
     return YES;
   }
 
@@ -331,18 +380,8 @@
     return YES;
   }
 
-  NSArray *bundleIDs =
-      [[NSUserDefaults standardUserDefaults] arrayForKey:kDKSTMarkedTextAppBundleIDsKey];
-  if (![bundleIDs count]) {
-    bundleIDs = DKSTDefaultMarkedTextAppBundleIDs();
-  }
-
-  for (NSString *markedBundleID in bundleIDs) {
-    NSString *trimmed = [markedBundleID
-        stringByTrimmingCharactersInSet:[NSCharacterSet whitespaceAndNewlineCharacterSet]];
-    if ([trimmed length] > 0 && [bundleID isEqualToString:trimmed]) {
-      return YES;
-    }
+  if ([_markedTextBundleIDSet containsObject:bundleID]) {
+    return YES;
   }
 
   @try {
@@ -360,6 +399,10 @@
   }
 
   return NO;
+}
+
+- (void)refreshMarkedTextPolicyForClient:(id)sender {
+  _useMarkedTextForClient = [self shouldUseMarkedTextForClient:sender];
 }
 
 - (BOOL)isHangulKeyCode:(unsigned short)keyCode {
@@ -425,6 +468,9 @@
   _selectedTextRange = NSMakeRange(NSNotFound, 0);
   _lastClientSelectedRange = NSMakeRange(NSNotFound, 0);
   _currentHanjaIndex = 0;
+  [_markedTextCommittedPrefix setString:@""];
+  _hanjaMarkedPrefixLength = 0;
+  _hanjaReplacementUsesMarkedPrefix = NO;
 }
 
 - (BOOL)hasPendingComposition {
@@ -452,7 +498,8 @@
     return;
   }
 
-  if (_lastInputClient && _lastInputClient != sender) {
+  BOOL clientChanged = (_lastInputClient && _lastInputClient != sender);
+  if (clientChanged) {
     DKSTLog(@"Input client changed; clearing pending composition");
 
     @try {
@@ -480,8 +527,11 @@
     }
   }
 
-  BOOL usesMarkedText = [self shouldUseMarkedTextForClient:sender];
-  if (!usesMarkedText && [self hasPendingComposition] &&
+  if (clientChanged || _lastInputClient != sender) {
+    [self refreshMarkedTextPolicyForClient:sender];
+  }
+
+  if (!_useMarkedTextForClient && [self hasPendingComposition] &&
       _lastClientSelectedRange.location != NSNotFound &&
       [sender respondsToSelector:@selector(selectedRange)]) {
     @try {
@@ -503,14 +553,57 @@
   _lastInputClient = sender;
 }
 
-- (void)applyUserPreferences {
+- (void)reloadUserPreferences {
   NSUserDefaults *defaults = [NSUserDefaults standardUserDefaults];
 
-  BOOL moaEnabled = [defaults boolForKey:@"EnableMoaJjiki"];
-  [engine setMoaJjikiEnabled:moaEnabled];
+  _moaJjikiEnabled = [defaults boolForKey:@"EnableMoaJjiki"];
+  [engine setMoaJjikiEnabled:_moaJjikiEnabled];
 
-  BOOL fullDelete = [defaults boolForKey:@"FullCharacterDelete"];
-  [engine setFullCharacterDelete:fullDelete];
+  _fullCharacterDeleteEnabled = [defaults boolForKey:@"FullCharacterDelete"];
+  [engine setFullCharacterDelete:_fullCharacterDeleteEnabled];
+
+  _customShiftEnabled = [defaults boolForKey:@"EnableCustomShift"];
+  _useMarkedTextForAllApps =
+      [defaults boolForKey:kDKSTUseMarkedTextForAllAppsKey];
+  if ([defaults objectForKey:@"EnableHanja"] != nil) {
+    _hanjaEnabled = [defaults boolForKey:@"EnableHanja"];
+  } else {
+    _hanjaEnabled = YES;
+  }
+
+  NSDictionary *mappings = [defaults dictionaryForKey:@"DKSTCustomShiftMappings"];
+  if (_customShiftMappings != mappings) {
+    [_customShiftMappings release];
+    _customShiftMappings = [mappings copy];
+  }
+
+  NSArray *bundleIDs = [defaults arrayForKey:kDKSTMarkedTextAppBundleIDsKey];
+  if (![bundleIDs count]) {
+    bundleIDs = DKSTDefaultMarkedTextAppBundleIDs();
+  }
+
+  NSMutableSet *normalizedBundleIDs = [NSMutableSet set];
+  NSCharacterSet *whitespace =
+      [NSCharacterSet whitespaceAndNewlineCharacterSet];
+  for (NSString *bundleID in bundleIDs) {
+    if (![bundleID isKindOfClass:[NSString class]]) {
+      continue;
+    }
+    NSString *trimmed = [bundleID stringByTrimmingCharactersInSet:whitespace];
+    if ([trimmed length] > 0) {
+      [normalizedBundleIDs addObject:trimmed];
+    }
+  }
+
+  [_markedTextBundleIDSet release];
+  _markedTextBundleIDSet = [normalizedBundleIDs copy];
+}
+
+- (void)preferencesDidChange:(NSNotification *)notification {
+  [self reloadUserPreferences];
+  if (_lastInputClient) {
+    [self refreshMarkedTextPolicyForClient:_lastInputClient];
+  }
 }
 
 // MARK: - Input Method Kit Methods
@@ -532,8 +625,8 @@
   _lastInputClient = sender;
   [self syncInputClient:sender force:YES];
 
-  [self applyUserPreferences];
-  _useMarkedTextForClient = [self shouldUseMarkedTextForClient:sender];
+  [self reloadUserPreferences];
+  [self refreshMarkedTextPolicyForClient:sender];
 
   // Ensure clean state and force Hangul mode on activation
   [self resetCompositionState];
@@ -566,13 +659,6 @@
 }
 
 - (BOOL)handleEvent:(NSEvent *)event client:(id)sender {
-  // 1. Check if Preferences Window is Key (Active)
-  NSWindow *prefWindow = [[PreferencesController sharedController] window];
-  if (prefWindow && [prefWindow isKeyWindow]) {
-    [NSApp sendEvent:event];
-    return YES; // Stop IMK from processing it for the client (TextEdit)
-  }
-
   unsigned short keyCode = [event keyCode];
 
   // Filter out everything but KeyDown (fixes Option release bug closing
@@ -585,9 +671,6 @@
 
   // Do not reselect/override the input client while handling a text key. Doing
   // so can race the current event and let the first Roman character leak.
-  [self applyUserPreferences];
-  _useMarkedTextForClient = [self shouldUseMarkedTextForClient:sender];
-
   // Process Candidate Navigation (Arrow keys, Enter, Space, numbers)
   if ([_candidates isVisible]) {
     DKSTLog(@"Candidate window is visible, keyCode=%d", keyCode);
@@ -741,14 +824,7 @@
   // enabled.
 
   // Hanja Conversion: Option + Return (keyCode 36)
-  BOOL hanjaEnabled = YES;
-  if ([[NSUserDefaults standardUserDefaults] objectForKey:@"EnableHanja"] !=
-      nil) {
-    hanjaEnabled =
-        [[NSUserDefaults standardUserDefaults] boolForKey:@"EnableHanja"];
-  }
-
-  if (hanjaEnabled && (keyCode == 36) &&
+  if (_hanjaEnabled && (keyCode == 36) &&
       (modifiers == NSEventModifierFlagOption)) {
     NSRange conversionRange = NSMakeRange(NSNotFound, 0);
     NSString *conversionText =
@@ -807,10 +883,7 @@
   // switching to "ABC" Input Source.
 
   // CUSTOM SHIFT SHORTCUT CHECK
-  NSUserDefaults *defaults = [NSUserDefaults standardUserDefaults];
-  BOOL shiftEnabled = [defaults boolForKey:@"EnableCustomShift"];
-
-  if (shiftEnabled && (modifiers == NSEventModifierFlagShift)) {
+  if (_customShiftEnabled && (modifiers == NSEventModifierFlagShift)) {
     // Map keyCode to key string used in dictionary
     NSString *lookupKey = nil;
     switch (keyCode) {
@@ -876,9 +949,7 @@
     }
 
     if (lookupKey) {
-      NSDictionary *mappings =
-          [defaults dictionaryForKey:@"DKSTCustomShiftMappings"];
-      NSString *output = [mappings objectForKey:lookupKey];
+      NSString *output = [_customShiftMappings objectForKey:lookupKey];
       if (output && [output length] > 0) {
         // If we have mapped content, commit it directly
         // First commit any pending composition
@@ -958,6 +1029,15 @@
                     client:(id)sender {
   if ([commit length] == 0) {
     return;
+  }
+
+  if (_useMarkedTextForClient) {
+    [_markedTextCommittedPrefix appendString:commit];
+    if ([_markedTextCommittedPrefix length] > 20) {
+      [_markedTextCommittedPrefix
+          deleteCharactersInRange:NSMakeRange(
+                                      0, [_markedTextCommittedPrefix length] - 20)];
+    }
   }
 
   NSRange replacementRange = NSMakeRange(NSNotFound, NSNotFound);
@@ -1065,7 +1145,6 @@
 }
 
 - (void)updateInlineForClient:(id)sender {
-  _useMarkedTextForClient = [self shouldUseMarkedTextForClient:sender];
   if (_useMarkedTextForClient) {
     if (_markedReplacementRange.location == NSNotFound &&
         _directInputComposedRange.location != NSNotFound) {
@@ -1092,6 +1171,7 @@
     _directInputComposedLength = 0;
     _directInputComposedRange = NSMakeRange(NSNotFound, 0);
     _markedReplacementRange = NSMakeRange(NSNotFound, 0);
+    [_markedTextCommittedPrefix setString:@""];
     [sender setMarkedText:@""
            selectionRange:NSMakeRange(0, 0)
          replacementRange:NSMakeRange(NSNotFound, NSNotFound)];
@@ -1125,6 +1205,7 @@
   _directInputComposedLength = 0;
   _directInputComposedRange = NSMakeRange(NSNotFound, 0);
   _markedReplacementRange = NSMakeRange(NSNotFound, 0);
+  [_markedTextCommittedPrefix setString:@""];
   [sender setMarkedText:@""
          selectionRange:NSMakeRange(0, 0)
        replacementRange:NSMakeRange(NSNotFound, NSNotFound)];
@@ -1295,6 +1376,23 @@
       }
 
       // Insert Hanja, replacing the text
+      if (_hanjaReplacementUsesMarkedPrefix && _hanjaMarkedPrefixLength > 0) {
+        @try {
+          [sender setMarkedText:@""
+                 selectionRange:NSMakeRange(0, 0)
+               replacementRange:NSMakeRange(NSNotFound, NSNotFound)];
+          NSRange selectedRange = [sender selectedRange];
+          if (selectedRange.location != NSNotFound &&
+              selectedRange.location >= _hanjaMarkedPrefixLength) {
+            replacementRange =
+                NSMakeRange(selectedRange.location - _hanjaMarkedPrefixLength,
+                            _hanjaMarkedPrefixLength);
+          }
+        } @catch (NSException *exception) {
+          DKSTLog(@"Exception preparing marked-prefix Hanja replacement: %@",
+                  exception);
+        }
+      }
       [sender insertText:hanja replacementRange:replacementRange];
       [engine reset];
       _directInputComposedLength = 0;
@@ -1310,6 +1408,9 @@
   // Reset selected range
   _selectedTextRange = NSMakeRange(NSNotFound, 0);
   _markedReplacementRange = NSMakeRange(NSNotFound, 0);
+  [_markedTextCommittedPrefix setString:@""];
+  _hanjaMarkedPrefixLength = 0;
+  _hanjaReplacementUsesMarkedPrefix = NO;
   _currentHanjaIndex = 0; // Reset index
 
   [_candidates hide];

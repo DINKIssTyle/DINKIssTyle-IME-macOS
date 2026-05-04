@@ -26,33 +26,6 @@
 	<dict>
 		<key>tsInputModeListKey</key>
 		<dict>
-			<!--
-			<key>com.dinkisstyle.inputmethod.DKST.english</key>
-			<dict>
-				<key>TISInputSourceID</key>
-				<string>com.dinkisstyle.inputmethod.DKST.english</string>
-				<key>TISIntendedLanguage</key>
-				<string>en</string>
-				<key>tsInputModeAlternateMenuIconFileKey</key>
-				<string>english.tiff</string>
-				<key>tsInputModeDefaultStateKey</key>
-				<true/>
-				<key>tsInputModeIsVisibleKey</key>
-				<true/>
-				<key>tsInputModeKeyEquivalentKey</key>
-				<string>U</string>
-				<key>tsInputModeKeyEquivalentModifiersKey</key>
-				<integer>4608</integer>
-				<key>tsInputModeMenuIconFileKey</key>
-				<string>english.tiff</string>
-				<key>tsInputModePaletteIconFileKey</key>
-				<string>english.tiff</string>
-				<key>tsInputModePrimaryInScriptKey</key>
-				<true/>
-				<key>tsInputModeScriptKey</key>
-				<string>smRoman</string>
-			</dict>
-			-->
 			<key>com.dinkisstyle.inputmethod.DKST.hangul</key>
 			<dict>
 				<key>TISInputSourceID</key>
@@ -77,7 +50,6 @@
 		</dict>
 		<key>tsVisibleInputModeOrderedArrayKey</key>
 		<array>
-			<!-- <string>com.dinkisstyle.inputmethod.DKST.english</string> -->
 			<string>com.dinkisstyle.inputmethod.DKST.hangul</string>
 		</array>
 		<key>TISUnifiedUIForInputMethodEnabling</key>

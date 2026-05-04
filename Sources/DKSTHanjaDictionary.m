@@ -55,6 +55,7 @@ static void DKSTAppleHanjaHitCallback(DKSTIDXIndexRef index,
     DKSTIDXPerformSearchFunc _IDXPerformSearch;
     CFStringRef _IDXSearchExactMatch;
     BOOL _triedAppleHanjaDictionary;
+    NSMutableDictionary *_appleRawMatchCache;
 }
 
 + (instancetype)sharedDictionary {
@@ -111,6 +112,7 @@ static void DKSTAppleHanjaHitCallback(DKSTIDXIndexRef index,
         
         // Use parsed dictionary, or empty if failed
         _dictionary = [dict copy]; // Helper makes it immutable
+        _appleRawMatchCache = [[NSMutableDictionary alloc] init];
         
         // If file load failed or was empty, maybe fallback?
         // For now, let's just log.
@@ -131,14 +133,17 @@ static void DKSTAppleHanjaHitCallback(DKSTIDXIndexRef index,
     }
 
     NSMutableArray *merged = [NSMutableArray array];
+    NSMutableSet *seenCandidates = [NSMutableSet set];
     for (NSString *candidate in localCandidates) {
-        if ([candidate length] > 0 && ![merged containsObject:candidate]) {
+        if ([candidate length] > 0 && ![seenCandidates containsObject:candidate]) {
             [merged addObject:candidate];
+            [seenCandidates addObject:candidate];
         }
     }
     for (NSString *candidate in appleCandidates) {
-        if ([candidate length] > 0 && ![merged containsObject:candidate]) {
+        if ([candidate length] > 0 && ![seenCandidates containsObject:candidate]) {
             [merged addObject:candidate];
+            [seenCandidates addObject:candidate];
         }
     }
     return merged;
@@ -165,12 +170,13 @@ static void DKSTAppleHanjaHitCallback(DKSTIDXIndexRef index,
     }
 
     NSMutableArray *formattedCandidates = [NSMutableArray array];
+    NSMutableSet *seenCandidates = [NSMutableSet set];
     for (NSString *candidate in rawCandidates) {
         NSString *formatted = [self formattedAppleCandidate:candidate
                                                sourceHangul:hangul];
-        if ([formatted length] > 0 &&
-            ![formattedCandidates containsObject:formatted]) {
+        if ([formatted length] > 0 && ![seenCandidates containsObject:formatted]) {
             [formattedCandidates addObject:formatted];
+            [seenCandidates addObject:formatted];
         }
     }
     return formattedCandidates;
@@ -181,6 +187,11 @@ static void DKSTAppleHanjaHitCallback(DKSTIDXIndexRef index,
         return nil;
     }
 
+    NSArray *cachedResults = [_appleRawMatchCache objectForKey:searchString];
+    if (cachedResults) {
+        return cachedResults;
+    }
+
     NSMutableArray *results = [NSMutableArray array];
     @try {
         _IDXSetSearchString(_appleHanjaIndex, (CFStringRef)searchString,
@@ -189,7 +200,9 @@ static void DKSTAppleHanjaHitCallback(DKSTIDXIndexRef index,
     } @catch (NSException *exception) {
         DKSTLog(@"Apple Hanja lookup failed: %@", exception);
     }
-    return results;
+    NSArray *immutableResults = [[results copy] autorelease];
+    [_appleRawMatchCache setObject:immutableResults forKey:searchString];
+    return immutableResults;
 }
 
 - (NSString *)appleAnnotationForCandidate:(NSString *)candidate
@@ -304,6 +317,7 @@ static void DKSTAppleHanjaHitCallback(DKSTIDXIndexRef index,
         _dictionaryServicesHandle = NULL;
     }
     [_dictionary release];
+    [_appleRawMatchCache release];
     [super dealloc];
 }
 

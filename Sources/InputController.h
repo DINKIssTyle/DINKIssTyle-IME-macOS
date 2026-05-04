@@ -17,6 +17,16 @@
   id _lastInputClient;
   NSRange _lastClientSelectedRange;
   BOOL _useMarkedTextForClient;
+  BOOL _moaJjikiEnabled;
+  BOOL _fullCharacterDeleteEnabled;
+  BOOL _customShiftEnabled;
+  BOOL _hanjaEnabled;
+  BOOL _useMarkedTextForAllApps;
+  NSDictionary *_customShiftMappings;
+  NSSet *_markedTextBundleIDSet;
+  NSMutableString *_markedTextCommittedPrefix;
+  NSUInteger _hanjaMarkedPrefixLength;
+  BOOL _hanjaReplacementUsesMarkedPrefix;
 }
 
 - (void)updateComposition:(id)sender;
@@ -26,7 +36,9 @@
     previousComposedLength:(NSUInteger)previousComposedLength
                     client:(id)sender;
 - (void)commitComposition:(id)sender;
-- (void)applyUserPreferences;
+- (void)reloadUserPreferences;
+- (void)preferencesDidChange:(NSNotification *)notification;
+- (void)refreshMarkedTextPolicyForClient:(id)sender;
 - (void)syncInputClient:(id)sender force:(BOOL)force;
 - (void)resetCompositionState;
 - (BOOL)hasPendingComposition;

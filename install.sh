@@ -2,9 +2,19 @@
 set -euo pipefail
 
 REPO="DINKIssTyle/DINKIssTyle-IME-macOS"
-API_URL="https://api.github.com/repos/${REPO}/releases?per_page=1"
+API_URL="https://api.github.com/repos/${REPO}/releases?per_page=100"
 MIN_MACOS_MAJOR=10
 MIN_MACOS_MINOR=15
+RELEASE_CHANNEL="${DKST_RELEASE_CHANNEL:-stable}"
+
+case "$RELEASE_CHANNEL" in
+    stable|beta)
+        ;;
+    *)
+        echo "오류: 알 수 없는 릴리즈 채널입니다: ${RELEASE_CHANNEL}"
+        exit 1
+        ;;
+esac
 
 if [ "$(uname -s)" != "Darwin" ]; then
     echo "오류: 지원되지 않는 운영체제입니다. DKST 한글 입력기는 macOS 10.15 Catalina 이상에서만 설치할 수 있습니다."
@@ -59,23 +69,66 @@ echo "[38;2;0;0;0m@[0m[38;2;0;0;0m@[0m[38;2;0;0;0m@[0m[38;2;0;0;0m@[0m[
 echo "=========================================="
 echo "      DKST 한글 입력기 설치 준비         "
 echo "=========================================="
-echo "최신 릴리즈 정보를 확인 중입니다..."
+if [ "$RELEASE_CHANNEL" = "beta" ]; then
+    echo "최신 베타 릴리즈 정보를 확인 중입니다..."
+else
+    echo "최신 정식 릴리즈 정보를 확인 중입니다..."
+fi
 
 RELEASE_JSON="$(curl -fsSL \
     -H "Accept: application/vnd.github+json" \
     -H "X-GitHub-Api-Version: 2022-11-28" \
     "$API_URL")"
 
-TAG_NAME="$(printf '%s\n' "$RELEASE_JSON" \
-    | sed -n 's/.*"tag_name": *"\([^"]*\)".*/\1/p' \
-    | head -n 1)"
+RELEASE_INFO="$(printf '%s\n' "$RELEASE_JSON" | awk -v channel="$RELEASE_CHANNEL" '
+function reset_release() {
+    tag = ""
+    zip = ""
+    prerelease = ""
+}
+function json_value(line, value) {
+    value = line
+    sub(/^[^:]*: *"/, "", value)
+    sub(/",? *$/, "", value)
+    return value
+}
+BEGIN {
+    reset_release()
+}
+/"tag_name":/ {
+    tag = json_value($0)
+}
+/"prerelease":/ {
+    prerelease = $0
+    sub(/^[^:]*: */, "", prerelease)
+    sub(/,? *$/, "", prerelease)
+}
+/"zipball_url":/ {
+    zip = json_value($0)
+    is_beta = (tolower(tag) ~ /beta/)
+    if (channel == "stable" && tag != "" && zip != "" &&
+        prerelease == "false" && !is_beta) {
+        print tag
+        print zip
+        exit
+    }
+    if (channel == "beta" && tag != "" && zip != "" && is_beta) {
+        print tag
+        print zip
+        exit
+    }
+}
+')"
 
-SOURCE_ZIP_URL="$(printf '%s\n' "$RELEASE_JSON" \
-    | sed -n 's/.*"zipball_url": *"\([^"]*\)".*/\1/p' \
-    | head -n 1)"
+TAG_NAME="$(printf '%s\n' "$RELEASE_INFO" | sed -n '1p')"
+SOURCE_ZIP_URL="$(printf '%s\n' "$RELEASE_INFO" | sed -n '2p')"
 
 if [ -z "$TAG_NAME" ]; then
-    echo "오류: 최신 릴리즈 태그를 확인하지 못했습니다."
+    if [ "$RELEASE_CHANNEL" = "beta" ]; then
+        echo "오류: 설치 가능한 베타 릴리즈 태그를 확인하지 못했습니다."
+    else
+        echo "오류: 설치 가능한 정식 릴리즈 태그를 확인하지 못했습니다."
+    fi
     exit 1
 fi
 

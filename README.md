@@ -15,6 +15,8 @@
 - **모아치기**로 빠르게 타이핑 할 수 있습니다.
 - **단모음/단자음에 쉬프트키**를 추가하여 원하는 **커스텀 입력**을 구성할 수 있습니다.
 - macOS용 **DKST 한글입력기는 macOS에 Apple 스럽게 스며든 입력기**입니다.
+- 영→한 변환 직후 **바로 입력해도 자소 분리**가 드뭅니다.
+- 영→한 변환 직후 **바로 입력해도 로마자 출현**이 드뭅니다.
 - 상세한 내용은 **아래 주요 특징**을 확인해주세요.
 ---
 
@@ -71,9 +73,21 @@ Mac의 고유한 사용 경험을 유지합니다.
 
 # 설치 또는 제거 방법 #
 **터미널**을 열고 **아래 코드**를 붙여넣어 실행하세요.
+
+**안정 된 버젼** 설치
 ```
 /bin/bash -c "$(curl -fsSL https://raw.githubusercontent.com/DINKIssTyle/DINKIssTyle-IME-macOS/main/install.sh)"
 ```
+
+<div><br></div>
+
+**베타 릴리즈** 설치 (*주의 불안정할 수 있습니다.)
+
+```
+/bin/bash -c "$(curl -fsSL https://raw.githubusercontent.com/DINKIssTyle/DINKIssTyle-IME-macOS/main/install-beta.sh)"
+```
+
+<div><br></div>
 
 설치할 파일을 내려받고 **다음 화면**이 표시됩니다.
 
