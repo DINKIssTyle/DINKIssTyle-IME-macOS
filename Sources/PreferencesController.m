@@ -247,7 +247,6 @@
     } else {
         BOOL moaEnabled = [defaults boolForKey:@"EnableMoaJjiki"];
         [moaJjikiCheckbox setState:(moaEnabled ? NSControlStateValueOn : NSControlStateValueOff)];
-        [moaJjikiCheckbox setState:(moaEnabled ? NSControlStateValueOn : NSControlStateValueOff)];
     }
     
     // Hanja Conversion Default: YES

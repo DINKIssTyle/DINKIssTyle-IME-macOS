@@ -249,11 +249,14 @@
              encoding:NSUTF8StringEncoding
                 error:nil];
 
+  NSString *escapedTempPath = [tempPath stringByReplacingOccurrencesOfString:@"'" withString:@"'\\''"];
+  NSString *escapedFilePath = [self.currentFilePath stringByReplacingOccurrencesOfString:@"'" withString:@"'\\''"];
+
   // Construct AppleScript execution of shell command
   NSString *scriptSource = [NSString
       stringWithFormat:@"do shell script \"cp -f '%@' '%@' && chmod 644 '%@'\" "
                        @"with administrator privileges",
-                       tempPath, self.currentFilePath, self.currentFilePath];
+                       escapedTempPath, escapedFilePath, escapedFilePath];
 
   NSAppleScript *appleScript =
       [[NSAppleScript alloc] initWithSource:scriptSource];

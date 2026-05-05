@@ -1,4 +1,3 @@
-#import "DKSTHangul.h"
 #import <Cocoa/Cocoa.h>
 
 @interface PreferencesController : NSWindowController <NSTableViewDataSource, NSTableViewDelegate, NSWindowDelegate> {
@@ -20,9 +19,6 @@
     NSMutableDictionary *mappingDict;
     NSMutableArray *markedTextAppBundleIDs;
     
-    // Internal Hangul support for Prefs
-    DKSTHangul *uiEngine;
-    id uiEventMonitor;
     
     // Shortcut Recording (Restored)
     IBOutlet NSButton *shortcutButton;

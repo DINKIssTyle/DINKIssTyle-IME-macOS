@@ -57,6 +57,35 @@ enum {
   kCGEventFlagsRight,
 };
 
+// Key codes (ANSI keyboard)
+enum {
+  kDKSTKeyCodeReturn    = 36,
+  kDKSTKeyCodeTab       = 48,
+  kDKSTKeyCodeSpace     = 49,
+  kDKSTKeyCodeBackspace = 51,
+  kDKSTKeyCodeEscape    = 53,
+  kDKSTKeyCodePageUp    = 116,
+  kDKSTKeyCodePageDown  = 121,
+  kDKSTKeyCodeLeft      = 123,
+  kDKSTKeyCodeRight     = 124,
+  kDKSTKeyCodeDown      = 125,
+  kDKSTKeyCodeUp        = 126,
+};
+
+// Number key codes (for candidate selection)
+enum {
+  kDKSTKeyCodeNum1 = 18,
+  kDKSTKeyCodeNum2 = 19,
+  kDKSTKeyCodeNum3 = 20,
+  kDKSTKeyCodeNum4 = 21,
+  kDKSTKeyCodeNum6 = 22,
+  kDKSTKeyCodeNum5 = 23,
+  kDKSTKeyCodeNum9 = 25,
+  kDKSTKeyCodeNum7 = 26,
+  kDKSTKeyCodeNum8 = 28,
+  kDKSTKeyCodeNum0 = 29,
+};
+
 // Advanced setup
 extern NSString *const kDKSTHangulCommitByWordKey;
 extern NSString *const kDKSTEnglishBypassWithOptionKey;

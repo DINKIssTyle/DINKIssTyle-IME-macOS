@@ -83,7 +83,6 @@
         case 'm': return 0x1173; case 'M': return 0x1173; // ㅡ
         default: return 0;
     }
-    return 0;
 }
 
 - (unichar)currentSyllable {

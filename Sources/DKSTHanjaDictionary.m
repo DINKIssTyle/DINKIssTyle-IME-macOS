@@ -55,7 +55,7 @@ static void DKSTAppleHanjaHitCallback(DKSTIDXIndexRef index,
     DKSTIDXPerformSearchFunc _IDXPerformSearch;
     CFStringRef _IDXSearchExactMatch;
     BOOL _triedAppleHanjaDictionary;
-    NSMutableDictionary *_appleRawMatchCache;
+    NSCache *_appleRawMatchCache;
 }
 
 + (instancetype)sharedDictionary {
@@ -112,7 +112,8 @@ static void DKSTAppleHanjaHitCallback(DKSTIDXIndexRef index,
         
         // Use parsed dictionary, or empty if failed
         _dictionary = [dict copy]; // Helper makes it immutable
-        _appleRawMatchCache = [[NSMutableDictionary alloc] init];
+        _appleRawMatchCache = [[NSCache alloc] init];
+        [_appleRawMatchCache setCountLimit:500];
         
         // If file load failed or was empty, maybe fallback?
         // For now, let's just log.
