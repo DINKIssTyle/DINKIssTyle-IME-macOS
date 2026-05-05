@@ -103,6 +103,14 @@ static IMKCandidates *DKSTSharedCandidatesForMacOS26;
                name:NSUserDefaultsDidChangeNotification
              object:nil];
 
+    // Listen for dictionary changes from DKSTDictEditor (distributed
+    // notification crosses process boundaries without killing the IME).
+    [[NSDistributedNotificationCenter defaultCenter]
+        addObserver:self
+           selector:@selector(dictionaryDidChange:)
+               name:@"DKSTDictionaryDidChangeNotification"
+             object:nil];
+
     // Style attributes to match Apple's Korean IME
     NSDictionary *styleAttributes = @{
       IMKCandidatesSendServerKeyEventFirst : @YES,
@@ -122,6 +130,11 @@ static IMKCandidates *DKSTSharedCandidatesForMacOS26;
 
 - (void)dealloc {
   DKSTLog(@"InputController dealloc called");
+
+  // Remove observers FIRST to prevent race conditions where a notification
+  // fires during dealloc.
+  [[NSNotificationCenter defaultCenter] removeObserver:self];
+  [[NSDistributedNotificationCenter defaultCenter] removeObserver:self];
 
   // InputMethodKit on macOS 26 beta internally caches a reference to the
   // IMKCandidates object and may call methods on it after our dealloc is
@@ -164,7 +177,7 @@ static IMKCandidates *DKSTSharedCandidatesForMacOS26;
     [_markedTextCommittedPrefix release];
     _markedTextCommittedPrefix = nil;
   }
-  [[NSNotificationCenter defaultCenter] removeObserver:self];
+  // (observers already removed at top of dealloc)
   [super dealloc];
 }
 
@@ -657,6 +670,11 @@ static IMKCandidates *DKSTSharedCandidatesForMacOS26;
 
 // MARK: - Input Method Kit Methods
 
+- (void)dictionaryDidChange:(NSNotification *)notification {
+  DKSTLog(@"Received DKSTDictionaryDidChangeNotification — reloading");
+  [[DKSTHanjaDictionary sharedDictionary] reloadDictionary];
+}
+
 - (void)activateServer:(id)sender {
   DKSTLog(@"activateServer called");
 
@@ -672,6 +690,11 @@ static IMKCandidates *DKSTSharedCandidatesForMacOS26;
   [super activateServer:sender];
 
   _lastInputClient = sender;
+
+  // Force keyboard override and input mode selection.
+  // Reset sync time to ensure override is re-applied even if the XPC
+  // connection was re-established after an endpoint invalidation.
+  _lastClientSyncTime = 0;
   [self syncInputClient:sender force:YES];
 
   [self reloadUserPreferences];

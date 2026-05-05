@@ -11,9 +11,12 @@ PROCESS_NAME="DKST"
 # --- 함수: 프로세스 종료 ---
 function kill_dkst_process() {
     echo "🔄 변경 사항 적용을 위해 $PROCESS_NAME 프로세스를 종료합니다..."
-    # 입력기 본체 실행 파일명과 정확히 일치하는 프로세스만 강제 종료합니다.
-    # -f를 사용하면 DKSTPreferences, DKSTDictEditor 등 다른 DKST 앱까지 종료될 수 있습니다.
-    # 2>/dev/null: 에러 메시지 숨김 / || true: 프로세스가 없어도 계속 진행
+    # SIGTERM (graceful) first, then wait briefly for XPC endpoint cleanup.
+    # Using SIGKILL (-9) previously caused XPC endpoint invalidation
+    # in imklaunchagent, breaking the menu bar and causing Roman passthrough.
+    sudo pkill -x "$PROCESS_NAME" 2>/dev/null || true
+    sleep 1
+    # Force-kill any remaining processes
     sudo pkill -9 -x "$PROCESS_NAME" 2>/dev/null || true
 }
 

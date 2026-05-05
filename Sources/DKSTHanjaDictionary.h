@@ -4,5 +4,6 @@
 
 + (instancetype)sharedDictionary;
 - (NSArray *)hanjaForHangul:(NSString *)hangul;
+- (void)reloadDictionary;
 
 @end

@@ -283,18 +283,17 @@
 
 - (void)showSaveSuccess {
   NSString *oldStatus = [self.statusLabel stringValue];
-  [self.statusLabel setStringValue:@"Saved! Restarting DKST..."];
+  [self.statusLabel setStringValue:@"Saved! Reloading dictionary..."];
 
-  // Kill DKST process so the dictionary changes take effect
-  // The system will automatically restart the IME when needed
-  NSTask *task = [[NSTask alloc] init];
-  [task setLaunchPath:@"/usr/bin/pkill"];
-  [task setArguments:@[ @"-x", @"DKST" ]];
-  @try {
-    [task launch];
-  } @catch (NSException *exception) {
-    // Ignore if pkill fails (process might not be running)
-  }
+  // Notify DKST to reload its hanja dictionary without killing the process.
+  // Killing DKST causes XPC endpoint invalidation which breaks the menu bar
+  // and allows Roman key passthrough until the system re-establishes the
+  // connection.
+  [[NSDistributedNotificationCenter defaultCenter]
+      postNotificationName:@"DKSTDictionaryDidChangeNotification"
+                    object:nil
+                  userInfo:nil
+        deliverImmediately:YES];
 
   [self performSelector:@selector(restoreStatus:)
              withObject:oldStatus
