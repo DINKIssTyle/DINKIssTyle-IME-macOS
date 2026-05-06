@@ -144,9 +144,9 @@ Mac의 고유한 사용 경험을 유지합니다.
 </div>
 
 
-#### 이 README.md 파일은 DKST Markdown으로 작성되었습니다. DKST Markdown에 대하여 관심있으시다면 아래 배지를 클릭하세요.
 <div align="center">
-<a href="https://github.com/DINKIssTyle/DINKIssTyle-Markdown-Browser" target="_blank"><img src="https://github.com/DINKIssTyle/DINKIssTyle-Markdown-Browser/blob/main/DKST-Markdown.png?raw=true" width="150"></a><br>
+이 README.md 파일은 DKST Markdown으로 작성되었습니다. AI가 어시스트 하는 마크다운 에디터에 관심있으시다면 아래 배지를 클릭하세요.<br><br>
+  <a href="https://github.com/DINKIssTyle/DINKIssTyle-Markdown-Browser" target="_blank"><img src="https://github.com/DINKIssTyle/DINKIssTyle-Markdown-Browser/blob/main/DKST-Markdown.png?raw=true" width="150"></a><br>
 </div>
 
 ## 감사 인사. ##
