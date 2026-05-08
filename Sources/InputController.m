@@ -1282,26 +1282,13 @@ static IMKCandidates *DKSTSharedCandidatesForMacOS26;
     }
   }
 
-  _directInputComposedLength = composedLength;
-  if (composedLength > 0 && replacementStart != NSNotFound) {
-    _directInputComposedRange =
-        NSMakeRange(replacementStart + commitLength, composedLength);
-  } else {
-    _directInputComposedRange = NSMakeRange(NSNotFound, 0);
-  }
   [_compositionState updateBufferContents:replacement];
   [_compositionState noteInsertedTextWithReplacementRange:replacementRange
                                         insertionLocation:replacementStart
                                           committedLength:commitLength
                                            composedLength:composedLength];
-  if (!NSEqualRanges([_compositionState inlineRange],
-                     _directInputComposedRange)) {
-    DKSTLog(@"CompositionState shadow inline mismatch state=(%lu,%lu) direct=(%lu,%lu)",
-            (unsigned long)[_compositionState inlineRange].location,
-            (unsigned long)[_compositionState inlineRange].length,
-            (unsigned long)_directInputComposedRange.location,
-            (unsigned long)_directInputComposedRange.length);
-  }
+  _directInputComposedLength = composedLength;
+  _directInputComposedRange = [_compositionState inlineRange];
   _markedReplacementRange = NSMakeRange(NSNotFound, 0);
   [self rememberSelectedRangeForClient:sender];
 }
