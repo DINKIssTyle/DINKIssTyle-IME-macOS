@@ -702,14 +702,22 @@ static IMKCandidates *DKSTSharedCandidatesForMacOS26;
       DKSTLog(@"Exception hiding candidates on client change: %@", exception);
     }
 
-    @try {
-      [self commitComposition:_lastInputClient];
-    } @catch (NSException *exception) {
-      DKSTLog(@"Exception committing previous client composition: %@",
-              exception);
-      [self resetCompositionState];
+    if ([self hasPendingComposition]) {
+      @try {
+        [self commitComposition:_lastInputClient];
+      } @catch (NSException *exception) {
+        DKSTLog(@"Exception committing previous client composition: %@",
+                exception);
+        [self resetCompositionState];
+      }
     }
+  }
 
+  if (clientChanged || _lastInputClient != sender) {
+    [self refreshMarkedTextPolicyForClient:sender];
+  }
+
+  if (clientChanged && _useMarkedTextForClient) {
     @try {
       [sender setMarkedText:@""
              selectionRange:NSMakeRange(0, 0)
@@ -717,10 +725,6 @@ static IMKCandidates *DKSTSharedCandidatesForMacOS26;
     } @catch (NSException *exception) {
       DKSTLog(@"Exception clearing new client marked text: %@", exception);
     }
-  }
-
-  if (clientChanged || _lastInputClient != sender) {
-    [self refreshMarkedTextPolicyForClient:sender];
   }
 
   if (!_useMarkedTextForClient && [self hasPendingComposition] &&
