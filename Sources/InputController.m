@@ -556,7 +556,7 @@ static IMKCandidates *DKSTSharedCandidatesForMacOS26;
   NSString *bundleID = [self bundleIdentifierForClient:sender];
 
   if (![bundleID length]) {
-    return YES;
+    return NO;
   }
 
   if ([_forcedMarkedTextBundleIDs containsObject:bundleID]) {
@@ -573,20 +573,6 @@ static IMKCandidates *DKSTSharedCandidatesForMacOS26;
 
   if ([self bundleIdentifierUsesChromiumMarkedTextPolicy:bundleID] ||
       [self runningApplicationUsesChromiumTextStack:bundleID]) {
-    return YES;
-  }
-
-  @try {
-    if (![sender respondsToSelector:@selector(selectedRange)]) {
-      return YES;
-    }
-    NSRange selectedRange = [sender selectedRange];
-    if (selectedRange.location == NSNotFound) {
-      return YES;
-    }
-  } @catch (NSException *exception) {
-    DKSTLog(@"Exception checking selected range for direct input: %@",
-            exception);
     return YES;
   }
 
@@ -709,7 +695,13 @@ static IMKCandidates *DKSTSharedCandidatesForMacOS26;
               exception);
       [self resetCompositionState];
     }
+  }
 
+  if (clientChanged || _lastInputClient != sender) {
+    [self refreshMarkedTextPolicyForClient:sender];
+  }
+
+  if (clientChanged && _useMarkedTextForClient) {
     @try {
       [sender setMarkedText:@""
              selectionRange:NSMakeRange(0, 0)
@@ -717,10 +709,6 @@ static IMKCandidates *DKSTSharedCandidatesForMacOS26;
     } @catch (NSException *exception) {
       DKSTLog(@"Exception clearing new client marked text: %@", exception);
     }
-  }
-
-  if (clientChanged || _lastInputClient != sender) {
-    [self refreshMarkedTextPolicyForClient:sender];
   }
 
   if (!_useMarkedTextForClient && [self hasPendingComposition] &&
