@@ -208,6 +208,102 @@ static IMKCandidates *DKSTSharedCandidatesForMacOS26;
           reason);
 }
 
+- (BOOL)bundleIdentifierUsesChromiumMarkedTextPolicy:(NSString *)bundleID {
+  if (![bundleID length]) {
+    return NO;
+  }
+
+  NSArray *chromiumBundlePrefixes = [NSArray
+      arrayWithObjects:@"org.chromium.Chromium", @"com.google.Chrome",
+                       @"com.google.Chrome.canary", @"com.microsoft.edgemac",
+                       @"com.brave.Browser", @"com.vivaldi.Vivaldi",
+                       @"com.operasoftware.Opera", @"com.naver.Whale",
+                       @"company.thebrowser.Browser", @"ai.perplexity.comet",
+                       @"com.perplexity.Comet", @"com.perplexity.comet",
+                       @"com.openai.atlas", @"com.openai.Atlas",
+                       @"com.openai.chatgpt.atlas", nil];
+
+  for (NSString *prefix in chromiumBundlePrefixes) {
+    if ([bundleID isEqualToString:prefix] ||
+        [bundleID hasPrefix:[prefix stringByAppendingString:@"."]]) {
+      return YES;
+    }
+  }
+
+  return NO;
+}
+
+- (BOOL)applicationBundleUsesChromiumTextStack:(NSURL *)bundleURL {
+  if (!bundleURL) {
+    return NO;
+  }
+
+  NSString *frameworksPath =
+      [[bundleURL path] stringByAppendingPathComponent:@"Contents/Frameworks"];
+  NSFileManager *fm = [NSFileManager defaultManager];
+  BOOL isDirectory = NO;
+  if (![fm fileExistsAtPath:frameworksPath isDirectory:&isDirectory] ||
+      !isDirectory) {
+    return NO;
+  }
+
+  NSArray *frameworkNames = [fm contentsOfDirectoryAtPath:frameworksPath
+                                                    error:nil];
+  NSArray *chromiumFrameworkNames =
+      [NSArray arrayWithObjects:@"Electron Framework.framework",
+                                @"Chromium Embedded Framework.framework",
+                                @"Google Chrome Framework.framework",
+                                @"Microsoft Edge Framework.framework",
+                                @"Brave Browser Framework.framework",
+                                @"Vivaldi Framework.framework",
+                                @"Opera Framework.framework", nil];
+
+  for (NSString *frameworkName in frameworkNames) {
+    if ([chromiumFrameworkNames containsObject:frameworkName]) {
+      return YES;
+    }
+    if ([frameworkName rangeOfString:@"Chromium"
+                             options:NSCaseInsensitiveSearch].location !=
+            NSNotFound ||
+        [frameworkName rangeOfString:@"Electron"
+                             options:NSCaseInsensitiveSearch].location !=
+            NSNotFound) {
+      return YES;
+    }
+  }
+
+  return NO;
+}
+
+- (BOOL)runningApplicationUsesChromiumTextStack:(NSString *)bundleID {
+  if (![bundleID length]) {
+    return NO;
+  }
+
+  NSArray *runningApps =
+      [NSRunningApplication runningApplicationsWithBundleIdentifier:bundleID];
+  for (NSRunningApplication *app in runningApps) {
+    NSString *appName = [[app localizedName] lowercaseString];
+    NSString *bundleName =
+        [[[[app bundleURL] lastPathComponent] stringByDeletingPathExtension]
+            lowercaseString];
+    if ([appName isEqualToString:@"comet"] ||
+        [bundleName isEqualToString:@"comet"] ||
+        [appName isEqualToString:@"atlas"] ||
+        [bundleName isEqualToString:@"atlas"] ||
+        [appName isEqualToString:@"chatgpt atlas"] ||
+        [bundleName isEqualToString:@"chatgpt atlas"]) {
+      return YES;
+    }
+
+    if ([self applicationBundleUsesChromiumTextStack:[app bundleURL]]) {
+      return YES;
+    }
+  }
+
+  return NO;
+}
+
 - (NSRange)directInputReplacementRange:(id)sender {
   if (_directInputComposedLength == 0 || !sender) {
     return _directInputComposedRange;
@@ -443,6 +539,11 @@ static IMKCandidates *DKSTSharedCandidatesForMacOS26;
   }
 
   if ([_markedTextBundleIDSet containsObject:bundleID]) {
+    return YES;
+  }
+
+  if ([self bundleIdentifierUsesChromiumMarkedTextPolicy:bundleID] ||
+      [self runningApplicationUsesChromiumTextStack:bundleID]) {
     return YES;
   }
 

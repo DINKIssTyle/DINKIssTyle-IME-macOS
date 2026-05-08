@@ -57,6 +57,9 @@
 - (NSString *)bundleIdentifierForClient:(id)sender;
 - (void)forceMarkedTextForClient:(id)sender reason:(NSString *)reason;
 - (BOOL)shouldUseMarkedTextForClient:(id)sender;
+- (BOOL)bundleIdentifierUsesChromiumMarkedTextPolicy:(NSString *)bundleID;
+- (BOOL)runningApplicationUsesChromiumTextStack:(NSString *)bundleID;
+- (BOOL)applicationBundleUsesChromiumTextStack:(NSURL *)bundleURL;
 - (BOOL)isHangulKeyCode:(unsigned short)keyCode;
 
 @end
