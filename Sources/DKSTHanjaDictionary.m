@@ -36,6 +36,7 @@ static void DKSTAppleHanjaHitCallback(DKSTIDXIndexRef index,
 }
 
 @interface DKSTHanjaDictionary ()
+- (NSDictionary *)dictionaryFromBundledHanjaFileWithLogPrefix:(NSString *)prefix;
 - (BOOL)appleHanjaDictionaryEnabled;
 - (NSArray *)appleHanjaForHangul:(NSString *)hangul;
 - (NSArray *)appleRawMatchesForSearchString:(NSString *)searchString;
@@ -70,53 +71,11 @@ static void DKSTAppleHanjaHitCallback(DKSTIDXIndexRef index,
 - (instancetype)init {
     self = [super init];
     if (self) {
-        NSMutableDictionary *dict = [NSMutableDictionary dictionary];
-        
-        // Load from hanja.txt in bundle
-        NSString *path = [[NSBundle mainBundle] pathForResource:@"hanja" ofType:@"txt"];
-        DKSTLog(@"Loading Hanja dictionary from: %@", path);
-        
-        if (path) {
-            NSError *error = nil;
-            NSString *content = [NSString stringWithContentsOfFile:path encoding:NSUTF8StringEncoding error:&error];
-            if (content) {
-                NSArray *lines = [content componentsSeparatedByString:@"\n"];
-                for (NSString *line in lines) {
-                    if ([line length] == 0) continue;
-                    
-                    // Format: Hangul:Hanja1,Hanja2,...
-                    NSArray *parts = [line componentsSeparatedByString:@":"];
-                    if ([parts count] == 2) {
-                        NSString *key = [parts objectAtIndex:0];
-                        NSString *valuesStr = [parts objectAtIndex:1];
-                        NSArray *values = [valuesStr componentsSeparatedByString:@","];
-                        
-                        // Trim whitespace
-                        NSMutableArray *trimmedValues = [NSMutableArray array];
-                        for (NSString *v in values) {
-                            NSString *trimmed = [v stringByTrimmingCharactersInSet:[NSCharacterSet whitespaceCharacterSet]];
-                            if ([trimmed length] > 0) {
-                                [trimmedValues addObject:trimmed];
-                            }
-                        }
-                        
-                        if ([trimmedValues count] > 0) {
-                            [dict setObject:trimmedValues forKey:key];
-                        }
-                    }
-                }
-            } else {
-                DKSTLog(@"Failed to read hanja.txt: %@", error);
-            }
-        }
-        
-        // Use parsed dictionary, or empty if failed
-        _dictionary = [dict copy]; // Helper makes it immutable
+        _dictionary =
+            [[self dictionaryFromBundledHanjaFileWithLogPrefix:@"Loading"] retain];
         _appleRawMatchCache = [[NSCache alloc] init];
         [_appleRawMatchCache setCountLimit:500];
-        
-        // If file load failed or was empty, maybe fallback?
-        // For now, let's just log.
+
         DKSTLog(@"Loaded %lu Hanja entries", (unsigned long)[_dictionary count]);
     }
     return self;
@@ -124,9 +83,21 @@ static void DKSTAppleHanjaHitCallback(DKSTIDXIndexRef index,
 
 - (void)reloadDictionary {
     DKSTLog(@"Reloading Hanja dictionary...");
+    NSDictionary *dict =
+        [self dictionaryFromBundledHanjaFileWithLogPrefix:@"Reloading"];
+    NSDictionary *oldDict = _dictionary;
+    _dictionary = [dict retain];
+    [oldDict release];
+    [_appleRawMatchCache removeAllObjects];
+    DKSTLog(@"Reloaded %lu Hanja entries", (unsigned long)[_dictionary count]);
+}
+
+- (NSDictionary *)dictionaryFromBundledHanjaFileWithLogPrefix:(NSString *)prefix {
     NSMutableDictionary *dict = [NSMutableDictionary dictionary];
     NSString *path =
         [[NSBundle mainBundle] pathForResource:@"hanja" ofType:@"txt"];
+    DKSTLog(@"%@ Hanja dictionary from: %@", prefix, path);
+
     if (path) {
         NSError *error = nil;
         NSString *content = [NSString stringWithContentsOfFile:path
@@ -158,14 +129,11 @@ static void DKSTAppleHanjaHitCallback(DKSTIDXIndexRef index,
                 }
             }
         } else {
-            DKSTLog(@"Failed to re-read hanja.txt: %@", error);
+            DKSTLog(@"Failed to read hanja.txt: %@", error);
         }
     }
-    NSDictionary *oldDict = _dictionary;
-    _dictionary = [dict copy];
-    [oldDict release];
-    [_appleRawMatchCache removeAllObjects];
-    DKSTLog(@"Reloaded %lu Hanja entries", (unsigned long)[_dictionary count]);
+
+    return [[dict copy] autorelease];
 }
 
 - (NSArray *)hanjaForHangul:(NSString *)hangul {

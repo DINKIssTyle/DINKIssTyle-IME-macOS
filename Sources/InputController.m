@@ -12,7 +12,8 @@
                    client:(id)sender;
 - (BOOL)processHangulInput:(NSEvent *)event
                    keyCode:(unsigned short)keyCode
-                    client:(id)sender;
+                    client:(id)sender
+        candidatesVisible:(BOOL)candidatesVisible;
 @end
 
 static NSInteger DKSTCandidateIndexForNumberKeyCode(unsigned short keyCode) {
@@ -941,10 +942,6 @@ static IMKCandidates *DKSTSharedCandidatesForMacOS26;
 // MARK: - Extracted Input Handling Methods
 
 - (BOOL)handleCandidateNavigation:(unsigned short)keyCode client:(id)sender {
-  if (![_candidates isVisible]) {
-    return NO;
-  }
-
   DKSTLog(@"Candidate window is visible, keyCode=%d", keyCode);
   BOOL hasCandidates =
       _currentHanjaCandidates && [_currentHanjaCandidates count] > 0;
@@ -1115,7 +1112,8 @@ static IMKCandidates *DKSTSharedCandidatesForMacOS26;
 
 - (BOOL)processHangulInput:(NSEvent *)event
                    keyCode:(unsigned short)keyCode
-                    client:(id)sender {
+                    client:(id)sender
+        candidatesVisible:(BOOL)candidatesVisible {
   NSUInteger previousComposedLength = 0;
   if (_useMarkedTextForClient) {
     previousComposedLength = [[engine composedString] length];
@@ -1124,7 +1122,7 @@ static IMKCandidates *DKSTSharedCandidatesForMacOS26;
   BOOL processed = [engine processCode:keyCode modifiers:[event modifierFlags]];
 
   if (processed) {
-    if ([_candidates isVisible]) {
+    if (candidatesVisible) {
       [_candidates hide];
     }
 
@@ -1147,7 +1145,7 @@ static IMKCandidates *DKSTSharedCandidatesForMacOS26;
     return YES;
   }
 
-  if ([_candidates isVisible]) {
+  if (candidatesVisible) {
     if (keyCode == kDKSTKeyCodeLeft || keyCode == kDKSTKeyCodeRight ||
         keyCode == kDKSTKeyCodeDown || keyCode == kDKSTKeyCodeUp ||
         keyCode == kDKSTKeyCodeReturn || keyCode == kDKSTKeyCodeSpace ||
@@ -1176,11 +1174,13 @@ static IMKCandidates *DKSTSharedCandidatesForMacOS26;
   [self prepareForInputClient:sender];
 
   // 1. Candidate window navigation
-  if ([_candidates isVisible]) {
+  BOOL candidatesVisible = [_candidates isVisible];
+  if (candidatesVisible) {
     if ([self handleCandidateNavigation:keyCode client:sender]) {
       return YES;
     }
     // handleCandidateNavigation hides candidates if key wasn't navigation
+    candidatesVisible = NO;
   }
 
   NSUInteger modifiers =
@@ -1227,7 +1227,7 @@ static IMKCandidates *DKSTSharedCandidatesForMacOS26;
 
   // 6. Enter/Space without candidates — commit and pass through
   if ((keyCode == kDKSTKeyCodeReturn || keyCode == kDKSTKeyCodeSpace) &&
-      ![_candidates isVisible]) {
+      !candidatesVisible) {
     [self commitComposition:sender];
     return NO;
   }
@@ -1238,7 +1238,10 @@ static IMKCandidates *DKSTSharedCandidatesForMacOS26;
   }
 
   // 8. Hangul processing
-  return [self processHangulInput:event keyCode:keyCode client:sender];
+  return [self processHangulInput:event
+                          keyCode:keyCode
+                           client:sender
+                candidatesVisible:candidatesVisible];
 }
 
 - (void)commitMarkedText:(NSString *)commit
