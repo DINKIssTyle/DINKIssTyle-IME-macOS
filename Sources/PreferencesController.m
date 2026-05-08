@@ -14,8 +14,12 @@
 
 // Helper to get shared defaults
 - (NSUserDefaults *)defaults {
-    // Access the specific domain of the Input Method
-    return [[[NSUserDefaults alloc] initWithSuiteName:@"com.dinkisstyle.inputmethod.DKST"] autorelease];
+    static NSUserDefaults *suiteDefaults = nil;
+    static dispatch_once_t onceToken;
+    dispatch_once(&onceToken, ^{
+        suiteDefaults = [[NSUserDefaults alloc] initWithSuiteName:@"com.dinkisstyle.inputmethod.DKST"];
+    });
+    return suiteDefaults;
 }
 
 - (id)init {

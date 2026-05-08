@@ -89,6 +89,8 @@ static IMKCandidates *DKSTSharedCandidatesForMacOS26;
     _markedReplacementRange = NSMakeRange(NSNotFound, 0);
     _forcedMarkedTextBundleIDs = [[NSMutableSet alloc] init];
     _lastInputClient = inputClient;
+    _lastBundleIdentifierClient = nil;
+    _lastInputClientBundleID = nil;
     _lastClientSelectedRange = NSMakeRange(NSNotFound, 0);
     _useMarkedTextForClient = NO;
     _hanjaEnabled = YES;
@@ -96,6 +98,7 @@ static IMKCandidates *DKSTSharedCandidatesForMacOS26;
     _hanjaMarkedPrefixLength = 0;
     _hanjaReplacementUsesMarkedPrefix = NO;
     _compositionState = [[DKSTCompositionState alloc] init];
+    _chromiumDetectionCache = [[NSMutableDictionary alloc] init];
 
     [self reloadUserPreferences];
     [[NSNotificationCenter defaultCenter]
@@ -182,11 +185,25 @@ static IMKCandidates *DKSTSharedCandidatesForMacOS26;
     [_compositionState release];
     _compositionState = nil;
   }
+  if (_lastInputClientBundleID) {
+    [_lastInputClientBundleID release];
+    _lastInputClientBundleID = nil;
+  }
+  if (_chromiumDetectionCache) {
+    [_chromiumDetectionCache release];
+    _chromiumDetectionCache = nil;
+  }
   // (observers already removed at top of dealloc)
   [super dealloc];
 }
 
 - (NSString *)bundleIdentifierForClient:(id)sender {
+  id cacheClient = sender ?: [self client];
+  if (cacheClient && cacheClient == _lastBundleIdentifierClient &&
+      [_lastInputClientBundleID length] > 0) {
+    return _lastInputClientBundleID;
+  }
+
   NSString *bundleID = nil;
 
   @try {
@@ -199,6 +216,10 @@ static IMKCandidates *DKSTSharedCandidatesForMacOS26;
   } @catch (NSException *exception) {
     DKSTLog(@"Exception getting client bundle id: %@", exception);
   }
+
+  [_lastInputClientBundleID release];
+  _lastInputClientBundleID = [bundleID copy];
+  _lastBundleIdentifierClient = cacheClient;
 
   return bundleID;
 }
@@ -273,12 +294,24 @@ static IMKCandidates *DKSTSharedCandidatesForMacOS26;
     return NO;
   }
 
+  NSString *bundlePath = [bundleURL path];
+  if (![bundlePath length]) {
+    return NO;
+  }
+
+  NSNumber *cachedResult = [_chromiumDetectionCache objectForKey:bundlePath];
+  if (cachedResult) {
+    return [cachedResult boolValue];
+  }
+
   NSString *frameworksPath =
-      [[bundleURL path] stringByAppendingPathComponent:@"Contents/Frameworks"];
+      [bundlePath stringByAppendingPathComponent:@"Contents/Frameworks"];
   NSFileManager *fm = [NSFileManager defaultManager];
   BOOL isDirectory = NO;
   if (![fm fileExistsAtPath:frameworksPath isDirectory:&isDirectory] ||
       !isDirectory) {
+    [_chromiumDetectionCache setObject:[NSNumber numberWithBool:NO]
+                                forKey:bundlePath];
     return NO;
   }
 
@@ -295,6 +328,8 @@ static IMKCandidates *DKSTSharedCandidatesForMacOS26;
 
   for (NSString *frameworkName in frameworkNames) {
     if ([chromiumFrameworkNames containsObject:frameworkName]) {
+      [_chromiumDetectionCache setObject:[NSNumber numberWithBool:YES]
+                                  forKey:bundlePath];
       return YES;
     }
     if ([frameworkName rangeOfString:@"Chromium"
@@ -303,10 +338,14 @@ static IMKCandidates *DKSTSharedCandidatesForMacOS26;
         [frameworkName rangeOfString:@"Electron"
                              options:NSCaseInsensitiveSearch].location !=
             NSNotFound) {
+      [_chromiumDetectionCache setObject:[NSNumber numberWithBool:YES]
+                                  forKey:bundlePath];
       return YES;
     }
   }
 
+  [_chromiumDetectionCache setObject:[NSNumber numberWithBool:NO]
+                              forKey:bundlePath];
   return NO;
 }
 

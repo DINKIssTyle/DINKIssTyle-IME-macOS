@@ -202,8 +202,11 @@ static void DKSTAppleHanjaHitCallback(DKSTIDXIndexRef index,
         return [standardDefaults boolForKey:kDKSTUseAppleHanjaDictionaryKey];
     }
 
-    NSUserDefaults *suiteDefaults = [[[NSUserDefaults alloc]
-        initWithSuiteName:kDKSTBundleID] autorelease];
+    static NSUserDefaults *suiteDefaults = nil;
+    static dispatch_once_t onceToken;
+    dispatch_once(&onceToken, ^{
+        suiteDefaults = [[NSUserDefaults alloc] initWithSuiteName:kDKSTBundleID];
+    });
     if ([suiteDefaults objectForKey:kDKSTUseAppleHanjaDictionaryKey]) {
         return [suiteDefaults boolForKey:kDKSTUseAppleHanjaDictionaryKey];
     }

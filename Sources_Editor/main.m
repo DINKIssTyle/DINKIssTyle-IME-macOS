@@ -14,41 +14,43 @@ int main(int argc, const char *argv[]) {
     NSApplication *app = [NSApplication sharedApplication];
 
     // Create the delegate (which will create the window)
-    DictEditorController *controller = [[DictEditorController alloc] init];
+    DictEditorController *controller =
+        [[[DictEditorController alloc] init] autorelease];
     [app setDelegate:controller];
 
     // simple main menu
-    NSMenu *menubar = [[NSMenu alloc] init];
-    NSMenuItem *appMenuItem = [[NSMenuItem alloc] init];
+    NSMenu *menubar = [[[NSMenu alloc] init] autorelease];
+    NSMenuItem *appMenuItem = [[[NSMenuItem alloc] init] autorelease];
     [menubar addItem:appMenuItem];
     [app setMainMenu:menubar];
 
-    NSMenu *appMenu = [[NSMenu alloc] init];
+    NSMenu *appMenu = [[[NSMenu alloc] init] autorelease];
     // Use manual name for the menu items (Does not affect actual process/file name)
     NSString *appName = @"DKST Dictionary Editor";
     
     // About Menu Item
-    NSMenuItem *aboutMenuItem = [[NSMenuItem alloc] initWithTitle:[NSString stringWithFormat:@"About %@", appName]
-                                                           action:@selector(showAboutWindow:)
-                                                    keyEquivalent:@""];
+    NSMenuItem *aboutMenuItem =
+        [[[NSMenuItem alloc] initWithTitle:[NSString stringWithFormat:@"About %@", appName]
+                                    action:@selector(showAboutWindow:)
+                             keyEquivalent:@""] autorelease];
     [aboutMenuItem setTarget:controller];
     [appMenu addItem:aboutMenuItem];
     [appMenu addItem:[NSMenuItem separatorItem]];
 
     NSString *quitTitle = [@"Quit " stringByAppendingString:appName];
     NSMenuItem *quitMenuItem =
-        [[NSMenuItem alloc] initWithTitle:quitTitle
-                                   action:@selector(terminate:)
-                            keyEquivalent:@"q"];
+        [[[NSMenuItem alloc] initWithTitle:quitTitle
+                                    action:@selector(terminate:)
+                             keyEquivalent:@"q"] autorelease];
     [appMenu addItem:quitMenuItem];
     [appMenuItem setSubmenu:appMenu];
 
     /* Edit menu (for copy/paste support) */
-    NSMenuItem *editMenuItem = [[NSMenuItem alloc] init];
+    NSMenuItem *editMenuItem = [[[NSMenuItem alloc] init] autorelease];
     [editMenuItem setTitle:@"Edit"];
     [menubar addItem:editMenuItem];
 
-    NSMenu *editMenu = [[NSMenu alloc] initWithTitle:@"Edit"];
+    NSMenu *editMenu = [[[NSMenu alloc] initWithTitle:@"Edit"] autorelease];
     [editMenuItem setSubmenu:editMenu];
 
     [editMenu addItemWithTitle:@"Cut"

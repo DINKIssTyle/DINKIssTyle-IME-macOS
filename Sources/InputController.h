@@ -16,6 +16,8 @@
   NSRange _markedReplacementRange;
   NSMutableSet *_forcedMarkedTextBundleIDs;
   id _lastInputClient;
+  id _lastBundleIdentifierClient;
+  NSString *_lastInputClientBundleID;
   NSRange _lastClientSelectedRange;
   BOOL _useMarkedTextForClient;
   BOOL _moaJjikiEnabled;
@@ -29,6 +31,7 @@
   NSUInteger _hanjaMarkedPrefixLength;
   BOOL _hanjaReplacementUsesMarkedPrefix;
   DKSTCompositionState *_compositionState;
+  NSMutableDictionary *_chromiumDetectionCache;
 }
 
 - (void)updateComposition:(id)sender;

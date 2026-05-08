@@ -10,13 +10,13 @@
 - (void)applicationDidFinishLaunching:(NSNotification *)aNotification {
   // 1. Create Window
   NSRect frame = NSMakeRect(0, 0, 600, 500);
-  self.window = [[NSWindow alloc]
+  self.window = [[[NSWindow alloc]
       initWithContentRect:frame
                 styleMask:(NSWindowStyleMaskTitled | NSWindowStyleMaskClosable |
                            NSWindowStyleMaskResizable |
                            NSWindowStyleMaskMiniaturizable)
                   backing:NSBackingStoreBuffered
-                    defer:NO];
+                    defer:NO] autorelease];
   [self.window setTitle:@"DKST Dictionary Editor"];
   [self.window center];
 
@@ -25,14 +25,16 @@
 
   // Top Bar: Search Field and Save Button
   self.searchField =
-      [[NSSearchField alloc] initWithFrame:NSMakeRect(20, 460, 460, 22)];
+      [[[NSSearchField alloc] initWithFrame:NSMakeRect(20, 460, 460, 22)]
+          autorelease];
   [self.searchField setDelegate:self];
   [self.searchField setPlaceholderString:@"Search trigger or values..."];
   [self.searchField setAutoresizingMask:NSViewWidthSizable | NSViewMinYMargin];
   [contentView addSubview:self.searchField];
 
   NSButton *saveButton =
-      [[NSButton alloc] initWithFrame:NSMakeRect(490, 458, 90, 26)];
+      [[[NSButton alloc] initWithFrame:NSMakeRect(490, 458, 90, 26)]
+          autorelease];
   [saveButton setTitle:@"Save"];
   [saveButton setBezelStyle:NSBezelStyleRounded];
   [saveButton setTarget:self];
@@ -42,7 +44,8 @@
 
   // Add Button
   NSButton *addButton =
-      [[NSButton alloc] initWithFrame:NSMakeRect(20, 18, 80, 26)];
+      [[[NSButton alloc] initWithFrame:NSMakeRect(20, 18, 80, 26)]
+          autorelease];
   [addButton setTitle:@"+ Add"];
   [addButton setBezelStyle:NSBezelStyleRounded];
   [addButton setTarget:self];
@@ -52,7 +55,8 @@
 
   // Delete Button
   NSButton *deleteButton =
-      [[NSButton alloc] initWithFrame:NSMakeRect(105, 18, 80, 26)];
+      [[[NSButton alloc] initWithFrame:NSMakeRect(105, 18, 80, 26)]
+          autorelease];
   [deleteButton setTitle:@"- Delete"];
   [deleteButton setBezelStyle:NSBezelStyleRounded];
   [deleteButton setTarget:self];
@@ -62,20 +66,22 @@
 
   // Table View
   NSScrollView *scrollView =
-      [[NSScrollView alloc] initWithFrame:NSMakeRect(20, 50, 560, 400)];
+      [[[NSScrollView alloc] initWithFrame:NSMakeRect(20, 50, 560, 400)]
+          autorelease];
   [scrollView setHasVerticalScroller:YES];
   [scrollView setHasHorizontalScroller:YES];
   [scrollView setAutoresizingMask:NSViewWidthSizable | NSViewHeightSizable];
 
-  self.tableView = [[NSTableView alloc] initWithFrame:scrollView.bounds];
+  self.tableView =
+      [[[NSTableView alloc] initWithFrame:scrollView.bounds] autorelease];
   NSTableColumn *triggerCol =
-      [[NSTableColumn alloc] initWithIdentifier:@"trigger"];
+      [[[NSTableColumn alloc] initWithIdentifier:@"trigger"] autorelease];
   [triggerCol setWidth:100];
   [triggerCol setTitle:@"Trigger (Key)"];
   [self.tableView addTableColumn:triggerCol];
 
   NSTableColumn *valueCol =
-      [[NSTableColumn alloc] initWithIdentifier:@"values"];
+      [[[NSTableColumn alloc] initWithIdentifier:@"values"] autorelease];
   [valueCol setWidth:430];
   [valueCol setTitle:@"Values (Comma Separated)"];
   [self.tableView addTableColumn:valueCol];
@@ -89,7 +95,8 @@
 
   // Status Label
   self.statusLabel =
-      [[NSTextField alloc] initWithFrame:NSMakeRect(200, 20, 380, 20)];
+      [[[NSTextField alloc] initWithFrame:NSMakeRect(200, 20, 380, 20)]
+          autorelease];
   [self.statusLabel setEditable:NO];
   [self.statusLabel setBordered:NO];
   [self.statusLabel setBackgroundColor:[NSColor clearColor]];
@@ -105,6 +112,17 @@
   [self performSelector:@selector(detectAndLoadFile)
              withObject:nil
              afterDelay:0.1];
+}
+
+- (void)dealloc {
+  self.window = nil;
+  self.tableView = nil;
+  self.allEntries = nil;
+  self.filteredEntries = nil;
+  self.currentFilePath = nil;
+  self.statusLabel = nil;
+  self.searchField = nil;
+  [super dealloc];
 }
 
 - (BOOL)applicationShouldTerminateAfterLastWindowClosed:
@@ -126,7 +144,7 @@
   BOOL systemExists = [fm fileExistsAtPath:systemPath];
 
   if (userExists && systemExists) {
-    NSAlert *alert = [[NSAlert alloc] init];
+    NSAlert *alert = [[[NSAlert alloc] init] autorelease];
     [alert setMessageText:@"Duplicate Dictionary Files Found"];
     [alert setInformativeText:@"Found dictionary files in both User and System "
                               @"locations.\nWhich one would you like to edit?"];
@@ -149,7 +167,7 @@
     NSString *bundlePath = [[NSBundle mainBundle] pathForResource:@"hanja"
                                                            ofType:@"txt"];
     if (bundlePath && [fm fileExistsAtPath:bundlePath]) {
-      NSAlert *alert = [[NSAlert alloc] init];
+      NSAlert *alert = [[[NSAlert alloc] init] autorelease];
       [alert setMessageText:@"No Standard Dictionary File Found"];
       [alert setInformativeText:
                  [NSString
@@ -158,7 +176,7 @@
       [alert runModal];
       [self loadFile:bundlePath];
     } else {
-      NSAlert *alert = [[NSAlert alloc] init];
+      NSAlert *alert = [[[NSAlert alloc] init] autorelease];
       [alert setMessageText:@"Error"];
       [alert setInformativeText:
                  @"Could not find 'hanja.txt' in standard locations."];
@@ -178,7 +196,7 @@
                                                 encoding:NSUTF8StringEncoding
                                                    error:&error];
   if (error) {
-    NSAlert *alert = [[NSAlert alloc] init];
+    NSAlert *alert = [[[NSAlert alloc] init] autorelease];
     [alert setMessageText:@"Read Error"];
     [alert setInformativeText:[error localizedDescription]];
     [alert runModal];
@@ -259,13 +277,13 @@
                        escapedTempPath, escapedFilePath, escapedFilePath];
 
   NSAppleScript *appleScript =
-      [[NSAppleScript alloc] initWithSource:scriptSource];
+      [[[NSAppleScript alloc] initWithSource:scriptSource] autorelease];
   NSDictionary *errorInfo = nil;
   NSAppleEventDescriptor *eventResult =
       [appleScript executeAndReturnError:&errorInfo];
 
   if (!eventResult) {
-    NSAlert *alert = [[NSAlert alloc] init];
+    NSAlert *alert = [[[NSAlert alloc] init] autorelease];
     [alert setMessageText:@"Save Failed"];
     NSString *errMsg =
         errorInfo[NSAppleScriptErrorMessage] ?: @"Unknown AppleScript error";

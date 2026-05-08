@@ -27,6 +27,12 @@
     return self;
 }
 
+- (void)dealloc {
+    [_buffer release];
+    [_completed release];
+    [super dealloc];
+}
+
 - (void)reset {
     _cho = 0;
     _jung = 0;
