@@ -208,6 +208,31 @@ static IMKCandidates *DKSTSharedCandidatesForMacOS26;
           reason);
 }
 
+- (BOOL)bundleIdentifierUsesWebKitTextStack:(NSString *)bundleID {
+  if (![bundleID length]) {
+    return NO;
+  }
+
+  NSArray *webkitBundlePrefixes =
+      [NSArray arrayWithObjects:@"com.apple.Safari",
+                                @"com.apple.WebKit",
+                                @"com.apple.mobilesafari", nil];
+
+  for (NSString *prefix in webkitBundlePrefixes) {
+    if ([bundleID isEqualToString:prefix] ||
+        [bundleID hasPrefix:[prefix stringByAppendingString:@"."]]) {
+      return YES;
+    }
+  }
+
+  return NO;
+}
+
+- (BOOL)shouldAvoidEagerSyncForClient:(id)sender {
+  NSString *bundleID = [self bundleIdentifierForClient:sender];
+  return [self bundleIdentifierUsesWebKitTextStack:bundleID];
+}
+
 - (BOOL)bundleIdentifierUsesChromiumMarkedTextPolicy:(NSString *)bundleID {
   if (![bundleID length]) {
     return NO;
@@ -538,6 +563,10 @@ static IMKCandidates *DKSTSharedCandidatesForMacOS26;
     return YES;
   }
 
+  if ([self bundleIdentifierUsesWebKitTextStack:bundleID]) {
+    return NO;
+  }
+
   if ([_markedTextBundleIDSet containsObject:bundleID]) {
     return YES;
   }
@@ -614,7 +643,7 @@ static IMKCandidates *DKSTSharedCandidatesForMacOS26;
 
   @try {
     [sender overrideKeyboardWithKeyboardNamed:kUSKeylayout];
-    if (force) {
+    if (force && ![self shouldAvoidEagerSyncForClient:sender]) {
       [sender selectInputMode:currentMode];
     }
     _lastClientSyncTime = now;

@@ -57,6 +57,8 @@
 - (NSString *)bundleIdentifierForClient:(id)sender;
 - (void)forceMarkedTextForClient:(id)sender reason:(NSString *)reason;
 - (BOOL)shouldUseMarkedTextForClient:(id)sender;
+- (BOOL)bundleIdentifierUsesWebKitTextStack:(NSString *)bundleID;
+- (BOOL)shouldAvoidEagerSyncForClient:(id)sender;
 - (BOOL)bundleIdentifierUsesChromiumMarkedTextPolicy:(NSString *)bundleID;
 - (BOOL)runningApplicationUsesChromiumTextStack:(NSString *)bundleID;
 - (BOOL)applicationBundleUsesChromiumTextStack:(NSURL *)bundleURL;
