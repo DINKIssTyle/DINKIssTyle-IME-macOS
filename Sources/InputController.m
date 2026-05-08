@@ -15,6 +15,10 @@
                     client:(id)sender
         candidatesVisible:(BOOL)candidatesVisible;
 - (BOOL)directInputRangeIsCurrent:(NSRange)range client:(id)sender;
+- (BOOL)repairFirstMarkedTextLeakForClient:(id)sender
+                                    keyCode:(unsigned short)keyCode
+                                  modifiers:(NSUInteger)modifiers
+                        selectedRangeBefore:(NSRange)selectedRangeBefore;
 @end
 
 static NSInteger DKSTCandidateIndexForNumberKeyCode(unsigned short keyCode) {
@@ -29,6 +33,40 @@ static NSInteger DKSTCandidateIndexForNumberKeyCode(unsigned short keyCode) {
   case kDKSTKeyCodeNum8: return 7;
   case kDKSTKeyCodeNum9: return 8;
   default: return -1;
+  }
+}
+
+static NSString *DKSTRomanStringForHangulKeyCode(unsigned short keyCode,
+                                                 NSUInteger modifiers) {
+  BOOL shift = (modifiers & NSEventModifierFlagShift) != 0;
+  switch (keyCode) {
+  case 0:  return shift ? @"A" : @"a";
+  case 1:  return shift ? @"S" : @"s";
+  case 2:  return shift ? @"D" : @"d";
+  case 3:  return shift ? @"F" : @"f";
+  case 4:  return shift ? @"H" : @"h";
+  case 5:  return shift ? @"G" : @"g";
+  case 6:  return shift ? @"Z" : @"z";
+  case 7:  return shift ? @"X" : @"x";
+  case 8:  return shift ? @"C" : @"c";
+  case 9:  return shift ? @"V" : @"v";
+  case 11: return shift ? @"B" : @"b";
+  case 12: return shift ? @"Q" : @"q";
+  case 13: return shift ? @"W" : @"w";
+  case 14: return shift ? @"E" : @"e";
+  case 15: return shift ? @"R" : @"r";
+  case 16: return shift ? @"Y" : @"y";
+  case 17: return shift ? @"T" : @"t";
+  case 31: return shift ? @"O" : @"o";
+  case 32: return shift ? @"U" : @"u";
+  case 34: return shift ? @"I" : @"i";
+  case 35: return shift ? @"P" : @"p";
+  case 37: return shift ? @"L" : @"l";
+  case 38: return shift ? @"J" : @"j";
+  case 40: return shift ? @"K" : @"k";
+  case 45: return shift ? @"N" : @"n";
+  case 46: return shift ? @"M" : @"m";
+  default: return nil;
   }
 }
 
@@ -733,6 +771,62 @@ static IMKCandidates *DKSTSharedCandidatesForMacOS26;
   }
 }
 
+- (BOOL)repairFirstMarkedTextLeakForClient:(id)sender
+                                    keyCode:(unsigned short)keyCode
+                                  modifiers:(NSUInteger)modifiers
+                        selectedRangeBefore:(NSRange)selectedRangeBefore {
+  if (!_useMarkedTextForClient || !sender ||
+      _markedReplacementRange.location != NSNotFound ||
+      _directInputComposedLength != 0 ||
+      selectedRangeBefore.location == NSNotFound ||
+      selectedRangeBefore.length != 0) {
+    return NO;
+  }
+
+  NSString *bundleID = [self bundleIdentifierForClient:sender];
+  BOOL isMarkedPolicyTarget =
+      _useMarkedTextForAllApps ||
+      ([bundleID length] > 0 &&
+       ([_forcedMarkedTextBundleIDs containsObject:bundleID] ||
+        [_markedTextBundleIDSet containsObject:bundleID] ||
+        [self bundleIdentifierUsesChromiumMarkedTextPolicy:bundleID] ||
+        [self runningApplicationUsesChromiumTextStack:bundleID]));
+  if (!isMarkedPolicyTarget ||
+      [self bundleIdentifierUsesWebKitTextStack:bundleID]) {
+    return NO;
+  }
+
+  NSString *roman = DKSTRomanStringForHangulKeyCode(keyCode, modifiers);
+  if ([roman length] == 0 ||
+      ![sender respondsToSelector:@selector(selectedRange)] ||
+      ![sender respondsToSelector:@selector(attributedSubstringFromRange:)]) {
+    return NO;
+  }
+
+  @try {
+    NSRange selectedRangeAfter = [sender selectedRange];
+    if (selectedRangeAfter.location != selectedRangeBefore.location + 1 ||
+        selectedRangeAfter.length != 0 || selectedRangeAfter.location == 0) {
+      return NO;
+    }
+
+    NSRange leakedRange = NSMakeRange(selectedRangeAfter.location - 1, 1);
+    NSAttributedString *leakedText =
+        [sender attributedSubstringFromRange:leakedRange];
+    if (![[leakedText string] isEqualToString:roman]) {
+      return NO;
+    }
+
+    [self setMarkedReplacementRange:leakedRange];
+    DKSTLog(@"Repairing first marked-text roman leak at %@ for %@",
+            NSStringFromRange(leakedRange), bundleID ?: @"unknown client");
+    return YES;
+  } @catch (NSException *exception) {
+    DKSTLog(@"Exception repairing first marked-text leak: %@", exception);
+    return NO;
+  }
+}
+
 - (void)syncInputClient:(id)sender force:(BOOL)force {
   if (!sender) {
     return;
@@ -1161,8 +1255,17 @@ static IMKCandidates *DKSTSharedCandidatesForMacOS26;
                     client:(id)sender
         candidatesVisible:(BOOL)candidatesVisible {
   NSUInteger previousComposedLength = 0;
+  NSRange selectedRangeBefore = NSMakeRange(NSNotFound, 0);
   if (_useMarkedTextForClient) {
     previousComposedLength = [[engine composedString] length];
+    @try {
+      if ([sender respondsToSelector:@selector(selectedRange)]) {
+        selectedRangeBefore = [sender selectedRange];
+      }
+    } @catch (NSException *exception) {
+      DKSTLog(@"Exception checking selected range before input: %@",
+              exception);
+    }
   }
 
   BOOL processed = [engine processCode:keyCode modifiers:[event modifierFlags]];
@@ -1178,6 +1281,13 @@ static IMKCandidates *DKSTSharedCandidatesForMacOS26;
         [self commitMarkedText:commit
         previousComposedLength:previousComposedLength
                         client:sender];
+      }
+      if (previousComposedLength == 0 &&
+          [[engine composedString] length] > 0) {
+        [self repairFirstMarkedTextLeakForClient:sender
+                                         keyCode:keyCode
+                                       modifiers:[event modifierFlags]
+                             selectedRangeBefore:selectedRangeBefore];
       }
     }
     [self updateInlineForClient:sender];
