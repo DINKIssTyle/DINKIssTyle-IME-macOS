@@ -30,6 +30,159 @@ function clear_build_app_quarantine() {
     done < <(find "$BUILD_DIR" -type d -name "*.app" -print0)
 }
 
+# --- 함수: 설치 대상 앱 존재 확인 ---
+function ensure_source_app_exists() {
+    if [ ! -d "$SOURCE_APP" ]; then
+        echo "오류: 설치할 앱을 찾을 수 없습니다."
+        echo "경로 확인: $SOURCE_APP"
+        echo "먼저 프로젝트를 빌드했는지 확인해주세요."
+        exit 1
+    fi
+}
+
+# --- 함수: plist 값 제거(없어도 계속 진행) ---
+function plist_delete_if_exists() {
+    /usr/libexec/PlistBuddy -c "Delete $1" "$2" >/dev/null 2>&1 || true
+}
+
+# --- 함수: plist 문자열 값 교체 ---
+function plist_replace_string() {
+    plist_delete_if_exists "$1" "$3"
+    /usr/libexec/PlistBuddy -c "Add $1 string $2" "$3"
+}
+
+# --- 함수: PDF 기반 상태 메뉴 아이콘 적용 ---
+function configure_pdf_icon() {
+    local SOURCE_PDF="$1"
+    local ICON_NAME="$2"
+    local RESOURCE_DIR="${SOURCE_APP}/Contents/Resources"
+    local INFO_PLIST="${SOURCE_APP}/Contents/Info.plist"
+    local INPUT_MODE_PATH=":ComponentInputModeDict:tsInputModeListKey:com.dinkisstyle.inputmethod.DKST.hangul"
+
+    ensure_source_app_exists
+
+    if [ ! -f "$SOURCE_PDF" ]; then
+        echo "오류: ${ICON_NAME} 파일을 찾을 수 없습니다."
+        echo "경로 확인: $SOURCE_PDF"
+        exit 1
+    fi
+
+    echo "${ICON_NAME}을 Hangul.pdf로 적용 중..."
+    cp "$SOURCE_PDF" "${RESOURCE_DIR}/Hangul.pdf"
+
+    plist_delete_if_exists ":TISIconIsTemplate" "$INFO_PLIST"
+    plist_delete_if_exists "${INPUT_MODE_PATH}:TISIconLabels" "$INFO_PLIST"
+    plist_replace_string "${INPUT_MODE_PATH}:tsInputModeAlternateMenuIconFileKey" "Hangul.pdf" "$INFO_PLIST"
+    plist_replace_string "${INPUT_MODE_PATH}:tsInputModeMenuIconFileKey" "Hangul.pdf" "$INFO_PLIST"
+    plist_replace_string "${INPUT_MODE_PATH}:tsInputModePaletteIconFileKey" "Hangul.pdf" "$INFO_PLIST"
+    plist_replace_string ":tsInputMethodIconFileKey" "Hangul.pdf" "$INFO_PLIST"
+}
+
+# --- 함수: 설치 실행 ---
+function install_dkst() {
+    echo ""
+    echo "[설치 시작]"
+
+    ensure_source_app_exists
+
+    echo "관리자 권한이 필요합니다. 비밀번호를 입력해주세요."
+
+    # 0. 빌드 폴더 안의 모든 앱 번들 격리 해제
+    clear_build_app_quarantine
+
+    # 1. 기존 hanja.txt 백업 (사용자 수정본 보존)
+    HANJA_FILE="${DEST_APP}/Contents/Resources/hanja.txt"
+    HANJA_BACKUP="/tmp/hanja_backup_$$.txt"
+    if [ -f "$HANJA_FILE" ]; then
+        echo "기존 hanja.txt 파일을 백업 중..."
+        sudo cp "$HANJA_FILE" "$HANJA_BACKUP"
+        HANJA_PRESERVED=true
+    else
+        HANJA_PRESERVED=false
+    fi
+
+    # 2. 기존 파일 정리 및 새 파일 복사
+    echo "기존 앱 파일 제거 및 새 파일 복사 중..."
+    sudo rm -rf "$DEST_APP"
+    sudo cp -R "$SOURCE_APP" "$DEST_DIR/"
+
+    # 2.5. 백업한 hanja.txt 복원
+    if [ "$HANJA_PRESERVED" = true ] && [ -f "$HANJA_BACKUP" ]; then
+        echo "사용자 hanja.txt 파일 복원 중..."
+        sudo cp "$HANJA_BACKUP" "$HANJA_FILE"
+        rm -f "$HANJA_BACKUP"
+    fi
+
+    # 3. 설치된 앱 번들 격리 해제
+    echo "설치된 앱 번들 확장 속성(quarantine) 제거 중..."
+    sudo xattr -cr "$DEST_APP"
+
+    # 4. [순서 변경됨] 설치 완료 후 프로세스 종료
+    kill_dkst_process
+
+    echo "[설치 완료]"
+    SHOW_MESSAGE=true
+}
+
+# --- 함수: 아이콘 선택 메뉴 ---
+function choose_icon_and_install() {
+    clear
+    echo "=========================================="
+    echo "      DKST 한글 입력기 설치 도우미      "
+    echo "      다음 중 상태 메뉴에 표시될 아이콘을 선택하세요. "
+    echo "      *선택한 아이콘은 재부팅 후 표시 됩니다."
+    echo "=========================================="
+    echo "1. 기본 아이콘 (Default 'Taegeuk symbol')"
+    echo "2. 아래아 '한' 아이콘 (Arae-a 'Han')"
+    echo "3. '한' (Han)"
+    echo "4. '가' (Ga)"
+    echo "5. '앙' (Ang)"
+    echo "6. 뒤로 돌아가기 (Back)"
+    echo "=========================================="
+    read -p "원하는 작업의 번호를 입력하세요 [1-6]: " ICON_CHOICE
+
+    case $ICON_CHOICE in
+        1)
+            configure_pdf_icon "${SCRIPT_DIR}/Resources/Hangul.pdf" "기본 아이콘"
+            install_dkst
+            ;;
+
+        2)
+            if [ -f "${SCRIPT_DIR}/Resources/Hangul2.pdf" ]; then
+                configure_pdf_icon "${SCRIPT_DIR}/Resources/Hangul2.pdf" "아래아 '한' 아이콘"
+            else
+                configure_pdf_icon "${SOURCE_APP}/Contents/Resources/Hangul2.pdf" "아래아 '한' 아이콘"
+            fi
+            install_dkst
+            ;;
+
+        3)
+            configure_pdf_icon "${SCRIPT_DIR}/Resources/Hangul3.pdf" "'한' 아이콘"
+            install_dkst
+            ;;
+
+        4)
+            configure_pdf_icon "${SCRIPT_DIR}/Resources/Hangul4.pdf" "'가' 아이콘"
+            install_dkst
+            ;;
+
+        5)
+            configure_pdf_icon "${SCRIPT_DIR}/Resources/Hangul5.pdf" "'앙' 아이콘"
+            install_dkst
+            ;;
+
+        6)
+            echo "이전 메뉴로 돌아갑니다."
+            exec "${SCRIPT_DIR}/install.command"
+            ;;
+
+        *)
+            echo "잘못된 입력입니다. 스크립트를 종료합니다."
+            exit 1
+            ;;
+    esac
+}
+
 # --- 화면 출력 및 메뉴 ---
 clear
 echo "[38;2;0;0;0m@[0m[38;2;0;0;0m@[0m[38;2;0;0;0m@[0m[38;2;0;0;0m@[0m[38;2;0;0;0m@[0m[38;2;0;0;0m@[0m[38;2;0;0;0m@[0m[38;2;0;0;0m@[0m[38;2;0;0;0m@[0m[38;2;0;0;0m@[0m[38;2;0;0;0m@[0m[38;2;0;0;0m@[0m[38;2;0;0;0m@[0m[38;2;0;0;0m@[0m[38;2;0;0;0m@[0m[38;2;0;0;0m@[0m[38;2;0;0;0m@[0m[38;2;0;0;0m@[0m[38;2;0;0;0m@[0m[38;2;0;0;0m@[0m[38;2;0;0;0m@[0m[38;2;0;0;0m@[0m[38;2;0;0;0m@[0m[38;2;0;0;0m@[0m[38;2;0;0;0m@[0m[38;2;0;0;0m@[0m[38;2;0;0;0m@[0m[38;2;0;0;0m@[0m[38;2;0;0;0m@[0m[38;2;0;0;0m@[0m[38;2;0;0;0m@[0m[38;2;0;0;0m@[0m[38;2;0;0;0m@[0m[38;2;0;0;0m@[0m[38;2;0;0;0m@[0m[38;2;0;0;0m@[0m[38;2;0;0;0m@[0m[38;2;0;0;0m@[0m[38;2;0;0;0m@[0m[38;2;0;0;0m@[0m[38;2;0;0;0m@[0m[38;2;0;0;0m@[0m
@@ -57,65 +210,24 @@ echo "=========================================="
 echo "      DKST 한글 입력기 설치 도우미      "
 echo "=========================================="
 echo "1. DKST 한글 입력기 설치 (Install)"
-echo "2. DKST 한글 입력기 제거 (Uninstall)"
-echo "3. 설치 도우미 닫기 (Exit)"
+echo "2. DKST 한글 입력기 아이콘 선택 설치 (Install)"
+echo "3. DKST 한글 입력기 제거 (Uninstall)"
+echo "4. 설치 도우미 닫기 (Exit)"
 echo "=========================================="
-read -p "원하는 작업의 번호를 입력하세요 [1-3]: " CHOICE
+read -p "원하는 작업의 번호를 입력하세요 [1-4]: " CHOICE
 
 # --- 로직 처리 ---
 case $CHOICE in
     1)
-        echo ""
-        echo "[설치 시작]"
-        
-        # 소스 파일 존재 여부 확인
-        if [ ! -d "$SOURCE_APP" ]; then
-            echo "오류: 설치할 앱을 찾을 수 없습니다."
-            echo "경로 확인: $SOURCE_APP"
-            echo "먼저 프로젝트를 빌드했는지 확인해주세요."
-            exit 1
-        fi
-
-        echo "관리자 권한이 필요합니다. 비밀번호를 입력해주세요."
-
-        # 0. 빌드 폴더 안의 모든 앱 번들 격리 해제
-        clear_build_app_quarantine
-        
-        # 1. 기존 hanja.txt 백업 (사용자 수정본 보존)
-        HANJA_FILE="${DEST_APP}/Contents/Resources/hanja.txt"
-        HANJA_BACKUP="/tmp/hanja_backup_$$.txt"
-        if [ -f "$HANJA_FILE" ]; then
-            echo "기존 hanja.txt 파일을 백업 중..."
-            sudo cp "$HANJA_FILE" "$HANJA_BACKUP"
-            HANJA_PRESERVED=true
-        else
-            HANJA_PRESERVED=false
-        fi
-
-        # 2. 기존 파일 정리 및 새 파일 복사
-        echo "기존 앱 파일 제거 및 새 파일 복사 중..."
-        sudo rm -rf "$DEST_APP"
-        sudo cp -R "$SOURCE_APP" "$DEST_DIR/"
-        
-        # 2.5. 백업한 hanja.txt 복원
-        if [ "$HANJA_PRESERVED" = true ] && [ -f "$HANJA_BACKUP" ]; then
-            echo "사용자 hanja.txt 파일 복원 중..."
-            sudo cp "$HANJA_BACKUP" "$HANJA_FILE"
-            rm -f "$HANJA_BACKUP"
-        fi
-        
-        # 3. 설치된 앱 번들 격리 해제
-        echo "설치된 앱 번들 확장 속성(quarantine) 제거 중..."
-        sudo xattr -cr "$DEST_APP"
-        
-        # 4. [순서 변경됨] 설치 완료 후 프로세스 종료
-        kill_dkst_process
-        
-        echo "[설치 완료]"
-        SHOW_MESSAGE=true
+        configure_pdf_icon "${SCRIPT_DIR}/Resources/Hangul.pdf" "기본 아이콘"
+        install_dkst
         ;;
-        
+
     2)
+        choose_icon_and_install
+        ;;
+
+    3)
         echo ""
         echo "[제거 시작]"
         echo "관리자 권한이 필요합니다. 비밀번호를 입력해주세요."
@@ -134,8 +246,8 @@ case $CHOICE in
         echo "[제거 완료]"
         SHOW_MESSAGE=true
         ;;
-        
-    3)
+
+    4)
         echo "프로그램을 종료합니다."
         exit 0
         ;;

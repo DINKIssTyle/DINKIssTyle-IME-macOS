@@ -24,6 +24,8 @@
 	<string>1.6</string>
 	<key>ComponentInputModeDict</key>
 	<dict>
+		<key>TISUnifiedUIForInputMethodEnabling</key>
+		<true/>
 		<key>tsInputModeListKey</key>
 		<dict>
 			<key>com.dinkisstyle.inputmethod.DKST.hangul</key>
@@ -52,8 +54,6 @@
 		<array>
 			<string>com.dinkisstyle.inputmethod.DKST.hangul</string>
 		</array>
-		<key>TISUnifiedUIForInputMethodEnabling</key>
-		<true/>
 	</dict>
 	<key>InputMethodConnectionName</key>
 	<string>DKST_1_Connection</string>
@@ -65,6 +65,8 @@
 	<string>InputController</string>
 	<key>LSBackgroundOnly</key>
 	<true/>
+	<key>LSMinimumSystemVersion</key>
+	<string>10.15</string>
 	<key>NSMainNibFile</key>
 	<string>MainMenu</string>
 	<key>NSPrincipalClass</key>
@@ -81,8 +83,5 @@
 	</array>
 	<key>tsInputMethodIconFileKey</key>
 	<string>Hangul.pdf</string>
-	<key>LSMinimumSystemVersion</key>
-	<string>10.15</string>
-
 </dict>
 </plist>

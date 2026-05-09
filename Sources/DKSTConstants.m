@@ -30,7 +30,8 @@ NSString *const kDKSTHangulKeyboardKey = @"DKSTHangulKeyboard";
 NSString *const kDKSTHangulOrderCorrectionKey = @"DKSTHangulOrderCorrection";
 NSString *const kDKSTQwertyEmulationEnableKey = @"DKSTQwertyEmulationEnable";
 NSString *const kDKSTMarkedTextAppBundleIDsKey = @"DKSTMarkedTextAppBundleIDs";
-NSString *const kDKSTUseMarkedTextForAllAppsKey = @"DKSTUseMarkedTextForAllApps";
+NSString *const kDKSTUseMarkedTextForAllAppsKey =
+    @"DKSTUseMarkedTextForAllApps";
 NSString *const kDKSTUseAppleHanjaDictionaryKey =
     @"DKSTUseAppleHanjaDictionary";
 
@@ -38,6 +39,7 @@ NSArray *DKSTDefaultMarkedTextAppBundleIDs(void) {
   return [NSArray
       arrayWithObjects:@"com.apple.Terminal", @"com.googlecode.iterm2",
                        @"com.microsoft.VSCode", @"com.microsoft.VSCodeInsiders",
+                       @"dev.zed.Zed", @"dev.zed.Zed-Dev",
                        @"com.todesktop.230313mzl4w4u92", @"com.google.Chrome",
                        @"com.google.Chrome.canary", @"com.microsoft.edgemac",
                        @"com.openai.chat", @"com.openai.codex",
