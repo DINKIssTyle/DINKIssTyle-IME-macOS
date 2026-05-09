@@ -127,8 +127,10 @@ Mac의 고유한 사용 경험을 유지합니다.
 2. 아래아 '한' 아이콘 (Arae-a 'Han')
 3. '한' (Han)
 4. '가' (Ga)
-5. '앙' (Ang)
-6. 뒤로 돌아가기 (Back)
+5. '클래식' (Classic)
+6. '앙' (Ang)
+7. '앙' (Ang) 큰버젼
+8. 뒤로 돌아가기 (Back)
 ==========================================
 원하는 작업의 번호를 입력하세요 [1-6]: 
 ```
@@ -154,12 +156,20 @@ Mac의 고유한 사용 경험을 유지합니다.
 </div>
 
 
-#### 5. '앙' (Ang)
+#### 5. '클래식' (Classic) *정식 탑재 미정
+<div align="center">
+<img src="docs/menu_icons/classic.png" alt="" width="350">
+</div>
+
+#### 6. '앙' (Ang)
 <div align="center">
 <img src="docs/menu_icons/ang.png" alt="" width="350">
 </div>
 
-
+#### 7. '앙' (Ang) 큰버젼
+<div align="center">
+<img src="docs/menu_icons/ang2.png" alt="" width="350">
+</div>
 
 
 

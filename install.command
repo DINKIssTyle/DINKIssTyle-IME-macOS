@@ -136,8 +136,10 @@ function choose_icon_and_install() {
     echo "2. 아래아 '한' 아이콘 (Arae-a 'Han')"
     echo "3. '한' (Han)"
     echo "4. '가' (Ga)"
-    echo "5. '앙' (Ang)"
-    echo "6. 뒤로 돌아가기 (Back)"
+    echo "5. '클래식' (Classic)"
+    echo "6. '앙' (Ang)"
+    echo "7. '앙' (Ang) 큰버젼"
+    echo "8. 뒤로 돌아가기 (Back)"
     echo "=========================================="
     read -p "원하는 작업의 번호를 입력하세요 [1-6]: " ICON_CHOICE
 
@@ -148,8 +150,8 @@ function choose_icon_and_install() {
             ;;
 
         2)
-            if [ -f "${SCRIPT_DIR}/Resources/Hangul2.pdf" ]; then
-                configure_pdf_icon "${SCRIPT_DIR}/Resources/Hangul2.pdf" "아래아 '한' 아이콘"
+            if [ -f "${SCRIPT_DIR}/Resources/ICON-Arae-A-Han.pdf" ]; then
+                configure_pdf_icon "${SCRIPT_DIR}/Resources/ICON-Arae-A-Han.pdf" "아래아 '한' 아이콘"
             else
                 configure_pdf_icon "${SOURCE_APP}/Contents/Resources/Hangul2.pdf" "아래아 '한' 아이콘"
             fi
@@ -157,21 +159,31 @@ function choose_icon_and_install() {
             ;;
 
         3)
-            configure_pdf_icon "${SCRIPT_DIR}/Resources/Hangul3.pdf" "'한' 아이콘"
+            configure_pdf_icon "${SCRIPT_DIR}/Resources/ICON-Han.pdf" "'한' 아이콘"
             install_dkst
             ;;
 
         4)
-            configure_pdf_icon "${SCRIPT_DIR}/Resources/Hangul4.pdf" "'가' 아이콘"
+            configure_pdf_icon "${SCRIPT_DIR}/Resources/ICON-Ga.pdf" "'가' 아이콘"
             install_dkst
             ;;
 
         5)
-            configure_pdf_icon "${SCRIPT_DIR}/Resources/Hangul5.pdf" "'앙' 아이콘"
+            configure_pdf_icon "${SCRIPT_DIR}/Resources/ICON-Classic.pdf" "'클래식' 아이콘"
             install_dkst
             ;;
 
         6)
+            configure_pdf_icon "${SCRIPT_DIR}/Resources/ICON-ANG.pdf" "'앙' 아이콘"
+            install_dkst
+            ;;
+
+        7)
+            configure_pdf_icon "${SCRIPT_DIR}/Resources/ICON-ANG-Large.pdf" "'앙' 큰버젼 아이콘"
+            install_dkst
+            ;;
+
+        8)
             echo "이전 메뉴로 돌아갑니다."
             exec "${SCRIPT_DIR}/install.command"
             ;;

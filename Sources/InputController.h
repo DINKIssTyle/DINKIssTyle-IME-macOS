@@ -12,6 +12,7 @@
   NSRange _selectedTextRange;   // For selected text Hanja conversion
   NSTimeInterval _lastClientSyncTime;
   NSUInteger _directInputComposedLength;
+  NSString *_directInputComposedText;
   NSRange _directInputComposedRange;
   NSRange _markedReplacementRange;
   NSMutableSet *_forcedMarkedTextBundleIDs;
