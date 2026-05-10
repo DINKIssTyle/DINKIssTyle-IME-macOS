@@ -33,6 +33,8 @@
   BOOL _hanjaReplacementUsesMarkedPrefix;
   DKSTCompositionState *_compositionState;
   NSMutableDictionary *_chromiumDetectionCache;
+  BOOL _awaitingFirstHandledHangulAfterClientSwitch;
+  NSUInteger _debugEventSerial;
 }
 
 - (void)updateComposition:(id)sender;
