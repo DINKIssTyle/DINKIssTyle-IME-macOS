@@ -71,26 +71,6 @@
   _currentlyEditing = ([_bufferContents length] > 0);
 }
 
-- (NSRange)directReplacementRangeForSelectedRange:(NSRange)selectedRange
-                                   composedLength:(NSUInteger)composedLength {
-  if (composedLength == 0) {
-    return _inlineRange;
-  }
-
-  if (selectedRange.location != NSNotFound &&
-      selectedRange.length == 0 &&
-      selectedRange.location >= composedLength) {
-    return NSMakeRange(selectedRange.location - composedLength,
-                       composedLength);
-  }
-
-  if (_inlineRange.location != NSNotFound && _inlineRange.length > 0) {
-    return _inlineRange;
-  }
-
-  return NSMakeRange(NSNotFound, 0);
-}
-
 - (void)noteInsertedTextWithReplacementRange:(NSRange)replacementRange
                            insertionLocation:(NSUInteger)insertionLocation
                              committedLength:(NSUInteger)committedLength
@@ -108,32 +88,6 @@
 
   _replacementRange = NSMakeRange(NSNotFound, 0);
   _currentlyEditing = (composedLength > 0);
-}
-
-- (NSUInteger)expectedSelectedLocationForInsertionLocation:(NSUInteger)location
-                                           committedLength:(NSUInteger)committedLength
-                                            composedLength:(NSUInteger)composedLength {
-  if (location == NSNotFound) {
-    return NSNotFound;
-  }
-  return location + committedLength + composedLength;
-}
-
-- (BOOL)selectedRange:(NSRange)selectedRange
-    matchesExpectedLocation:(NSUInteger)expectedLocation {
-  if (expectedLocation == NSNotFound) {
-    return YES;
-  }
-  return selectedRange.location == expectedLocation && selectedRange.length == 0;
-}
-
-- (BOOL)shouldFallbackForSelectedRange:(NSRange)selectedRange
-                      expectedLocation:(NSUInteger)expectedLocation {
-  if (!_shouldCheckInsertionError || expectedLocation == NSNotFound) {
-    return NO;
-  }
-  return ![self selectedRange:selectedRange
-       matchesExpectedLocation:expectedLocation];
 }
 
 - (void)markReplacementRange:(NSRange)range {

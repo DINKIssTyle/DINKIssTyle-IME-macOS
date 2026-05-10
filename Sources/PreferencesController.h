@@ -18,14 +18,6 @@
     NSMutableArray *mappingKeys;
     NSMutableDictionary *mappingDict;
     NSMutableArray *markedTextAppBundleIDs;
-    
-    
-    // Shortcut Recording (Restored)
-    IBOutlet NSButton *shortcutButton;
-    BOOL isRecordingShortcut;
-    NSInteger savedKeyCode;
-    NSUInteger savedModifiers;
-    id eventMonitor;
 }
 
 + (PreferencesController *)sharedController;
