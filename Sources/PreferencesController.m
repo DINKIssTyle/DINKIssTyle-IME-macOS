@@ -23,7 +23,7 @@
 }
 
 - (id)init {
-    NSRect frame = NSMakeRect(0, 0, 520, 650);
+    NSRect frame = NSMakeRect(0, 0, 520, 673);
     NSWindow *window = [[[NSWindow alloc] initWithContentRect:frame
                                                     styleMask:(NSWindowStyleMaskTitled | NSWindowStyleMaskClosable | NSWindowStyleMaskMiniaturizable)
                                                       backing:NSBackingStoreBuffered
@@ -71,7 +71,7 @@
         }
         
         // 2. Moa-jjiki
-        moaJjikiCheckbox = [[[NSButton alloc] initWithFrame:NSMakeRect(20, 610, 460, 24)] autorelease];
+        moaJjikiCheckbox = [[[NSButton alloc] initWithFrame:NSMakeRect(20, 633, 460, 24)] autorelease];
         [moaJjikiCheckbox setButtonType:NSButtonTypeSwitch];
         [moaJjikiCheckbox setTitle:@"모아치기 (자모 순서 자동 보정)"];
         [moaJjikiCheckbox setTarget:self];
@@ -79,21 +79,21 @@
         [contentView addSubview:moaJjikiCheckbox];
         
         // 2.5. Hanja Conversion
-        hanjaConversionCheckbox = [[[NSButton alloc] initWithFrame:NSMakeRect(20, 580, 460, 24)] autorelease];
+        hanjaConversionCheckbox = [[[NSButton alloc] initWithFrame:NSMakeRect(20, 603, 460, 24)] autorelease];
         [hanjaConversionCheckbox setButtonType:NSButtonTypeSwitch];
         [hanjaConversionCheckbox setTitle:@"사전 변환 사용 (Option + Enter)"];
         [hanjaConversionCheckbox setTarget:self];
         [hanjaConversionCheckbox setAction:@selector(toggleHanjaConversion:)];
         [contentView addSubview:hanjaConversionCheckbox];
 
-        appleHanjaDictionaryCheckbox = [[[NSButton alloc] initWithFrame:NSMakeRect(20, 550, 460, 24)] autorelease];
+        appleHanjaDictionaryCheckbox = [[[NSButton alloc] initWithFrame:NSMakeRect(20, 573, 460, 24)] autorelease];
         [appleHanjaDictionaryCheckbox setButtonType:NSButtonTypeSwitch];
         [appleHanjaDictionaryCheckbox setTitle:@"Apple 시스템 한자 사전도 후보에 사용"];
         [appleHanjaDictionaryCheckbox setTarget:self];
         [appleHanjaDictionaryCheckbox setAction:@selector(toggleAppleHanjaDictionary:)];
         [contentView addSubview:appleHanjaDictionaryCheckbox];
         
-        useMarkedTextForAllAppsCheckbox = [[[NSButton alloc] initWithFrame:NSMakeRect(20, 490, 460, 24)] autorelease];
+        useMarkedTextForAllAppsCheckbox = [[[NSButton alloc] initWithFrame:NSMakeRect(20, 513, 460, 24)] autorelease];
         [useMarkedTextForAllAppsCheckbox setButtonType:NSButtonTypeSwitch];
         [useMarkedTextForAllAppsCheckbox setTitle:@"모든 앱에서 밑줄 조합 방식 사용"];
         [useMarkedTextForAllAppsCheckbox setTarget:self];
@@ -101,7 +101,7 @@
         [contentView addSubview:useMarkedTextForAllAppsCheckbox];
 
         // 3. Custom Shift Enable (Moved Down)
-        customShiftCheckbox = [[[NSButton alloc] initWithFrame:NSMakeRect(20, 460, 460, 24)] autorelease];
+        customShiftCheckbox = [[[NSButton alloc] initWithFrame:NSMakeRect(20, 483, 460, 24)] autorelease];
         [customShiftCheckbox setButtonType:NSButtonTypeSwitch];
         [customShiftCheckbox setTitle:@"쉬프트키 + 단자음/단모음 사용자화 사용"];
         [customShiftCheckbox setTarget:self];
@@ -109,7 +109,7 @@
         [contentView addSubview:customShiftCheckbox];
         
         // 5. Full Character Delete
-        fullDeleteCheckbox = [[[NSButton alloc] initWithFrame:NSMakeRect(20, 520, 460, 24)] autorelease];
+        fullDeleteCheckbox = [[[NSButton alloc] initWithFrame:NSMakeRect(20, 543, 460, 24)] autorelease];
         [fullDeleteCheckbox setButtonType:NSButtonTypeSwitch];
         [fullDeleteCheckbox setTitle:@"글자 단위로 삭제"];
         [fullDeleteCheckbox setTarget:self];
@@ -117,7 +117,7 @@
         [contentView addSubview:fullDeleteCheckbox];
 
         // 4. Table Scroll View
-        NSScrollView *scrollView = [[[NSScrollView alloc] initWithFrame:NSMakeRect(20, 260, 480, 190)] autorelease];
+        NSScrollView *scrollView = [[[NSScrollView alloc] initWithFrame:NSMakeRect(20, 283, 480, 190)] autorelease];
         [scrollView setBorderType:NSBezelBorder];
         [scrollView setHasVerticalScroller:YES];
         
@@ -143,7 +143,7 @@
         [scrollView setDocumentView:mappingsTableView];
         [contentView addSubview:scrollView];
 
-        NSTextField *markedLabel = [[[NSTextField alloc] initWithFrame:NSMakeRect(20, 225, 480, 20)] autorelease];
+        NSTextField *markedLabel = [[[NSTextField alloc] initWithFrame:NSMakeRect(20, 248, 480, 20)] autorelease];
         [markedLabel setStringValue:@"밑줄 조합 방식으로 사용할 앱 Bundle ID"];
         [markedLabel setBezeled:NO];
         [markedLabel setDrawsBackground:NO];
@@ -152,7 +152,7 @@
         [markedLabel setFont:[NSFont boldSystemFontOfSize:12]];
         [contentView addSubview:markedLabel];
 
-        NSScrollView *markedScrollView = [[[NSScrollView alloc] initWithFrame:NSMakeRect(20, 70, 480, 145)] autorelease];
+        NSScrollView *markedScrollView = [[[NSScrollView alloc] initWithFrame:NSMakeRect(20, 93, 480, 145)] autorelease];
         [markedScrollView setBorderType:NSBezelBorder];
         [markedScrollView setHasVerticalScroller:YES];
 
@@ -168,20 +168,39 @@
         [markedScrollView setDocumentView:markedTextAppsTableView];
         [contentView addSubview:markedScrollView];
 
-        addMarkedTextAppButton = [[[NSButton alloc] initWithFrame:NSMakeRect(20, 35, 80, 24)] autorelease];
+        addMarkedTextAppButton = [[[NSButton alloc] initWithFrame:NSMakeRect(20, 58, 80, 24)] autorelease];
         [addMarkedTextAppButton setTitle:@"추가"];
         [addMarkedTextAppButton setTarget:self];
         [addMarkedTextAppButton setAction:@selector(addMarkedTextApp:)];
         [contentView addSubview:addMarkedTextAppButton];
 
-        removeMarkedTextAppButton = [[[NSButton alloc] initWithFrame:NSMakeRect(108, 35, 80, 24)] autorelease];
+        removeMarkedTextAppButton = [[[NSButton alloc] initWithFrame:NSMakeRect(108, 58, 80, 24)] autorelease];
         [removeMarkedTextAppButton setTitle:@"삭제"];
         [removeMarkedTextAppButton setTarget:self];
         [removeMarkedTextAppButton setAction:@selector(removeMarkedTextApp:)];
         [contentView addSubview:removeMarkedTextAppButton];
         
+        NSString *version = [[[NSBundle mainBundle] objectForInfoDictionaryKey:@"DKSTVersionDisplay"] description];
+        if ([version length] == 0) {
+            version = [[[NSBundle mainBundle] objectForInfoDictionaryKey:@"CFBundleShortVersionString"] description];
+        }
+        if ([version length] == 0) {
+            version = @"2.0(beta4)";
+        }
+
+        NSTextField *versionLabel = [[[NSTextField alloc] initWithFrame:NSMakeRect(20, 27, 480, 16)] autorelease];
+        [versionLabel setStringValue:[NSString stringWithFormat:@"DKST macOS용 한글입력기 Ver. %@", version]];
+        [versionLabel setBezeled:NO];
+        [versionLabel setDrawsBackground:NO];
+        [versionLabel setEditable:NO];
+        [versionLabel setSelectable:NO];
+        [versionLabel setAlignment:NSTextAlignmentCenter];
+        [versionLabel setFont:[NSFont systemFontOfSize:11]];
+        [versionLabel setTextColor:[NSColor secondaryLabelColor]];
+        [contentView addSubview:versionLabel];
+
         // 6. Copyright Link
-        NSTextView *copyrightView = [[[NSTextView alloc] initWithFrame:NSMakeRect(20, 2, 480, 18)] autorelease];
+        NSTextView *copyrightView = [[[NSTextView alloc] initWithFrame:NSMakeRect(20, 5, 480, 18)] autorelease];
         [copyrightView setEditable:NO];
         [copyrightView setSelectable:YES];
         [copyrightView setDrawsBackground:NO];

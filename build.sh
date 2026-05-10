@@ -1,9 +1,28 @@
 #!/bin/bash
 set -e
 
+BUILD_CONFIG="./build.config"
+if [ -f "$BUILD_CONFIG" ]; then
+    # shellcheck source=/dev/null
+    source "$BUILD_CONFIG"
+fi
+
+: "${DKST_VERSION_DISPLAY:=2.0(beta4)}"
+: "${DKST_BUNDLE_SHORT_VERSION:=2.0}"
+: "${DKST_BUNDLE_VERSION:=2.0.0.4}"
+
+set_plist_string() {
+    local plist_path="$1"
+    local key="$2"
+    local value="$3"
+
+    /usr/bin/plutil -replace "$key" -string "$value" "$plist_path"
+}
+
 # Interactive build mode selection
 echo "=========================================="
 echo "       DKST 빌드 도우미"
+echo "       Version: ${DKST_VERSION_DISPLAY}"
 echo "=========================================="
 echo "1. Debug 빌드 (개발용)"
 echo "2. Release 빌드 (배포용)"
@@ -57,6 +76,9 @@ echo "Processing Info.plist..."
 sed -e 's/${PRODUCT_NAME}/DKST/g' \
     -e 's/$(PRODUCT_BUNDLE_IDENTIFIER)/com.dinkisstyle.inputmethod.DKST/g' \
     Resources/Info.plist > build/DKST.app/Contents/Info.plist
+set_plist_string build/DKST.app/Contents/Info.plist CFBundleShortVersionString "$DKST_BUNDLE_SHORT_VERSION"
+set_plist_string build/DKST.app/Contents/Info.plist CFBundleVersion "$DKST_BUNDLE_VERSION"
+set_plist_string build/DKST.app/Contents/Info.plist DKSTVersionDisplay "$DKST_VERSION_DISPLAY"
 
 # Compile XIB
 echo "Compiling XIB..."
@@ -115,6 +137,9 @@ cat > build/DKSTPreferences.app/Contents/Info.plist <<EOF
 </dict>
 </plist>
 EOF
+set_plist_string build/DKSTPreferences.app/Contents/Info.plist CFBundleShortVersionString "$DKST_BUNDLE_SHORT_VERSION"
+set_plist_string build/DKSTPreferences.app/Contents/Info.plist CFBundleVersion "$DKST_BUNDLE_VERSION"
+set_plist_string build/DKSTPreferences.app/Contents/Info.plist DKSTVersionDisplay "$DKST_VERSION_DISPLAY"
 
 # Copy Icon
 cp Resources/DKST.icns build/DKSTPreferences.app/Contents/Resources/
@@ -160,6 +185,9 @@ cat > build/DKSTDictEditor.app/Contents/Info.plist <<EOF
 </dict>
 </plist>
 EOF
+set_plist_string build/DKSTDictEditor.app/Contents/Info.plist CFBundleShortVersionString "$DKST_BUNDLE_SHORT_VERSION"
+set_plist_string build/DKSTDictEditor.app/Contents/Info.plist CFBundleVersion "$DKST_BUNDLE_VERSION"
+set_plist_string build/DKSTDictEditor.app/Contents/Info.plist DKSTVersionDisplay "$DKST_VERSION_DISPLAY"
 
 # Copy Icon (Reuse existing icon)
 cp Resources/DKST.icns build/DKSTDictEditor.app/Contents/Resources/
