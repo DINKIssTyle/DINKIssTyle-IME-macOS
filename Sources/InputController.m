@@ -764,6 +764,14 @@ static IMKCandidates *DKSTSharedCandidatesForMacOS26;
     return YES;
   }
 
+  // 1. Apple Native Private API Query (마크드 텍스트 네이티브 지원 여부 확인)
+  SEL showsComposingTextSel = NSSelectorFromString(@"showsComposingTextAsMarkedText");
+  if ([sender respondsToSelector:showsComposingTextSel]) {
+    BOOL showsMarked = ((BOOL (*)(id, SEL))[sender methodForSelector:showsComposingTextSel])(sender, showsComposingTextSel);
+    return showsMarked;
+  }
+
+  // 2. Fallback to Bundle ID heuristics (기존 Bundle ID 기반 예외 처리)
   NSString *bundleID = [self bundleIdentifierForClient:sender];
 
   if (![bundleID length]) {
