@@ -2,8 +2,8 @@
   <img src="docs/DKST_video.gif" alt="Video Demo" width="90%">
 </p>
 
-<p align="center">
-  <img src="docs/Main_img.png" alt="Icon Image" width="128">
+<p align="center"><br>
+  <img src="docs/Main_img.png" alt="Icon Image" width="96">
 </p>
 
 # macOS용 DKST 한글입력기 
@@ -27,7 +27,8 @@
 
 > 상세한 내용은 **아래 주요 특징**을 확인해주세요.
 
-
+> 혹시 **리눅스용 DKST 한글입력기**도 알고 계신가요?
+> https://github.com/DINKIssTyle/DINKIssTyle-IME-Ubuntu
 
 ---
 
