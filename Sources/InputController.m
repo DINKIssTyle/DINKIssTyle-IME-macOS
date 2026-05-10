@@ -2,6 +2,8 @@
 #import "DKSTConstants.h"
 #import "DKSTHanjaDictionary.h"
 
+static const int64_t DKSTUnicodeInjectionEventMarker = 0x444b5354554e4931LL;
+
 @interface InputController ()
 - (BOOL)handleCandidateNavigation:(unsigned short)keyCode client:(id)sender;
 - (BOOL)handleHanjaConversion:(unsigned short)keyCode
@@ -135,6 +137,9 @@ static IMKCandidates *DKSTSharedCandidatesForMacOS26;
     _lastClientSelectedRange = NSMakeRange(NSNotFound, 0);
     _useMarkedTextForClient = NO;
     _hanjaEnabled = YES;
+    _unicodeInjectionEnabled = NO;
+    _unicodeInjectionAccessLogged = NO;
+    _unicodeInjectedComposedLength = 0;
     _markedTextCommittedPrefix = [[NSMutableString alloc] init];
     _hanjaMarkedPrefixLength = 0;
     _hanjaReplacementUsesMarkedPrefix = NO;
@@ -221,6 +226,10 @@ static IMKCandidates *DKSTSharedCandidatesForMacOS26;
   if (_markedTextBundleIDSet) {
     [_markedTextBundleIDSet release];
     _markedTextBundleIDSet = nil;
+  }
+  if (_unicodeInjectionBundleIDSet) {
+    [_unicodeInjectionBundleIDSet release];
+    _unicodeInjectionBundleIDSet = nil;
   }
   if (_markedTextCommittedPrefix) {
     [_markedTextCommittedPrefix release];
@@ -313,6 +322,141 @@ static IMKCandidates *DKSTSharedCandidatesForMacOS26;
   }
 
   return NO;
+}
+
+- (BOOL)shouldUseUnicodeInjectionForClient:(id)sender {
+  if (!_unicodeInjectionEnabled) {
+    return NO;
+  }
+
+  NSString *bundleID = [self bundleIdentifierForClient:sender];
+  if (![bundleID length] || [self bundleIdentifierUsesWebKitTextStack:bundleID]) {
+    return NO;
+  }
+
+  for (NSString *pattern in _unicodeInjectionBundleIDSet) {
+    if (![pattern isKindOfClass:[NSString class]]) {
+      continue;
+    }
+    if ([self bundleIdentifier:bundleID matchesPattern:pattern]) {
+      return YES;
+    }
+  }
+
+  return NO;
+}
+
+- (void)markSyntheticEvent:(CGEventRef)event {
+  if (event) {
+    CGEventSetIntegerValueField(event, kCGEventSourceUserData,
+                                DKSTUnicodeInjectionEventMarker);
+  }
+}
+
+- (void)postSyntheticKeyboardEvent:(CGEventRef)event {
+  if (!event) {
+    return;
+  }
+
+  [self markSyntheticEvent:event];
+  CGEventPost(kCGSessionEventTap, event);
+}
+
+- (BOOL)eventContainsInjectedUnicodeText:(NSEvent *)event {
+  if (!event || [event type] != NSEventTypeKeyDown || [event keyCode] != 0) {
+    return NO;
+  }
+
+  NSString *characters = [event characters];
+  for (NSUInteger index = 0; index < [characters length]; index++) {
+    unichar ch = [characters characterAtIndex:index];
+    if ((ch >= 0x1100 && ch <= 0x11FF) || (ch >= 0x3130 && ch <= 0x318F) ||
+        (ch >= 0xAC00 && ch <= 0xD7AF)) {
+      return YES;
+    }
+  }
+  return NO;
+}
+
+- (void)postUnicodeString:(NSString *)string {
+  if ([string length] == 0) {
+    return;
+  }
+
+  if (!_unicodeInjectionAccessLogged) {
+    _unicodeInjectionAccessLogged = YES;
+    BOOL axTrusted = AXIsProcessTrusted();
+    BOOL postEventAllowed = CGPreflightPostEventAccess();
+    DKSTLog(@"unicode injection access: AXTrusted=%d postEventAllowed=%d",
+            axTrusted ? 1 : 0, postEventAllowed ? 1 : 0);
+  }
+
+  NSUInteger length = [string length];
+  UniChar *buffer = (UniChar *)calloc(length, sizeof(UniChar));
+  if (!buffer) {
+    return;
+  }
+
+  [string getCharacters:buffer range:NSMakeRange(0, length)];
+  CGEventRef keyDown = CGEventCreateKeyboardEvent(NULL, 0, true);
+  if (!keyDown) {
+    free(buffer);
+    return;
+  }
+  CGEventKeyboardSetUnicodeString(keyDown, length, buffer);
+  CGEventPost(kCGSessionEventTap, keyDown);
+
+  CFRelease(keyDown);
+  free(buffer);
+}
+
+- (void)postSyntheticBackspaceCount:(NSUInteger)count {
+  if (count == 0) {
+    return;
+  }
+
+  for (NSUInteger index = 0; index < count; index++) {
+    CGEventRef keyDown =
+        CGEventCreateKeyboardEvent(NULL, kDKSTKeyCodeBackspace, true);
+    CGEventRef keyUp =
+        CGEventCreateKeyboardEvent(NULL, kDKSTKeyCodeBackspace, false);
+    if (keyDown) {
+      [self postSyntheticKeyboardEvent:keyDown];
+    }
+    if (keyUp) {
+      [self postSyntheticKeyboardEvent:keyUp];
+    }
+    if (keyDown) {
+      CFRelease(keyDown);
+    }
+    if (keyUp) {
+      CFRelease(keyUp);
+    }
+  }
+}
+
+- (void)updateUnicodeInjectionComposition:(id)sender {
+  NSString *commit = [engine commitString];
+  NSString *composed = [engine composedString];
+  NSMutableString *replacement = [NSMutableString string];
+
+  if ([commit length] > 0) {
+    [replacement appendString:commit];
+  }
+  if ([composed length] > 0) {
+    [replacement appendString:composed];
+  }
+
+  [self postSyntheticBackspaceCount:_unicodeInjectedComposedLength];
+  [self postUnicodeString:replacement];
+
+  _unicodeInjectedComposedLength = [composed length];
+  _directInputComposedLength = 0;
+  [_directInputComposedText release];
+  _directInputComposedText = nil;
+  _directInputComposedRange = NSMakeRange(NSNotFound, 0);
+  [self clearMarkedReplacementRange];
+  [_compositionState resetTransientRanges];
 }
 
 - (BOOL)bundleIdentifierUsesWebKitTextStack:(NSString *)bundleID {
@@ -922,6 +1066,7 @@ static IMKCandidates *DKSTSharedCandidatesForMacOS26;
 - (void)resetCompositionState {
   [engine reset];
   _directInputComposedLength = 0;
+  _unicodeInjectedComposedLength = 0;
   [_directInputComposedText release];
   _directInputComposedText = nil;
   _directInputComposedRange = NSMakeRange(NSNotFound, 0);
@@ -1044,6 +1189,8 @@ static IMKCandidates *DKSTSharedCandidatesForMacOS26;
   _customShiftEnabled = [defaults boolForKey:@"EnableCustomShift"];
   _useMarkedTextForAllApps =
       [defaults boolForKey:kDKSTUseMarkedTextForAllAppsKey];
+  _unicodeInjectionEnabled =
+      [defaults boolForKey:kDKSTUnicodeInjectionInputEnabledKey];
   if ([defaults objectForKey:@"EnableHanja"] != nil) {
     _hanjaEnabled = [defaults boolForKey:@"EnableHanja"];
   } else {
@@ -1076,6 +1223,26 @@ static IMKCandidates *DKSTSharedCandidatesForMacOS26;
 
   [_markedTextBundleIDSet release];
   _markedTextBundleIDSet = [normalizedBundleIDs copy];
+
+  NSArray *unicodeBundleIDs =
+      [defaults arrayForKey:kDKSTUnicodeInjectionAppBundleIDsKey];
+  if (![unicodeBundleIDs count]) {
+    unicodeBundleIDs = DKSTDefaultUnicodeInjectionAppBundleIDs();
+  }
+
+  NSMutableSet *normalizedUnicodeBundleIDs = [NSMutableSet set];
+  for (NSString *bundleID in unicodeBundleIDs) {
+    if (![bundleID isKindOfClass:[NSString class]]) {
+      continue;
+    }
+    NSString *trimmed = [bundleID stringByTrimmingCharactersInSet:whitespace];
+    if ([trimmed length] > 0) {
+      [normalizedUnicodeBundleIDs addObject:trimmed];
+    }
+  }
+
+  [_unicodeInjectionBundleIDSet release];
+  _unicodeInjectionBundleIDSet = [normalizedUnicodeBundleIDs copy];
 }
 
 - (void)preferencesDidChange:(NSNotification *)notification {
@@ -1315,8 +1482,12 @@ static IMKCandidates *DKSTSharedCandidatesForMacOS26;
   }
 
   [self commitComposition:sender];
-  [sender insertText:output
-      replacementRange:NSMakeRange(NSNotFound, NSNotFound)];
+  if ([self shouldUseUnicodeInjectionForClient:sender]) {
+    [self postUnicodeString:output];
+  } else {
+    [sender insertText:output
+        replacementRange:NSMakeRange(NSNotFound, NSNotFound)];
+  }
   return YES;
 }
 
@@ -1324,9 +1495,10 @@ static IMKCandidates *DKSTSharedCandidatesForMacOS26;
                    keyCode:(unsigned short)keyCode
                     client:(id)sender
         candidatesVisible:(BOOL)candidatesVisible {
+  BOOL unicodeInjection = [self shouldUseUnicodeInjectionForClient:sender];
   NSUInteger previousComposedLength = 0;
   NSRange selectedRangeBefore = NSMakeRange(NSNotFound, 0);
-  if (_useMarkedTextForClient) {
+  if (_useMarkedTextForClient && !unicodeInjection) {
     previousComposedLength = [[engine composedString] length];
     // The roman-leak repair only runs when a new marked composition starts.
     // selectedRange is another IPC call, so skip it while a composition is
@@ -1350,7 +1522,9 @@ static IMKCandidates *DKSTSharedCandidatesForMacOS26;
       [_candidates hide];
     }
 
-    if (_useMarkedTextForClient) {
+    if (unicodeInjection) {
+      [self updateUnicodeInjectionComposition:sender];
+    } else if (_useMarkedTextForClient) {
       NSString *commit = [engine commitString];
       if ([commit length] > 0) {
         [self commitMarkedText:commit
@@ -1365,7 +1539,9 @@ static IMKCandidates *DKSTSharedCandidatesForMacOS26;
                              selectedRangeBefore:selectedRangeBefore];
       }
     }
-    [self updateInlineForClient:sender];
+    if (!unicodeInjection) {
+      [self updateInlineForClient:sender];
+    }
     return YES;
   }
 
@@ -1395,6 +1571,15 @@ static IMKCandidates *DKSTSharedCandidatesForMacOS26;
 
 - (BOOL)handleEvent:(NSEvent *)event client:(id)sender {
   unsigned short keyCode = [event keyCode];
+  CGEventRef cgEvent = [event CGEvent];
+  if (cgEvent &&
+      CGEventGetIntegerValueField(cgEvent, kCGEventSourceUserData) ==
+          DKSTUnicodeInjectionEventMarker) {
+    return NO;
+  }
+  if ([self eventContainsInjectedUnicodeText:event]) {
+    return NO;
+  }
 
   // Filter out everything but KeyDown (fixes Option release bug closing
   // candidates)
@@ -1440,6 +1625,10 @@ static IMKCandidates *DKSTSharedCandidatesForMacOS26;
   // 5. Backspace
   if (keyCode == kDKSTKeyCodeBackspace) {
     if ([engine backspace]) {
+      if ([self shouldUseUnicodeInjectionForClient:sender]) {
+        [self updateUnicodeInjectionComposition:sender];
+        return YES;
+      }
       if (!_useMarkedTextForClient) {
         NSString *composedAfterBackspace = [engine composedString];
         if ([composedAfterBackspace length] == 0 &&
@@ -1601,7 +1790,9 @@ static IMKCandidates *DKSTSharedCandidatesForMacOS26;
 }
 
 - (void)updateInlineForClient:(id)sender {
-  if (_useMarkedTextForClient) {
+  if ([self shouldUseUnicodeInjectionForClient:sender]) {
+    [self updateUnicodeInjectionComposition:sender];
+  } else if (_useMarkedTextForClient) {
     if (_markedReplacementRange.location == NSNotFound &&
         _directInputComposedRange.location != NSNotFound) {
       [self setMarkedReplacementRange:_directInputComposedRange];
@@ -1621,6 +1812,19 @@ static IMKCandidates *DKSTSharedCandidatesForMacOS26;
   // Hanja. Committing now would flush the Hangul and result in double insertion
   // when Hanja is picked.
   if ([_candidates isVisible]) {
+    return;
+  }
+
+  if ([self shouldUseUnicodeInjectionForClient:sender] &&
+      _unicodeInjectedComposedLength > 0) {
+    [engine reset];
+    _unicodeInjectedComposedLength = 0;
+    _directInputComposedLength = 0;
+    [_directInputComposedText release];
+    _directInputComposedText = nil;
+    _directInputComposedRange = NSMakeRange(NSNotFound, 0);
+    [self clearMarkedReplacementRange];
+    [_markedTextCommittedPrefix setString:@""];
     return;
   }
 

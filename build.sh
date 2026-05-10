@@ -167,3 +167,30 @@ cp Resources/DKST.icns build/DKSTDictEditor.app/Contents/Resources/
 # Copy DictEditor app into Input Method Resources
 rm -rf build/DKST.app/Contents/Resources/DKSTDictEditor.app
 cp -r build/DKSTDictEditor.app build/DKST.app/Contents/Resources/
+
+# Sign bundles even for local debug builds so TCC can bind Accessibility /
+# event-post permissions to the bundle identity instead of an unstable
+# linker-signed executable.
+if command -v codesign &> /dev/null; then
+    echo "Signing app bundles..."
+    if command -v xattr &> /dev/null; then
+        xattr -cr build/DKST.app build/DKSTPreferences.app build/DKSTDictEditor.app
+    fi
+    codesign --force --sign - \
+        --identifier com.dinkisstyle.inputmethod.DKST.preferences \
+        build/DKSTPreferences.app
+    codesign --force --sign - \
+        --identifier com.dinkisstyle.inputmethod.DKST.dicteditor \
+        build/DKSTDictEditor.app
+    codesign --force --sign - \
+        --identifier com.dinkisstyle.inputmethod.DKST.preferences \
+        build/DKST.app/Contents/Resources/DKSTPreferences.app
+    codesign --force --sign - \
+        --identifier com.dinkisstyle.inputmethod.DKST.dicteditor \
+        build/DKST.app/Contents/Resources/DKSTDictEditor.app
+    codesign --force --deep --sign - \
+        --identifier com.dinkisstyle.inputmethod.DKST \
+        build/DKST.app
+else
+    echo "Warning: codesign not found. TCC permissions may not bind reliably."
+fi

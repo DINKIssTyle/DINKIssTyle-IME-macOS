@@ -27,8 +27,11 @@ extern NSString *const kDKSTQwertyEmulationEnableKey;
 extern NSString *const kDKSTMarkedTextAppBundleIDsKey;
 extern NSString *const kDKSTUseMarkedTextForAllAppsKey;
 extern NSString *const kDKSTUseAppleHanjaDictionaryKey;
+extern NSString *const kDKSTUnicodeInjectionInputEnabledKey;
+extern NSString *const kDKSTUnicodeInjectionAppBundleIDsKey;
 
 NSArray *DKSTDefaultMarkedTextAppBundleIDs(void);
+NSArray *DKSTDefaultUnicodeInjectionAppBundleIDs(void);
 
 // Shortcuts
 extern NSString *const kDKSTShortcutsKey;

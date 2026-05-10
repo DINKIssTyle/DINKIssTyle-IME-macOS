@@ -26,8 +26,12 @@
   BOOL _customShiftEnabled;
   BOOL _hanjaEnabled;
   BOOL _useMarkedTextForAllApps;
+  BOOL _unicodeInjectionEnabled;
+  BOOL _unicodeInjectionAccessLogged;
+  NSUInteger _unicodeInjectedComposedLength;
   NSDictionary *_customShiftMappings;
   NSSet *_markedTextBundleIDSet;
+  NSSet *_unicodeInjectionBundleIDSet;
   NSMutableString *_markedTextCommittedPrefix;
   NSUInteger _hanjaMarkedPrefixLength;
   BOOL _hanjaReplacementUsesMarkedPrefix;
@@ -66,6 +70,12 @@
 - (void)forceMarkedTextForClient:(id)sender reason:(NSString *)reason;
 - (BOOL)shouldUseMarkedTextForClient:(id)sender;
 - (BOOL)bundleIdentifierMatchesMarkedTextConfiguration:(NSString *)bundleID;
+- (BOOL)shouldUseUnicodeInjectionForClient:(id)sender;
+- (void)updateUnicodeInjectionComposition:(id)sender;
+- (void)postUnicodeString:(NSString *)string;
+- (void)postSyntheticBackspaceCount:(NSUInteger)count;
+- (void)postSyntheticKeyboardEvent:(CGEventRef)event;
+- (BOOL)eventContainsInjectedUnicodeText:(NSEvent *)event;
 - (BOOL)bundleIdentifierUsesWebKitTextStack:(NSString *)bundleID;
 - (BOOL)shouldAvoidEagerSyncForClient:(id)sender;
 - (BOOL)shouldTrustDirectCompositionRangeForClient:(id)sender;

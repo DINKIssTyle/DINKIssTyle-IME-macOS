@@ -34,6 +34,10 @@ NSString *const kDKSTUseMarkedTextForAllAppsKey =
     @"DKSTUseMarkedTextForAllApps";
 NSString *const kDKSTUseAppleHanjaDictionaryKey =
     @"DKSTUseAppleHanjaDictionary";
+NSString *const kDKSTUnicodeInjectionInputEnabledKey =
+    @"DKSTUnicodeInjectionInputEnabled";
+NSString *const kDKSTUnicodeInjectionAppBundleIDsKey =
+    @"DKSTUnicodeInjectionAppBundleIDs";
 
 NSArray *DKSTDefaultMarkedTextAppBundleIDs(void) {
   return [NSArray
@@ -51,6 +55,11 @@ NSArray *DKSTDefaultMarkedTextAppBundleIDs(void) {
                        @"com.dinkisstyle.llmchat", @"com.dinkisstyle.mdbrowser",
                        @"com.dinkisstyle.phototaggerai",
                        @"com.dinkisstyle.readerserver", nil];
+}
+
+NSArray *DKSTDefaultUnicodeInjectionAppBundleIDs(void) {
+  return [NSArray arrayWithObjects:@"com.apple.Terminal",
+                                   @"com.googlecode.iterm2", nil];
 }
 
 // Shortcuts
