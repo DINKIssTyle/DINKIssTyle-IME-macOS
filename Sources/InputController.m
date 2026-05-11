@@ -36,39 +36,8 @@ static NSInteger DKSTCandidateIndexForNumberKeyCode(unsigned short keyCode) {
   }
 }
 
-static NSString *DKSTRomanStringForHangulKeyCode(unsigned short keyCode,
-                                                 NSUInteger modifiers) {
-  BOOL shift = (modifiers & NSEventModifierFlagShift) != 0;
-  switch (keyCode) {
-  case 0:  return shift ? @"A" : @"a";
-  case 1:  return shift ? @"S" : @"s";
-  case 2:  return shift ? @"D" : @"d";
-  case 3:  return shift ? @"F" : @"f";
-  case 4:  return shift ? @"H" : @"h";
-  case 5:  return shift ? @"G" : @"g";
-  case 6:  return shift ? @"Z" : @"z";
-  case 7:  return shift ? @"X" : @"x";
-  case 8:  return shift ? @"C" : @"c";
-  case 9:  return shift ? @"V" : @"v";
-  case 11: return shift ? @"B" : @"b";
-  case 12: return shift ? @"Q" : @"q";
-  case 13: return shift ? @"W" : @"w";
-  case 14: return shift ? @"E" : @"e";
-  case 15: return shift ? @"R" : @"r";
-  case 16: return shift ? @"Y" : @"y";
-  case 17: return shift ? @"T" : @"t";
-  case 31: return shift ? @"O" : @"o";
-  case 32: return shift ? @"U" : @"u";
-  case 34: return shift ? @"I" : @"i";
-  case 35: return shift ? @"P" : @"p";
-  case 37: return shift ? @"L" : @"l";
-  case 38: return shift ? @"J" : @"j";
-  case 40: return shift ? @"K" : @"k";
-  case 45: return shift ? @"N" : @"n";
-  case 46: return shift ? @"M" : @"m";
-  default: return nil;
-  }
-}
+// DKSTRomanStringForHangulKeyCode removed — use DKSTRomanStringForKeyCode()
+// from DKSTConstants (single source of truth for keyCode mapping)
 
 @implementation InputController
 
@@ -130,7 +99,6 @@ static IMKCandidates *DKSTSharedCandidatesForMacOS26;
     _markedReplacementRange = NSMakeRange(NSNotFound, 0);
     _forcedMarkedTextBundleIDs = [[NSMutableSet alloc] init];
     _lastInputClient = inputClient;
-    _lastBundleIdentifierClient = nil;
     _lastInputClientBundleID = nil;
     _lastClientSelectedRange = NSMakeRange(NSNotFound, 0);
     _useMarkedTextForClient = NO;
@@ -265,7 +233,6 @@ static IMKCandidates *DKSTSharedCandidatesForMacOS26;
 
   [_lastInputClientBundleID release];
   _lastInputClientBundleID = [bundleID copy];
-  _lastBundleIdentifierClient = nil;
 
   return bundleID;
 }
@@ -336,11 +303,14 @@ static IMKCandidates *DKSTSharedCandidatesForMacOS26;
 }
 
 - (BOOL)shouldAvoidEagerSyncForClient:(id)sender {
-  NSString *bundleID = [self bundleIdentifierForClient:sender];
-  return [self bundleIdentifierUsesWebKitTextStack:bundleID];
+  return [self clientUsesWebKitTextStack:sender];
 }
 
 - (BOOL)shouldTrustDirectCompositionRangeForClient:(id)sender {
+  return [self clientUsesWebKitTextStack:sender];
+}
+
+- (BOOL)clientUsesWebKitTextStack:(id)sender {
   NSString *bundleID = [self bundleIdentifierForClient:sender];
   return [self bundleIdentifierUsesWebKitTextStack:bundleID];
 }
@@ -550,10 +520,7 @@ static IMKCandidates *DKSTSharedCandidatesForMacOS26;
 
   DKSTLog(@"Dropping stale direct input range %@",
           NSStringFromRange(_directInputComposedRange));
-  _directInputComposedLength = 0;
-  [_directInputComposedText release];
-  _directInputComposedText = nil;
-  _directInputComposedRange = NSMakeRange(NSNotFound, 0);
+  [self clearDirectInputState];
   [self clearMarkedReplacementRange];
   [_compositionState resetTransientRanges];
   return NSMakeRange(NSNotFound, 0);
@@ -567,9 +534,8 @@ static IMKCandidates *DKSTSharedCandidatesForMacOS26;
   if (_directInputComposedLength > 0) {
     return [self directInputReplacementRange:sender];
   }
-  NSRange markedReplacementRange = [_compositionState replacementRange];
-  if (markedReplacementRange.location != NSNotFound) {
-    return markedReplacementRange;
+  if (_markedReplacementRange.location != NSNotFound) {
+    return _markedReplacementRange;
   }
 
   NSString *composed = [engine composedString];
@@ -837,37 +803,7 @@ static IMKCandidates *DKSTSharedCandidatesForMacOS26;
 }
 
 - (BOOL)isHangulKeyCode:(unsigned short)keyCode {
-  switch (keyCode) {
-  case 0:  // a
-  case 1:  // s
-  case 2:  // d
-  case 3:  // f
-  case 4:  // h
-  case 5:  // g
-  case 6:  // z
-  case 7:  // x
-  case 8:  // c
-  case 9:  // v
-  case 11: // b
-  case 12: // q
-  case 13: // w
-  case 14: // e
-  case 15: // r
-  case 16: // y
-  case 17: // t
-  case 31: // o
-  case 32: // u
-  case 34: // i
-  case 35: // p
-  case 37: // l
-  case 38: // j
-  case 40: // k
-  case 45: // n
-  case 46: // m
-    return YES;
-  default:
-    return NO;
-  }
+  return DKSTIsHangulKeyCode(keyCode);
 }
 
 - (BOOL)repairFirstMarkedTextLeakForClient:(id)sender
@@ -895,7 +831,7 @@ static IMKCandidates *DKSTSharedCandidatesForMacOS26;
     return NO;
   }
 
-  NSString *roman = DKSTRomanStringForHangulKeyCode(keyCode, modifiers);
+  NSString *roman = DKSTRomanStringForKeyCode(keyCode, modifiers);
   if ([roman length] == 0 ||
       ![sender respondsToSelector:@selector(selectedRange)] ||
       ![sender respondsToSelector:@selector(attributedSubstringFromRange:)]) {
@@ -952,12 +888,16 @@ static IMKCandidates *DKSTSharedCandidatesForMacOS26;
   }
 }
 
-- (void)resetCompositionState {
-  [engine reset];
+- (void)clearDirectInputState {
   _directInputComposedLength = 0;
   [_directInputComposedText release];
   _directInputComposedText = nil;
   _directInputComposedRange = NSMakeRange(NSNotFound, 0);
+}
+
+- (void)resetCompositionState {
+  [engine reset];
+  [self clearDirectInputState];
   _markedReplacementRange = NSMakeRange(NSNotFound, 0);
   _selectedTextRange = NSMakeRange(NSNotFound, 0);
   _lastClientSelectedRange = NSMakeRange(NSNotFound, 0);
@@ -1409,17 +1349,6 @@ static IMKCandidates *DKSTSharedCandidatesForMacOS26;
     return YES;
   }
 
-  if (candidatesVisible) {
-    if (keyCode == kDKSTKeyCodeLeft || keyCode == kDKSTKeyCodeRight ||
-        keyCode == kDKSTKeyCodeDown || keyCode == kDKSTKeyCodeUp ||
-        keyCode == kDKSTKeyCodeReturn || keyCode == kDKSTKeyCodeSpace ||
-        keyCode == kDKSTKeyCodeEscape ||
-        (keyCode >= kDKSTKeyCodeNum1 && keyCode <= kDKSTKeyCodeNum0)) {
-      return NO;
-    }
-    [_candidates hide];
-  }
-
   [self commitComposition:sender];
   return NO;
 }
@@ -1503,10 +1432,7 @@ static IMKCandidates *DKSTSharedCandidatesForMacOS26;
         NSString *composedAfterBackspace = [engine composedString];
         if ([composedAfterBackspace length] == 0 &&
             _directInputComposedLength > 0) {
-          _directInputComposedLength = 0;
-          [_directInputComposedText release];
-          _directInputComposedText = nil;
-          _directInputComposedRange = NSMakeRange(NSNotFound, 0);
+          [self clearDirectInputState];
           [self clearMarkedReplacementRange];
           return NO;
         }
@@ -1702,10 +1628,7 @@ static IMKCandidates *DKSTSharedCandidatesForMacOS26;
         _directInputComposedRange.location != NSNotFound) {
       [self setMarkedReplacementRange:_directInputComposedRange];
     }
-    _directInputComposedLength = 0;
-    [_directInputComposedText release];
-    _directInputComposedText = nil;
-    _directInputComposedRange = NSMakeRange(NSNotFound, 0);
+    [self clearDirectInputState];
     [self updateComposition:sender];
   } else {
     // §2: If direct composition fails (cursor mismatch), clean up stale
@@ -1713,10 +1636,7 @@ static IMKCandidates *DKSTSharedCandidatesForMacOS26;
     // marked text path (forceMarkedTextForClient already set the flag).
     if (![self updateDirectComposition:sender]) {
       DKSTLog(@"Direct composition failed; cleaning up for marked text");
-      _directInputComposedLength = 0;
-      [_directInputComposedText release];
-      _directInputComposedText = nil;
-      _directInputComposedRange = NSMakeRange(NSNotFound, 0);
+      [self clearDirectInputState];
       [_compositionState resetTransientRanges];
     }
   }
@@ -1732,10 +1652,7 @@ static IMKCandidates *DKSTSharedCandidatesForMacOS26;
 
   if (_directInputComposedLength > 0) {
     [engine reset];
-    _directInputComposedLength = 0;
-    [_directInputComposedText release];
-    _directInputComposedText = nil;
-    _directInputComposedRange = NSMakeRange(NSNotFound, 0);
+    [self clearDirectInputState];
     [self clearMarkedReplacementRange];
     [_markedTextCommittedPrefix setString:@""];
     [sender setMarkedText:@""
@@ -1774,10 +1691,7 @@ static IMKCandidates *DKSTSharedCandidatesForMacOS26;
   }
 
   [engine reset];
-  _directInputComposedLength = 0;
-  [_directInputComposedText release];
-  _directInputComposedText = nil;
-  _directInputComposedRange = NSMakeRange(NSNotFound, 0);
+  [self clearDirectInputState];
   [self clearMarkedReplacementRange];
   [_markedTextCommittedPrefix setString:@""];
   [self rememberSelectedRangeForClient:sender];
@@ -1798,43 +1712,28 @@ static IMKCandidates *DKSTSharedCandidatesForMacOS26;
 }
 
 // Menu handling (Modes)
-- (void)showPreferences:(id)sender {
-  NSString *path = [[NSBundle mainBundle] pathForResource:@"DKSTPreferences"
-                                                   ofType:@"app"];
-  if (path) {
-    NSURL *url = [NSURL fileURLWithPath:path];
-    [[NSWorkspace sharedWorkspace]
-        openApplicationAtURL:url
-               configuration:[NSWorkspaceOpenConfiguration configuration]
-           completionHandler:^(NSRunningApplication *app, NSError *error) {
-             if (error) {
-               DKSTLog(@"Failed to launch Preferences app: %@", error);
-             }
-           }];
-  } else {
-    DKSTLog(@"Could not find Preferences app at %@", path);
+- (void)launchBundledApp:(NSString *)appName {
+  NSString *path = [[NSBundle mainBundle] pathForResource:appName ofType:@"app"];
+  if (!path) {
+    DKSTLog(@"%@.app not found in bundle resources", appName);
+    return;
   }
+  [[NSWorkspace sharedWorkspace]
+      openApplicationAtURL:[NSURL fileURLWithPath:path]
+             configuration:[NSWorkspaceOpenConfiguration configuration]
+         completionHandler:^(NSRunningApplication *app, NSError *error) {
+           if (error) {
+             DKSTLog(@"Failed to launch %@: %@", appName, error);
+           }
+         }];
+}
+
+- (void)showPreferences:(id)sender {
+  [self launchBundledApp:@"DKSTPreferences"];
 }
 
 - (void)launchDictEditor:(id)sender {
-  NSString *appPath = [[NSBundle mainBundle] pathForResource:@"DKSTDictEditor"
-                                                      ofType:@"app"];
-  if (appPath) {
-    NSURL *appUrl = [NSURL fileURLWithPath:appPath];
-    NSWorkspaceOpenConfiguration *config =
-        [NSWorkspaceOpenConfiguration configuration];
-    [[NSWorkspace sharedWorkspace]
-        openApplicationAtURL:appUrl
-               configuration:config
-           completionHandler:^(NSRunningApplication *_Nullable app,
-                               NSError *_Nullable error) {
-             if (error) {
-               DKSTLog(@"DKST: Failed to launch DictEditor: %@", error);
-             }
-           }];
-  } else {
-    DKSTLog(@"DKST: DKSTDictEditor.app not found in bundle resources.");
-  }
+  [self launchBundledApp:@"DKSTDictEditor"];
 }
 
 - (NSMenu *)menu {
@@ -1854,41 +1753,7 @@ static IMKCandidates *DKSTSharedCandidatesForMacOS26;
   [dictEditorItem setTarget:self];
   [menu addItem:dictEditorItem];
 
-  /* functionality not yet implemented
-  NSMenuItem *englishItem = [[[NSMenuItem alloc] initWithTitle:@"English"
-  action:@selector(selectInputMode:) keyEquivalent:@""] autorelease];
-  [englishItem setTag:0];
-  if ([currentMode isEqualToString:kDKSTEnglishMode]) {
-      [englishItem setState:NSControlStateValueOn];
-  } else {
-      [englishItem setState:NSControlStateValueOff];
-  }
-  [menu addItem:englishItem];
-
-  NSMenuItem *hangulItem = [[[NSMenuItem alloc] initWithTitle:@"Hangul"
-  action:@selector(selectInputMode:) keyEquivalent:@""] autorelease];
-  [hangulItem setTag:1];
-  if ([currentMode isEqualToString:kDKSTHangulMode]) {
-      [hangulItem setState:NSControlStateValueOn];
-  } else {
-      [hangulItem setState:NSControlStateValueOff];
-  }
-  [menu addItem:hangulItem];
-  */
-
   return menu;
-}
-
-- (void)selectInputMode:(id)sender {
-  NSInteger tag = [sender tag];
-  NSString *newMode = (tag == 0) ? kDKSTEnglishMode : kDKSTHangulMode;
-
-  if (currentMode != newMode) {
-    [currentMode release];
-    currentMode = [newMode retain];
-  }
-
-  [[self client] selectInputMode:newMode];
 }
 
 // Required methods?
@@ -1966,10 +1831,7 @@ static IMKCandidates *DKSTSharedCandidatesForMacOS26;
       }
       [sender insertText:hanja replacementRange:replacementRange];
       [engine reset];
-      _directInputComposedLength = 0;
-      [_directInputComposedText release];
-      _directInputComposedText = nil;
-      _directInputComposedRange = NSMakeRange(NSNotFound, 0);
+      [self clearDirectInputState];
       [self clearMarkedReplacementRange];
     } else {
       DKSTLog(@"Failed to extract hanja from '%@'", selected);

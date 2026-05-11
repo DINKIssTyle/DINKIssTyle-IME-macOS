@@ -17,7 +17,6 @@
   NSRange _markedReplacementRange;
   NSMutableSet *_forcedMarkedTextBundleIDs;
   id _lastInputClient;
-  id _lastBundleIdentifierClient;
   NSString *_lastInputClientBundleID;
   NSRange _lastClientSelectedRange;
   BOOL _useMarkedTextForClient;
@@ -73,5 +72,8 @@
 - (BOOL)runningApplicationUsesChromiumTextStack:(NSString *)bundleID;
 - (BOOL)applicationBundleUsesChromiumTextStack:(NSURL *)bundleURL;
 - (BOOL)isHangulKeyCode:(unsigned short)keyCode;
+- (void)clearDirectInputState;
+- (BOOL)clientUsesWebKitTextStack:(id)sender;
+- (void)launchBundledApp:(NSString *)appName;
 
 @end

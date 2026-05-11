@@ -108,3 +108,48 @@ NSString *const kDKSTUpdateLastCheckKey = @"DKSTUpdateLastCheck";
 
 // Dev
 NSString *const kDKSTVerboseModeKey = @"DKSTVerboseMode";
+
+// Shared keyCode → ASCII mapping (single source of truth)
+unichar DKSTASCIIForKeyCode(unsigned short keyCode, BOOL shift) {
+  switch (keyCode) {
+  case 0:  return shift ? 'A' : 'a';
+  case 1:  return shift ? 'S' : 's';
+  case 2:  return shift ? 'D' : 'd';
+  case 3:  return shift ? 'F' : 'f';
+  case 4:  return shift ? 'H' : 'h';
+  case 5:  return shift ? 'G' : 'g';
+  case 6:  return shift ? 'Z' : 'z';
+  case 7:  return shift ? 'X' : 'x';
+  case 8:  return shift ? 'C' : 'c';
+  case 9:  return shift ? 'V' : 'v';
+  case 11: return shift ? 'B' : 'b';
+  case 12: return shift ? 'Q' : 'q';
+  case 13: return shift ? 'W' : 'w';
+  case 14: return shift ? 'E' : 'e';
+  case 15: return shift ? 'R' : 'r';
+  case 16: return shift ? 'Y' : 'y';
+  case 17: return shift ? 'T' : 't';
+  case 31: return shift ? 'O' : 'o';
+  case 32: return shift ? 'U' : 'u';
+  case 34: return shift ? 'I' : 'i';
+  case 35: return shift ? 'P' : 'p';
+  case 37: return shift ? 'L' : 'l';
+  case 38: return shift ? 'J' : 'j';
+  case 40: return shift ? 'K' : 'k';
+  case 45: return shift ? 'N' : 'n';
+  case 46: return shift ? 'M' : 'm';
+  default: return 0;
+  }
+}
+
+BOOL DKSTIsHangulKeyCode(unsigned short keyCode) {
+  return DKSTASCIIForKeyCode(keyCode, NO) != 0;
+}
+
+NSString *DKSTRomanStringForKeyCode(unsigned short keyCode,
+                                    NSUInteger modifiers) {
+  BOOL shift = (modifiers & NSEventModifierFlagShift) != 0;
+  unichar ch = DKSTASCIIForKeyCode(keyCode, shift);
+  if (ch == 0) return nil;
+  return [NSString stringWithCharacters:&ch length:1];
+}
