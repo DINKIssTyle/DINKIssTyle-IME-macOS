@@ -764,6 +764,37 @@ static IMKCandidates *DKSTSharedCandidatesForMacOS26;
     return YES;
   }
 
+  // 1. Apple Private API: Query showsComposingTextAsMarkedText
+  // This is the most reliable way to detect if a client needs marked text.
+  // KIM_Extension uses textDocument proxy for this query.
+  SEL textDocSel = NSSelectorFromString(@"textDocument");
+  id textDocument = nil;
+  if ([self respondsToSelector:textDocSel]) {
+#pragma clang diagnostic push
+#pragma clang diagnostic ignored "-Warc-performSelector-leaks"
+    textDocument = [self performSelector:textDocSel];
+#pragma clang diagnostic pop
+  }
+
+  SEL showsComposingTextSel =
+      NSSelectorFromString(@"showsComposingTextAsMarkedText");
+
+  // Check textDocument proxy first (standard IMK behavior)
+  if (textDocument && [textDocument respondsToSelector:showsComposingTextSel]) {
+    BOOL showsMarked =
+        ((BOOL(*)(id, SEL))[textDocument methodForSelector:showsComposingTextSel])(
+            textDocument, showsComposingTextSel);
+    return showsMarked;
+  }
+
+  // Fallback: Check sender directly (some apps might implement it)
+  if ([sender respondsToSelector:showsComposingTextSel]) {
+    BOOL showsMarked =
+        ((BOOL(*)(id, SEL))[sender methodForSelector:showsComposingTextSel])(
+            sender, showsComposingTextSel);
+    return showsMarked;
+  }
+
   NSString *bundleID = [self bundleIdentifierForClient:sender];
 
   if (![bundleID length]) {
