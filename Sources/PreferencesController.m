@@ -243,8 +243,9 @@
     [copyrightView setTextContainerInset:NSMakeSize(0, 0)];
     [[copyrightView textContainer] setLineFragmentPadding:0];
 
-    NSString *copyrightText = @"Copyright © 2026 DINKI'ssTyle. | Github.";
-    NSString *linkText = @"Github.";
+    NSString *copyrightText =
+        @"Copyright © 2026 DINKI'ssTyle. | macOS용 DKST 한글입력기 Github.";
+    NSString *linkText = @"macOS용 DKST 한글입력기 Github.";
     NSMutableParagraphStyle *copyrightParagraphStyle =
         [[[NSMutableParagraphStyle alloc] init] autorelease];
     [copyrightParagraphStyle setAlignment:NSTextAlignmentCenter];

@@ -30,11 +30,6 @@ extern NSString *const kDKSTUseAppleHanjaDictionaryKey;
 
 NSArray *DKSTDefaultMarkedTextAppBundleIDs(void);
 
-// Shared keyCode → ASCII mapping (single source of truth for hangul key detection)
-BOOL DKSTIsHangulKeyCode(unsigned short keyCode);
-unichar DKSTASCIIForKeyCode(unsigned short keyCode, BOOL shift);
-NSString *DKSTRomanStringForKeyCode(unsigned short keyCode, NSUInteger modifiers);
-
 // Shortcuts
 extern NSString *const kDKSTShortcutsKey;
 extern NSString *const kShortcutUserDefinedKey;

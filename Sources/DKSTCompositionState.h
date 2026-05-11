@@ -21,10 +21,19 @@
 - (void)reset;
 - (void)resetTransientRanges;
 - (void)updateBufferContents:(NSString *)contents;
+- (NSRange)directReplacementRangeForSelectedRange:(NSRange)selectedRange
+                                   composedLength:(NSUInteger)composedLength;
 - (void)noteInsertedTextWithReplacementRange:(NSRange)replacementRange
                            insertionLocation:(NSUInteger)insertionLocation
                              committedLength:(NSUInteger)committedLength
                               composedLength:(NSUInteger)composedLength;
+- (NSUInteger)expectedSelectedLocationForInsertionLocation:(NSUInteger)location
+                                           committedLength:(NSUInteger)committedLength
+                                            composedLength:(NSUInteger)composedLength;
+- (BOOL)selectedRange:(NSRange)selectedRange
+    matchesExpectedLocation:(NSUInteger)expectedLocation;
+- (BOOL)shouldFallbackForSelectedRange:(NSRange)selectedRange
+                      expectedLocation:(NSUInteger)expectedLocation;
 - (void)markReplacementRange:(NSRange)range;
 - (void)clearReplacementRange;
 

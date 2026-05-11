@@ -17,6 +17,7 @@
   NSRange _markedReplacementRange;
   NSMutableSet *_forcedMarkedTextBundleIDs;
   id _lastInputClient;
+  id _lastBundleIdentifierClient;
   NSString *_lastInputClientBundleID;
   NSRange _lastClientSelectedRange;
   BOOL _useMarkedTextForClient;
@@ -35,13 +36,12 @@
 }
 
 - (void)updateComposition:(id)sender;
-- (BOOL)updateDirectComposition:(id)sender;
+- (void)updateDirectComposition:(id)sender;
 - (void)updateInlineForClient:(id)sender;
 - (void)commitMarkedText:(NSString *)commit
     previousComposedLength:(NSUInteger)previousComposedLength
                     client:(id)sender;
 - (void)commitComposition:(id)sender;
-- (void)commitComposition:(id)sender withSuffix:(NSString *)suffix;
 - (void)reloadUserPreferences;
 - (void)preferencesDidChange:(NSNotification *)notification;
 - (void)refreshMarkedTextPolicyForClient:(id)sender;
@@ -73,8 +73,5 @@
 - (BOOL)runningApplicationUsesChromiumTextStack:(NSString *)bundleID;
 - (BOOL)applicationBundleUsesChromiumTextStack:(NSURL *)bundleURL;
 - (BOOL)isHangulKeyCode:(unsigned short)keyCode;
-- (void)clearDirectInputState;
-- (BOOL)clientUsesWebKitTextStack:(id)sender;
-- (void)launchBundledApp:(NSString *)appName;
 
 @end
