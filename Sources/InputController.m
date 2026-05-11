@@ -764,9 +764,51 @@ static IMKCandidates *DKSTSharedCandidatesForMacOS26;
     return YES;
   }
 
-  // 1. Apple Private API: Query showsComposingTextAsMarkedText
-  // This is the most reliable way to detect if a client needs marked text.
-  // KIM_Extension uses textDocument proxy for this query.
+  NSString *bundleID = [self bundleIdentifierForClient:sender];
+
+  // 1. Apple Internal Blocklist (Dynamic Private API)
+  static NSSet *sModelessUnsupportedApps = nil;
+  static dispatch_once_t onceToken;
+  dispatch_once(&onceToken, ^{
+    Class cls = NSClassFromString(@"IMKActiveCompositionController");
+    if (cls && [cls respondsToSelector:NSSelectorFromString(@"modelessUnsupportedApps")]) {
+#pragma clang diagnostic push
+#pragma clang diagnostic ignored "-Warc-performSelector-leaks"
+      id apps = [cls performSelector:NSSelectorFromString(@"modelessUnsupportedApps")];
+#pragma clang diagnostic pop
+      if ([apps isKindOfClass:[NSSet class]]) {
+        sModelessUnsupportedApps = [apps retain];
+      }
+    }
+  });
+
+  if (sModelessUnsupportedApps && [bundleID length] > 0) {
+    if ([sModelessUnsupportedApps containsObject:bundleID]) {
+      return YES;
+    }
+  }
+
+  // 2. Trust Heuristics (Apple & WebKit)
+  if ([bundleID length] > 0) {
+    if ([self bundleIdentifierUsesWebKitTextStack:bundleID]) {
+      return NO;
+    }
+    if ([bundleID hasPrefix:@"com.apple."]) {
+      if (![bundleID isEqualToString:@"com.apple.Terminal"]) {
+        return NO;
+      }
+    }
+  }
+
+  // 3. User & Learned Overrides (Persisted self-healing)
+  if ([bundleID length] > 0) {
+    if ([_forcedMarkedTextBundleIDs containsObject:bundleID] ||
+        [self bundleIdentifierMatchesMarkedTextConfiguration:bundleID]) {
+      return YES;
+    }
+  }
+
+  // 4. Dynamic Proxy Check
   SEL textDocSel = NSSelectorFromString(@"textDocument");
   id textDocument = nil;
   if ([self respondsToSelector:textDocSel]) {
@@ -776,63 +818,40 @@ static IMKCandidates *DKSTSharedCandidatesForMacOS26;
 #pragma clang diagnostic pop
   }
 
-  SEL showsComposingTextSel =
-      NSSelectorFromString(@"showsComposingTextAsMarkedText");
-
-  // Check textDocument proxy first (standard IMK behavior)
-  if (textDocument && [textDocument respondsToSelector:showsComposingTextSel]) {
-    BOOL showsMarked =
-        ((BOOL(*)(id, SEL))[textDocument methodForSelector:showsComposingTextSel])(
-            textDocument, showsComposingTextSel);
-    return showsMarked;
-  }
-
-  // Fallback: Check sender directly (some apps might implement it)
-  if ([sender respondsToSelector:showsComposingTextSel]) {
-    BOOL showsMarked =
-        ((BOOL(*)(id, SEL))[sender methodForSelector:showsComposingTextSel])(
-            sender, showsComposingTextSel);
-    return showsMarked;
-  }
-
-  NSString *bundleID = [self bundleIdentifierForClient:sender];
-
-  if (![bundleID length]) {
-    return YES;
-  }
-
-  if ([_forcedMarkedTextBundleIDs containsObject:bundleID]) {
-    return YES;
-  }
-
-  if ([self bundleIdentifierUsesWebKitTextStack:bundleID]) {
-    return NO;
-  }
-
-  if ([self bundleIdentifierMatchesMarkedTextConfiguration:bundleID]) {
-    return YES;
-  }
-
-  if ([self bundleIdentifierUsesChromiumMarkedTextPolicy:bundleID] ||
-      [self runningApplicationUsesChromiumTextStack:bundleID]) {
-    return YES;
-  }
-
-  @try {
-    if (![sender respondsToSelector:@selector(selectedRange)]) {
-      return YES;
+  if (textDocument) {
+    // A. Explicit preference (Honor showsComposingTextAsMarkedText)
+    SEL showsMarkedSel = NSSelectorFromString(@"showsComposingTextAsMarkedText");
+    if ([textDocument respondsToSelector:showsMarkedSel]) {
+      BOOL showsMarked = ((BOOL(*)(id, SEL))[textDocument
+          methodForSelector:showsMarkedSel])(textDocument, showsMarkedSel);
+      return showsMarked;
     }
-    NSRange selectedRange = [sender selectedRange];
-    if (selectedRange.location == NSNotFound) {
-      return YES;
+
+    // B. Contextual Heuristics
+    SEL isSearchSel = NSSelectorFromString(@"isIncrementalSearchInputContext");
+    if ([textDocument respondsToSelector:isSearchSel]) {
+      if (((BOOL(*)(id, SEL))[textDocument methodForSelector:isSearchSel])(
+              textDocument, isSearchSel)) {
+        return NO;
+      }
     }
-  } @catch (NSException *exception) {
-    DKSTLog(@"Exception checking selected range for direct input: %@",
-            exception);
-    return YES;
   }
 
-  return NO;
+  // 5. Capability Check: Distinguish Modern vs Legacy Text Stacks
+  // Modern apps (Sublime, etc.) that support Direct Input typically implement 
+  // the full IMKTextInput protocol including validAttributesForMarkedText.
+  // Legacy apps (Photoshop) often return nil or don't respond.
+  if ([sender respondsToSelector:@selector(validAttributesForMarkedText)]) {
+    NSArray *attrs = [sender validAttributesForMarkedText];
+    if ([attrs count] > 0) {
+      // App reports supported attributes -> likely modern and direct-input capable.
+      return NO;
+    }
+  }
+
+  // 6. Final Fallback: Safety First (Marked Text)
+  // Default to YES for unknown 3rd party apps to prevent fragmentation.
+  return YES;
 }
 
 - (void)refreshMarkedTextPolicyForClient:(id)sender {
@@ -1176,6 +1195,20 @@ static IMKCandidates *DKSTSharedCandidatesForMacOS26;
   }
 
   // Call super - this is required for proper cleanup
+  // Invalidate textDocument cache during deactivation (Apple KIM behavior)
+  SEL textDocSel = NSSelectorFromString(@"textDocument");
+  if ([self respondsToSelector:textDocSel]) {
+#pragma clang diagnostic push
+#pragma clang diagnostic ignored "-Warc-performSelector-leaks"
+    id textDocument = [self performSelector:textDocSel];
+#pragma clang diagnostic pop
+    SEL invalidateSel = NSSelectorFromString(@"invalidateCache");
+    if (textDocument && [textDocument respondsToSelector:invalidateSel]) {
+      ((void (*)(id, SEL))[textDocument methodForSelector:invalidateSel])(
+          textDocument, invalidateSel);
+    }
+  }
+
   [super deactivateServer:sender];
 }
 
