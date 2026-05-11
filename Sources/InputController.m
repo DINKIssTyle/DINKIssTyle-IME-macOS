@@ -1449,22 +1449,6 @@ static IMKCandidates *DKSTSharedCandidatesForMacOS26;
     return NO;
   }
 
-  // Item 7: Control character handling (u_iscntrl equivalent)
-  // Ensures candidates are closed and composition is committed on control keys.
-  NSString *chars = [event characters];
-  if ([chars length] > 0) {
-    unichar c = [chars characterAtIndex:0];
-    if ([[NSCharacterSet controlCharacterSet] characterIsMember:c]) {
-      if (candidatesVisible) {
-        [_candidates hide];
-        candidatesVisible = NO;
-      }
-      if ([self hasPendingComposition]) {
-        [self commitComposition:sender];
-      }
-    }
-  }
-
   // 4. Tab — commit and pass through
   if (keyCode == kDKSTKeyCodeTab) {
     [self commitComposition:sender];
