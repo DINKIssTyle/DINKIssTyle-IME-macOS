@@ -764,75 +764,49 @@ static IMKCandidates *DKSTSharedCandidatesForMacOS26;
     return YES;
   }
 
-  // 1. Apple Private API: Query showsComposingTextAsMarkedText
-  // This is the most reliable way to detect if a client needs marked text.
-  // KIM_Extension uses textDocument proxy for this query.
-  SEL textDocSel = NSSelectorFromString(@"textDocument");
-  id textDocument = nil;
-  if ([self respondsToSelector:textDocSel]) {
-#pragma clang diagnostic push
-#pragma clang diagnostic ignored "-Warc-performSelector-leaks"
-    textDocument = [self performSelector:textDocSel];
-#pragma clang diagnostic pop
-  }
-
-  SEL showsComposingTextSel =
-      NSSelectorFromString(@"showsComposingTextAsMarkedText");
-
-  // Check textDocument proxy first (standard IMK behavior)
-  if (textDocument && [textDocument respondsToSelector:showsComposingTextSel]) {
-    BOOL showsMarked =
-        ((BOOL(*)(id, SEL))[textDocument methodForSelector:showsComposingTextSel])(
-            textDocument, showsComposingTextSel);
-    return showsMarked;
-  }
-
-  // Fallback: Check sender directly (some apps might implement it)
-  if ([sender respondsToSelector:showsComposingTextSel]) {
-    BOOL showsMarked =
-        ((BOOL(*)(id, SEL))[sender methodForSelector:showsComposingTextSel])(
-            sender, showsComposingTextSel);
-    return showsMarked;
-  }
-
   NSString *bundleID = [self bundleIdentifierForClient:sender];
 
-  if (![bundleID length]) {
-    return YES;
-  }
-
-  if ([_forcedMarkedTextBundleIDs containsObject:bundleID]) {
-    return YES;
-  }
-
-  if ([self bundleIdentifierUsesWebKitTextStack:bundleID]) {
-    return NO;
-  }
-
+  // 1. Manual Configuration: If the app is in the user's "Marked Text Apps" list,
+  // honor it first. This allows forcing Marked Text for Apple apps like Terminal.
   if ([self bundleIdentifierMatchesMarkedTextConfiguration:bundleID]) {
     return YES;
   }
 
-  if ([self bundleIdentifierUsesChromiumMarkedTextPolicy:bundleID] ||
-      [self runningApplicationUsesChromiumTextStack:bundleID]) {
-    return YES;
+  // 2. Apple Apps: Prefer Direct Input but respect system/app preference if available.
+  if ([bundleID hasPrefix:@"com.apple."]) {
+    SEL textDocSel = NSSelectorFromString(@"textDocument");
+    id textDocument = nil;
+    if ([self respondsToSelector:textDocSel]) {
+#pragma clang diagnostic push
+#pragma clang diagnostic ignored "-Warc-performSelector-leaks"
+      textDocument = [self performSelector:textDocSel];
+#pragma clang diagnostic pop
+    }
+
+    SEL showsComposingTextSel =
+        NSSelectorFromString(@"showsComposingTextAsMarkedText");
+
+    if (textDocument && [textDocument respondsToSelector:showsComposingTextSel]) {
+      BOOL showsMarked =
+          ((BOOL(*)(id, SEL))[textDocument methodForSelector:showsComposingTextSel])(
+              textDocument, showsComposingTextSel);
+      return showsMarked;
+    }
+
+    if ([sender respondsToSelector:showsComposingTextSel]) {
+      BOOL showsMarked =
+          ((BOOL(*)(id, SEL))[sender methodForSelector:showsComposingTextSel])(
+              sender, showsComposingTextSel);
+      return showsMarked;
+    }
+
+    // Default to Direct Input for Apple apps for maximum performance.
+    return NO;
   }
 
-  @try {
-    if (![sender respondsToSelector:@selector(selectedRange)]) {
-      return YES;
-    }
-    NSRange selectedRange = [sender selectedRange];
-    if (selectedRange.location == NSNotFound) {
-      return YES;
-    }
-  } @catch (NSException *exception) {
-    DKSTLog(@"Exception checking selected range for direct input: %@",
-            exception);
-    return YES;
-  }
-
-  return NO;
+  // 3. All other apps (Adobe, Chrome, Electron, etc.):
+  // Force Marked Text for stability and to prevent character fragmentation.
+  return YES;
 }
 
 - (void)refreshMarkedTextPolicyForClient:(id)sender {
