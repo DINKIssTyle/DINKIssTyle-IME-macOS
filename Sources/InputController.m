@@ -1186,12 +1186,11 @@ static IMKCandidates *DKSTSharedCandidatesForMacOS26;
   [self refreshMarkedTextPolicyForClient:sender];
 
   // Optimize XPC Timeout: Reduce synchronous wait time to prevent IME hangs.
-  // This utilizes internal IPMDServerClientWrapper API found in IMK.
+  // Set to an aggressive 0.03s (30ms) for near-instant responsiveness.
   SEL timeoutSel = NSSelectorFromString(@"setReplyTimeout:");
   if ([sender respondsToSelector:timeoutSel]) {
-    // 0.1 seconds is usually enough for a healthy app but prevents long hangs.
-    ((void (*)(id, SEL, double))objc_msgSend)(sender, timeoutSel, 0.1);
-    DKSTLog(@"Optimized client XPC replyTimeout to 0.1s for %@",
+    ((void (*)(id, SEL, double))objc_msgSend)(sender, timeoutSel, 0.03);
+    DKSTLog(@"Aggressively optimized client XPC replyTimeout to 0.03s for %@",
             [self bundleIdentifierForClient:sender]);
   }
 
