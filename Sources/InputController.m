@@ -818,12 +818,21 @@ static IMKCandidates *DKSTSharedCandidatesForMacOS26;
     return YES;
   }
 
-  // Unknown app: default to marked text (safe).
-  // Marked text mode works universally; direct input is only used for
-  // apps explicitly identified by earlier checks (textDocument query,
-  // WebKit detection, etc.). This avoids both XPC blocking lag and
-  // fragmentation in apps like Photoshop that don't support direct input.
-  return YES;
+  @try {
+    if (![sender respondsToSelector:@selector(selectedRange)]) {
+      return YES;
+    }
+    NSRange selectedRange = [sender selectedRange];
+    if (selectedRange.location == NSNotFound) {
+      return YES;
+    }
+  } @catch (NSException *exception) {
+    DKSTLog(@"Exception checking selected range for direct input: %@",
+            exception);
+    return YES;
+  }
+
+  return NO;
 }
 
 - (void)refreshMarkedTextPolicyForClient:(id)sender {
