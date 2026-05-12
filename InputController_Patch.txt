@@ -1,2 +1,0 @@
-- Remove bundle ID checks in shouldUseMarkedTextForClient:
-- Remove bundleIdentifierUsesChromiumMarkedTextPolicy, bundleIdentifierUsesWebKitTextStack, etc.
