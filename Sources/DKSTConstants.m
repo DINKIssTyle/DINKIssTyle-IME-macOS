@@ -35,6 +35,12 @@ NSString *const kDKSTUseMarkedTextForAllAppsKey =
 NSString *const kDKSTUseAppleHanjaDictionaryKey =
     @"DKSTUseAppleHanjaDictionary";
 
+// Hanja custom shortcut
+NSString *const kDKSTHanjaShortcutKeyCodeKey = @"DKSTHanjaShortcutKeyCode";
+NSString *const kDKSTHanjaShortcutModifiersKey = @"DKSTHanjaShortcutModifiers";
+NSString *const kDKSTHanjaShortcutDidChangeNotification =
+    @"DKSTHanjaShortcutDidChangeNotification";
+
 NSArray *DKSTDefaultMarkedTextAppBundleIDs(void) {
   return [NSArray
       arrayWithObjects:@"com.apple.Terminal", @"com.googlecode.iterm2",

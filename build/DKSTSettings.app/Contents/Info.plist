@@ -1,0 +1,28 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
+<plist version="1.0">
+<dict>
+	<key>CFBundleDisplayName</key>
+	<string>DKST macOS용 한글입력기</string>
+	<key>CFBundleExecutable</key>
+	<string>DKSTSettings</string>
+	<key>CFBundleIconFile</key>
+	<string>DKST_pref</string>
+	<key>CFBundleIdentifier</key>
+	<string>com.dinkisstyle.inputmethod.DKST.settings</string>
+	<key>CFBundleName</key>
+	<string>DKST macOS용 한글입력기</string>
+	<key>CFBundlePackageType</key>
+	<string>APPL</string>
+	<key>CFBundleShortVersionString</key>
+	<string>2.7</string>
+	<key>CFBundleVersion</key>
+	<string>2.7.0.0</string>
+	<key>DKSTVersionDisplay</key>
+	<string>2.7.0 Beta3</string>
+	<key>LSMinimumSystemVersion</key>
+	<string>10.15</string>
+	<key>NSPrincipalClass</key>
+	<string>NSApplication</string>
+</dict>
+</plist>

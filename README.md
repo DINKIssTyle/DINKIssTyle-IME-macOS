@@ -8,7 +8,7 @@
 - **2026년 5월 12일 [ver.2.7.0 베타1](https://github.com/DINKIssTyle/DINKIssTyle-IME-macOS/releases/tag/v2.7.0-beta1)** 이 릴리즈 되었습니다.
 - **2026년 5월 12일 [사전 데이타 업데이트](Dict.md)** 가 업데이트 되었습니다.
   
-## macOS용 DKST 한글입력기를 사용하면 좋습니다. ###
+## ✅ macOS용 DKST 한글입력기를 사용하면 좋습니다. ###
 - **더 이상 앱 단축키 사용을 위해 영어로 입력기를 변경하지 않아도 됩니다.**
 - **모아치기**로 빠르게 타이핑 할 수 있습니다.
 - **단모음/단자음에 쉬프트키**를 추가하여 원하는 **커스텀 입력**을 구성할 수 있습니다.
@@ -18,7 +18,7 @@
 - Apple 기본 한글 입력기보다 **CPU 점유율이 1/2수준으로 낮습니다.**
 - Apple 기본 한글 입력기보다 **한/영 전환이 우수합니다.**
  
- [Youtube 영상 | DKST macOS용 한글입력기 vs macOS 26 기본 한글입력기](https://www.youtube.com/watch?v=F6AHofQf0ls)
+🔎 [Youtube 영상 | DKST macOS용 한글입력기 vs macOS 26 기본 한글입력기](https://www.youtube.com/watch?v=F6AHofQf0ls)
 - macOS용 **DKST 한글입력기는 macOS에 Apple 스럽게 스며든 입력기**입니다.
 - 영→한 변환 직후 **바로 입력해도 자소 분리**가 드뭅니다.
 - 영→한 변환 직후 **바로 입력해도 로마자 출현**이 드뭅니다.
@@ -27,7 +27,7 @@
 
 > 상세한 내용은 **아래 주요 특징**을 확인해주세요.
 
-> 혹시 **리눅스용 DKST 한글입력기**도 알고 계신가요?
+> **✅ 리눅스용 DKST 한글입력기**도 있습니다.
 > https://github.com/DINKIssTyle/DINKIssTyle-IME-Ubuntu
 
 ---
@@ -207,16 +207,34 @@ Mac의 고유한 사용 경험을 유지합니다.
 
 ---
 
+### ❗다양한 개발자들의 각양각색 서드파티 macOS용 한글입력기들을 알고 계신가요~?
+* [**구름 입력기**](https://github.com/gureum/gureum): 편리하게, 가볍게, 자유롭게 라는 목표로 오랜기간 개발되어온 macOS용 한글 입력기 입니다.
+* **[나빌 입력기 for 맥](https://github.com/navilera/NavilIMEforMac)**: 세별식 318, 세별식 390, 두벌식을 지원하는 가벼운 한글 입력기 입니다.
+* **[속 입력기](https://github.com/kiding/SokIM)**: 빠르고 매끄러운 한영 전환을 위한 새로운 macOS 입력기
+* **[Ongeul (온글)](https://github.com/hiking90/ongeul)**: macOS용 한글 입력기 — 하나의 입력 소스로 한글과 영문을 모두 처리합니다.
+
+> Github 릴리즈 순 목록입니다.
+
+
+## 응원과 후원
 
 <div align="center">
-<img src="docs/star.png" alt="" width="320"><br>
+<img src="docs/star.png" alt="" width="130"><br>
   이 프로젝트가 유용하셨다면, Star를 눌러 응원해주세요.<br><br>
 </div>
 
 
+<p align="center">
+  <a href="https://github.com/sponsors/DINKIssTyle">
+    <img src="https://img.shields.io/badge/Sponsor-EA4AAA?style=for-the-badge&logo=github-sponsors&logoColor=white" alt="Sponsor">
+  </a>
+  <br> 이 프로젝트가 아내 눈치 안보고 지속되길 바라신다면 위 버튼을 눌러주세요!
+</p><br>
+
+
 <div align="center">
-이 README.md 파일은 DKST Markdown으로 작성되었습니다. AI가 어시스트 하는 마크다운 에디터에 관심있으시다면 아래 배지를 클릭하세요.<br><br>
   <a href="https://github.com/DINKIssTyle/DINKIssTyle-Markdown-Browser" target="_blank"><img src="https://github.com/DINKIssTyle/DINKIssTyle-Markdown-Browser/blob/main/DKST-Markdown.png?raw=true" width="150"></a><br>
+이 README.md 파일은 DKST Markdown으로 작성되었습니다.<br>AI가 어시스트 하는 마크다운 에디터에 관심있으시다면 아래 배지를 클릭하세요.<br><br>
 </div>
 
 ## 감사 인사. ##

@@ -10,6 +10,7 @@ fi
 : "${DKST_VERSION_DISPLAY:=2.0(beta4)}"
 : "${DKST_BUNDLE_SHORT_VERSION:=2.0}"
 : "${DKST_BUNDLE_VERSION:=2.0.0.4}"
+: "${DKST_PREFS_VERSION:=2.0.0}"
 
 set_plist_string() {
     local plist_path="$1"
@@ -67,7 +68,7 @@ mkdir -p build/DKST.app/Contents/Resources/Base.lproj
 echo "Compiling Sources..."
 clang -arch x86_64 -arch arm64 -mmacosx-version-min=10.15 \
     $OPTIMIZATION $DEBUG_FLAGS \
-    -framework Cocoa -framework InputMethodKit \
+    -framework Cocoa -framework InputMethodKit -framework Carbon \
     -o build/DKST.app/Contents/MacOS/DKST \
     Sources/*.m
 
@@ -101,31 +102,36 @@ cp -r Resources/ko.lproj build/DKST.app/Contents/Resources/
 # Create PkgInfo
 echo "APPL????" > build/DKST.app/Contents/PkgInfo
 
-# Build DKSTPreferences.app
-echo "Compiling DKSTPreferences..."
-mkdir -p build/DKSTPreferences.app/Contents/MacOS
-mkdir -p build/DKSTPreferences.app/Contents/Resources
+# Build DKSTSettings.app (Integrated Preferences & Dictionary Editor)
+echo "Compiling DKSTSettings..."
+mkdir -p build/DKSTSettings.app/Contents/MacOS
+mkdir -p build/DKSTSettings.app/Contents/Resources
 
 clang -arch x86_64 -arch arm64 -mmacosx-version-min=10.15 \
     $OPTIMIZATION $DEBUG_FLAGS \
-    -o build/DKSTPreferences.app/Contents/MacOS/DKSTPreferences \
+    -DDKST_PREFS_VERSION=\"$DKST_PREFS_VERSION\" \
+    -o build/DKSTSettings.app/Contents/MacOS/DKSTSettings \
     Sources/PreferencesApp/main.m \
-    Sources/PreferencesController.m \
+    Sources/DKSTSettingsWindowController.m \
+    Sources/DKSTSettingsViewControllers.m \
     Sources/DKSTConstants.m \
-    -framework Cocoa -I Sources
+    Sources/DKSTShortcutRecorder.m \
+    -framework Cocoa -framework Carbon -I Sources
 
-# Create simple Info.plist for Prefs
-cat > build/DKSTPreferences.app/Contents/Info.plist <<EOF
+# Create simple Info.plist for Settings
+cat > build/DKSTSettings.app/Contents/Info.plist <<EOF
 <?xml version="1.0" encoding="UTF-8"?>
 <!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
 <plist version="1.0">
 <dict>
     <key>CFBundleExecutable</key>
-    <string>DKSTPreferences</string>
+    <string>DKSTSettings</string>
     <key>CFBundleIdentifier</key>
-    <string>com.dinkisstyle.inputmethod.DKST.preferences</string>
+    <string>com.dinkisstyle.inputmethod.DKST.settings</string>
     <key>CFBundleName</key>
-    <string>DKST Preferences</string>
+    <string>DKST macOS용 한글입력기</string>
+    <key>CFBundleDisplayName</key>
+    <string>DKST macOS용 한글입력기</string>
     <key>CFBundleIconFile</key>
     <string>DKST_pref</string>
     <key>CFBundlePackageType</key>
@@ -137,61 +143,17 @@ cat > build/DKSTPreferences.app/Contents/Info.plist <<EOF
 </dict>
 </plist>
 EOF
-set_plist_string build/DKSTPreferences.app/Contents/Info.plist CFBundleShortVersionString "$DKST_BUNDLE_SHORT_VERSION"
-set_plist_string build/DKSTPreferences.app/Contents/Info.plist CFBundleVersion "$DKST_BUNDLE_VERSION"
-set_plist_string build/DKSTPreferences.app/Contents/Info.plist DKSTVersionDisplay "$DKST_VERSION_DISPLAY"
+set_plist_string build/DKSTSettings.app/Contents/Info.plist CFBundleShortVersionString "$DKST_BUNDLE_SHORT_VERSION"
+set_plist_string build/DKSTSettings.app/Contents/Info.plist CFBundleVersion "$DKST_BUNDLE_VERSION"
+set_plist_string build/DKSTSettings.app/Contents/Info.plist DKSTVersionDisplay "$DKST_VERSION_DISPLAY"
 
 # Copy Icon
-cp Resources/DKST_pref.icns build/DKSTPreferences.app/Contents/Resources/
+cp Resources/DKST_pref.icns build/DKSTSettings.app/Contents/Resources/
+cp Resources/SettingsIcons/*.pdf build/DKSTSettings.app/Contents/Resources/
+cp Resources/SettingsIcons/icon.png build/DKSTSettings.app/Contents/Resources/
 
-# Copy Prefs app into Input Method Resources
-rm -rf build/DKST.app/Contents/Resources/DKSTPreferences.app
-cp -r build/DKSTPreferences.app build/DKST.app/Contents/Resources/
+# Copy Settings app into Input Method Resources
+rm -rf build/DKST.app/Contents/Resources/DKSTSettings.app
+cp -r build/DKSTSettings.app build/DKST.app/Contents/Resources/
 
-# ------------------------------------------------------------------------
-# Build DKSTDictEditor.app (Hanja Dictionary Editor)
-# ------------------------------------------------------------------------
-echo "Compiling DKSTDictEditor..."
-mkdir -p build/DKSTDictEditor.app/Contents/MacOS
-mkdir -p build/DKSTDictEditor.app/Contents/Resources
-
-clang -arch x86_64 -arch arm64 -mmacosx-version-min=10.15 \
-    $OPTIMIZATION $DEBUG_FLAGS \
-    -o build/DKSTDictEditor.app/Contents/MacOS/DKSTDictEditor \
-    Sources_Editor/main.m \
-    Sources_Editor/DictEditorController.m \
-    -framework Cocoa
-
-# Create Info.plist for DictEditor
-cat > build/DKSTDictEditor.app/Contents/Info.plist <<EOF
-<?xml version="1.0" encoding="UTF-8"?>
-<!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
-<plist version="1.0">
-<dict>
-    <key>CFBundleExecutable</key>
-    <string>DKSTDictEditor</string>
-    <key>CFBundleIdentifier</key>
-    <string>com.dinkisstyle.inputmethod.DKST.dicteditor</string>
-    <key>CFBundleName</key>
-    <string>DKST Dictionary Editor</string>
-    <key>CFBundleIconFile</key>
-    <string>DKST_dict</string>
-    <key>CFBundlePackageType</key>
-    <string>APPL</string>
-    <key>LSMinimumSystemVersion</key>
-    <string>10.15</string>
-    <key>NSPrincipalClass</key>
-    <string>NSApplication</string>
-</dict>
-</plist>
-EOF
-set_plist_string build/DKSTDictEditor.app/Contents/Info.plist CFBundleShortVersionString "$DKST_BUNDLE_SHORT_VERSION"
-set_plist_string build/DKSTDictEditor.app/Contents/Info.plist CFBundleVersion "$DKST_BUNDLE_VERSION"
-set_plist_string build/DKSTDictEditor.app/Contents/Info.plist DKSTVersionDisplay "$DKST_VERSION_DISPLAY"
-
-# Copy Icon
-cp Resources/DKST_dict.icns build/DKSTDictEditor.app/Contents/Resources/
-
-# Copy DictEditor app into Input Method Resources
-rm -rf build/DKST.app/Contents/Resources/DKSTDictEditor.app
-cp -r build/DKSTDictEditor.app build/DKST.app/Contents/Resources/
+# (DKSTDictEditor is now integrated into DKSTSettings)

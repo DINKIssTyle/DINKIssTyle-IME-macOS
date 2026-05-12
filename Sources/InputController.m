@@ -108,6 +108,57 @@ static NSString *DKSTRomanStringForHangulKeyCode(unsigned short keyCode,
   }
 }
 
+// Returns YES if the given keyCode is a modifier key (FlagsChanged only).
+static BOOL DKSTIsModifierKeyCode(unsigned short keyCode) {
+  switch (keyCode) {
+  case 0x3E: // kVK_RightControl
+  case 0x3B: // kVK_Control
+  case 0x3C: // kVK_RightShift
+  case 0x38: // kVK_Shift
+  case 0x3D: // kVK_RightOption
+  case 0x3A: // kVK_Option
+  case 0x36: // kVK_RightCommand
+  case 0x37: // kVK_Command
+    return YES;
+  default:
+    return NO;
+  }
+}
+
+static BOOL DKSTModifierKeyIsPress(unsigned short keyCode, NSUInteger flags) {
+  switch (keyCode) {
+  case 0x3E: case 0x3B:
+    return (flags & NSEventModifierFlagControl) != 0;
+  case 0x3C: case 0x38:
+    return (flags & NSEventModifierFlagShift) != 0;
+  case 0x3D: case 0x3A:
+    return (flags & NSEventModifierFlagOption) != 0;
+  case 0x36: case 0x37:
+    return (flags & NSEventModifierFlagCommand) != 0;
+  default:
+    return NO;
+  }
+}
+
+static NSUInteger DKSTModifierMaskForKeyCode(unsigned short keyCode) {
+  switch (keyCode) {
+  case 0x3B: // Control
+  case 0x3E: // Right Control
+    return NSEventModifierFlagControl;
+  case 0x38: // Shift
+  case 0x3C: // Right Shift
+    return NSEventModifierFlagShift;
+  case 0x3A: // Option
+  case 0x3D: // Right Option
+    return NSEventModifierFlagOption;
+  case 0x37: // Command
+  case 0x36: // Right Command
+    return NSEventModifierFlagCommand;
+  default:
+    return 0;
+  }
+}
+
 @implementation InputController
 
 static IMKCandidates *DKSTSharedCandidatesForMacOS26;
@@ -178,6 +229,12 @@ static IMKCandidates *DKSTSharedCandidatesForMacOS26;
     _compositionState = [[DKSTCompositionState alloc] init];
     _chromiumDetectionCache = [[NSMutableDictionary alloc] init];
 
+    // Default Hanja shortcut: Option + Return
+    _hanjaShortcutKeyCode = kDKSTKeyCodeReturn;
+    _hanjaShortcutModifiers = NSEventModifierFlagOption;
+    _hanjaShortcutIsCustom = NO;
+    _hanjaModifierPending = NO;
+
     [self reloadUserPreferences];
     [[NSNotificationCenter defaultCenter]
         addObserver:self
@@ -191,6 +248,13 @@ static IMKCandidates *DKSTSharedCandidatesForMacOS26;
         addObserver:self
            selector:@selector(dictionaryDidChange:)
                name:@"DKSTDictionaryDidChangeNotification"
+             object:nil];
+
+    // Listen for Hanja shortcut changes from Preferences app
+    [[NSDistributedNotificationCenter defaultCenter]
+        addObserver:self
+           selector:@selector(hanjaShortcutDidChange:)
+               name:kDKSTHanjaShortcutDidChangeNotification
              object:nil];
 
     // Style attributes to match Apple's Korean IME
@@ -1142,6 +1206,40 @@ static IMKCandidates *DKSTSharedCandidatesForMacOS26;
 
   [_markedTextBundleIDSet release];
   _markedTextBundleIDSet = [normalizedBundleIDs copy];
+
+  // Load custom Hanja shortcut from CFPreferences (cross-process safe)
+  [self reloadHanjaShortcut];
+}
+
+- (void)reloadHanjaShortcut {
+  CFStringRef appID = CFSTR("com.dinkisstyle.inputmethod.DKST");
+
+  // Force re-read from disk (bypass in-memory cache)
+  CFPreferencesAppSynchronize(appID);
+
+  CFPropertyListRef keyCodeRef = CFPreferencesCopyAppValue(
+      (__bridge CFStringRef)kDKSTHanjaShortcutKeyCodeKey, appID);
+  CFPropertyListRef modifiersRef = CFPreferencesCopyAppValue(
+      (__bridge CFStringRef)kDKSTHanjaShortcutModifiersKey, appID);
+
+  if (keyCodeRef && modifiersRef) {
+    _hanjaShortcutKeyCode =
+        (unsigned short)[((__bridge NSNumber *)keyCodeRef) integerValue];
+    _hanjaShortcutModifiers =
+        (NSUInteger)[((__bridge NSNumber *)modifiersRef) unsignedIntegerValue];
+    _hanjaShortcutIsCustom = YES;
+    DKSTLog(@"Loaded custom Hanja shortcut: keyCode=%d modifiers=0x%lx",
+            _hanjaShortcutKeyCode, (unsigned long)_hanjaShortcutModifiers);
+  } else {
+    // Fallback to default: Option + Return
+    _hanjaShortcutKeyCode = kDKSTKeyCodeReturn;
+    _hanjaShortcutModifiers = NSEventModifierFlagOption;
+    _hanjaShortcutIsCustom = NO;
+    DKSTLog(@"Using default Hanja shortcut: Option + Return");
+  }
+
+  if (keyCodeRef) CFRelease(keyCodeRef);
+  if (modifiersRef) CFRelease(modifiersRef);
 }
 
 - (void)preferencesDidChange:(NSNotification *)notification {
@@ -1156,6 +1254,11 @@ static IMKCandidates *DKSTSharedCandidatesForMacOS26;
 - (void)dictionaryDidChange:(NSNotification *)notification {
   DKSTLog(@"Received DKSTDictionaryDidChangeNotification — reloading");
   [[DKSTHanjaDictionary sharedDictionary] reloadDictionary];
+}
+
+- (void)hanjaShortcutDidChange:(NSNotification *)notification {
+  DKSTLog(@"Received DKSTHanjaShortcutDidChangeNotification — reloading shortcut");
+  [self reloadHanjaShortcut];
 }
 
 - (void)activateServer:(id)sender {
@@ -1337,8 +1440,8 @@ static IMKCandidates *DKSTSharedCandidatesForMacOS26;
 - (BOOL)handleHanjaConversion:(unsigned short)keyCode
                     modifiers:(NSUInteger)modifiers
                        client:(id)sender {
-  if (!_hanjaEnabled || keyCode != kDKSTKeyCodeReturn ||
-      modifiers != NSEventModifierFlagOption) {
+  if (!_hanjaEnabled || keyCode != _hanjaShortcutKeyCode ||
+      modifiers != _hanjaShortcutModifiers) {
     return NO;
   }
 
@@ -1506,6 +1609,40 @@ static IMKCandidates *DKSTSharedCandidatesForMacOS26;
 - (BOOL)handleEvent:(NSEvent *)event client:(id)sender {
   unsigned short keyCode = [event keyCode];
 
+  // Handle modifier-only Hanja shortcut (e.g., Option + Control)
+  if ([event type] == NSEventTypeFlagsChanged && _hanjaEnabled &&
+      DKSTIsModifierKeyCode(_hanjaShortcutKeyCode)) {
+    if (keyCode == _hanjaShortcutKeyCode) {
+      NSUInteger flags = [event modifierFlags] &
+                         (NSEventModifierFlagCommand | NSEventModifierFlagControl |
+                          NSEventModifierFlagOption | NSEventModifierFlagShift);
+
+      NSUInteger requiredFlags =
+          _hanjaShortcutModifiers |
+          DKSTModifierMaskForKeyCode(_hanjaShortcutKeyCode);
+
+      if (DKSTModifierKeyIsPress(keyCode, flags)) {
+        if (flags == requiredFlags) {
+          _hanjaModifierPending = YES;
+        } else {
+          _hanjaModifierPending = NO;
+        }
+      } else if (_hanjaModifierPending) {
+        // Modifier released without intervening keyDown → trigger
+        _hanjaModifierPending = NO;
+        NSRange conversionRange = NSMakeRange(NSNotFound, 0);
+        NSString *conversionText =
+            [self hangulTextForHanjaConversion:sender range:&conversionRange];
+        if ([self showHanjaCandidatesForText:conversionText
+                            replacementRange:conversionRange
+                                      client:sender]) {
+          return YES;
+        }
+      }
+    }
+    return NO;
+  }
+
   // Item 6: KIM pattern - Reset buffer for events other than
   // KeyDown/FlagsChanged
   if ([event type] != NSEventTypeKeyDown) {
@@ -1514,6 +1651,9 @@ static IMKCandidates *DKSTSharedCandidatesForMacOS26;
     }
     return NO;
   }
+
+  // Any keyDown clears modifier-only pending state
+  _hanjaModifierPending = NO;
 
   [self prepareForInputClient:sender];
 
@@ -1532,7 +1672,7 @@ static IMKCandidates *DKSTSharedCandidatesForMacOS26;
       (NSEventModifierFlagCommand | NSEventModifierFlagControl |
        NSEventModifierFlagOption | NSEventModifierFlagShift);
 
-  // 2. Hanja conversion (Option + Return)
+  // 2. Hanja conversion (custom shortcut, default: Option + Return)
   if ([self handleHanjaConversion:keyCode modifiers:modifiers client:sender]) {
     return YES;
   }
@@ -1897,7 +2037,7 @@ static IMKCandidates *DKSTSharedCandidatesForMacOS26;
 
 // Menu handling (Modes)
 - (void)showPreferences:(id)sender {
-  NSString *path = [[NSBundle mainBundle] pathForResource:@"DKSTPreferences"
+  NSString *path = [[NSBundle mainBundle] pathForResource:@"DKSTSettings"
                                                    ofType:@"app"];
   if (path) {
     NSURL *url = [NSURL fileURLWithPath:path];
@@ -1906,12 +2046,16 @@ static IMKCandidates *DKSTSharedCandidatesForMacOS26;
                configuration:[NSWorkspaceOpenConfiguration configuration]
            completionHandler:^(NSRunningApplication *app, NSError *error) {
              if (error) {
-               DKSTLog(@"Failed to launch Preferences app: %@", error);
+               DKSTLog(@"Failed to launch Settings app: %@", error);
              }
            }];
   } else {
-    DKSTLog(@"Could not find Preferences app at %@", path);
+    DKSTLog(@"Could not find Settings app at %@", path);
   }
+}
+
+- (void)showSettings:(id)sender {
+  [self showPreferences:sender];
 }
 
 - (void)launchDictEditor:(id)sender {
@@ -1938,19 +2082,12 @@ static IMKCandidates *DKSTSharedCandidatesForMacOS26;
 - (NSMenu *)menu {
   NSMenu *menu = [[[NSMenu alloc] initWithTitle:@"DKST"] autorelease];
 
-  NSMenuItem *prefsItem =
-      [[[NSMenuItem alloc] initWithTitle:@"Preferences..."
-                                  action:@selector(showPreferences:)
+  NSMenuItem *settingsItem =
+      [[[NSMenuItem alloc] initWithTitle:@"Settings..."
+                                  action:@selector(showSettings:)
                            keyEquivalent:@""] autorelease];
-  [prefsItem setTarget:self];
-  [menu addItem:prefsItem];
-
-  NSMenuItem *dictEditorItem =
-      [[[NSMenuItem alloc] initWithTitle:@"Dictionary Editor..."
-                                  action:@selector(launchDictEditor:)
-                           keyEquivalent:@""] autorelease];
-  [dictEditorItem setTarget:self];
-  [menu addItem:dictEditorItem];
+  [settingsItem setTarget:self];
+  [menu addItem:settingsItem];
 
   /* functionality not yet implemented
   NSMenuItem *englishItem = [[[NSMenuItem alloc] initWithTitle:@"English"

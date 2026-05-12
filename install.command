@@ -112,34 +112,34 @@ function install_dkst() {
     sudo rm -rf "$DEST_APP"
     sudo cp -R "$SOURCE_APP" "$DEST_DIR/"
 
-    # 2.5. 백업한 hanja.txt 복원
-    if [ "$HANJA_PRESERVED" = true ] && [ -f "$HANJA_BACKUP" ]; then
-        echo "사용자 hanja.txt 파일 복원 중..."
-        sudo cp "$HANJA_BACKUP" "$HANJA_FILE"
-        rm -f "$HANJA_BACKUP"
-    fi
-
-    # 3. 설치된 앱 번들 격리 해제
+    # 3. 설치된 앱 번들 격리 해제 (사전 복원 전 수행)
     echo "설치된 앱 번들 확장 속성(quarantine) 제거 중..."
     sudo xattr -cr "$DEST_APP"
 
     # --- 사용자 사전 업데이트 확인 ---
-    echo ""
-    echo ""
-    echo "=========================================="
-    echo "사용자 사전을 업데이트 하시겠습니까? "
-    echo "*주의! 업데이트하면, 기존 사용자가 작성한 내용은 삭제됩니다."
-    echo "=========================================="
-    echo ""
-    echo "1 - 아니오, 기존 데이타를 유지합니다."
-    echo "2 - 예, 새 데이타로 업데이트 합니다."
-    echo ""
-    echo "=========================================="
-    read -p "원하는 작업의 번호를 입력하세요 [1-2]: " UPDATE_DICT_CHOICE
-    
-    if [ "$UPDATE_DICT_CHOICE" = "2" ]; then
-        echo "사용자 사전을 새 데이타로 업데이트 중..."
-        sudo cp "${SCRIPT_DIR}/Resources/hanja.txt" "/Library/Input Methods/DKST.app/Contents/Resources/hanja.txt"
+    if [ "$HANJA_PRESERVED" = true ]; then
+        echo ""
+        echo ""
+        echo "=========================================="
+        echo "사용자 사전을 업데이트 하시겠습니까? "
+        echo "*주의! 업데이트하면, 기존 사용자가 작성한 내용은 삭제됩니다."
+        echo "=========================================="
+        echo ""
+        echo "1 - 아니오, 기존 데이타를 유지합니다."
+        echo "2 - 예, 새 데이타로 업데이트 합니다."
+        echo ""
+        echo "=========================================="
+        read -p "원하는 작업의 번호를 입력하세요 [1-2]: " UPDATE_DICT_CHOICE
+        
+        if [ "$UPDATE_DICT_CHOICE" = "1" ]; then
+            echo "기존 사용자 사전을 복원 중..."
+            sudo cp "$HANJA_BACKUP" "$HANJA_FILE"
+        else
+            echo "새 사용자 사전을 적용합니다."
+        fi
+        sudo rm -f "$HANJA_BACKUP"
+    else
+        echo "기존 사전이 없어 새 사전을 설치합니다."
     fi
 
     # 4. [순서 변경됨] 설치 완료 후 프로세스 종료

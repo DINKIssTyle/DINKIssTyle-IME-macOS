@@ -28,6 +28,11 @@ extern NSString *const kDKSTMarkedTextAppBundleIDsKey;
 extern NSString *const kDKSTUseMarkedTextForAllAppsKey;
 extern NSString *const kDKSTUseAppleHanjaDictionaryKey;
 
+// Hanja custom shortcut
+extern NSString *const kDKSTHanjaShortcutKeyCodeKey;
+extern NSString *const kDKSTHanjaShortcutModifiersKey;
+extern NSString *const kDKSTHanjaShortcutDidChangeNotification;
+
 NSArray *DKSTDefaultMarkedTextAppBundleIDs(void);
 
 // Shortcuts
