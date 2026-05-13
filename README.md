@@ -1,12 +1,12 @@
 <p align="center"><br><br>
-  <img src="docs/Main_img.png" alt="Icon Image" width="96">
+  <img src="Docs/Main_img.png" alt="Icon Image" width="96">
 </p>
 
 # macOS용 DKST 한글입력기 
 
 ### 새소식
-- **2026년 5월 12일 [ver.2.7.0 베타1](https://github.com/DINKIssTyle/DINKIssTyle-IME-macOS/releases/tag/v2.7.0-beta1)** 이 릴리즈 되었습니다.
-- **2026년 5월 12일 [사전 데이타 업데이트](Dict.md)** 가 업데이트 되었습니다.
+- **2026년 5월 13일 ver.2.7.0 베타3** 이 릴리즈 되었습니다.
+- **2026년 5월 12일 [사전 데이타 업데이트](Docs/DICT.md)** 가 업데이트 되었습니다.
   
 ## ✅ macOS용 DKST 한글입력기를 사용하면 좋습니다. ###
 - **더 이상 앱 단축키 사용을 위해 영어로 입력기를 변경하지 않아도 됩니다.**
@@ -36,7 +36,7 @@
 
 ## 🤖 지능형 입력 엔진
 사용 중인 앱의 환경을 스스로 분석하여 최적의 입력 방식을 결정합니다.
-<div align="center"><img src="docs/Inline_Input.gif" alt="" width="300"/><br><br></div>  
+<div align="center"><img src="Docs/Inline_Input.gif" alt="" width="300"/><br><br></div>  
 
 * **스마트 자동 감지 및 전환**: 앱의 텍스트 입력 규격 준수 여부를 직접 확인하고 자동으로 판단합니다.  
     * **인라인 직접 입력**: 표준 규격을 준수하는 앱에서는 밑줄(Marked Text) 없는 매끄러운 직접 입력을 제공합니다.
@@ -48,9 +48,9 @@
 ## ✨ 입력 편의 및 커스텀 기능
 단순한 입력을 넘어 사용자의 생산성을 극대화하는 기능을 포함합니다.
 
-<div align="center"><img src="docs/Dict.gif" alt="" width="350"/><br><br></div>
+<div align="center"><img src="Docs/Dict.gif" alt="" width="350"/><br><br></div>
 
-* **[사전 입력 및 편집기](Dict_edit.md)**: 자주 사용하는 문구를 관리할 수 있는 전용 편집기를 제공합니다. 
+* **[사전 입력 및 편집기](Docs/DICT-EDIT.md)**: 자주 사용하는 문구를 관리할 수 있는 전용 편집기를 제공합니다. 
 * **모아치기 지원**: 직관적인 자소 조합을 지원합니다. (예: `ㅏ` + `ㄱ` = `가`)
 * **단축 입력 확장**: 단모음/단자음을 `Shift` 키와 함께 입력할 때 커스텀 문구나 이모지가 출력되도록 설정 가능합니다. (예: `Shift` + `ㅇ` = `안녕하세요`)
 * **세밀한 삭제 옵션**: 백스페이스 사용 시, 글자 조합이 완료되지 않은 상태에서도 자소 단위로 한 글자씩 제거하는 옵션을 제공합니다.
@@ -59,14 +59,14 @@
 Mac의 고유한 사용 경험을 유지합니다.
 
 * **시스템 테마 연동**: macOS의 다크/라이트 모드 변경에 따라 메뉴바 아이콘이 실시간으로 대응합니다.
-  <div align="center"><br><img src="docs/SP_Layout.png" alt="" width="500"/></div>  
+  <div align="center"><br><img src="Docs/SP_Layout.png" alt="" width="500"/></div>  
 
 > [!NOTE]
 > 옵션키 조합과 옵션+쉬프키 조합의 키보드 레이아웃
 
 * **전통적 특수 문자 지원**: Mac 표준 방식인 `Option` 또는 `Option` + `Shift` 조합을 통한 특수 문자 입력을 완벽하게 지원합니다.
   
-<div align="center"><br><img src="docs/macOS_hanja.png" alt="" width="450"/><br></div>  
+<div align="center"><br><img src="Docs/macOS_hanja.png" alt="" width="450"/><br></div>  
 
 * **macOS 한자 사전 지원**: 시스템의 한자 사전을 이용하여 한자 변환이 가능합니다.
   
@@ -138,38 +138,38 @@ Mac의 고유한 사용 경험을 유지합니다.
 
 #### 1. 기본 아이콘 (Default 'Taegeuk symbol')
 <div align="center">
-<img src="docs/menu_icons/default.png" alt="" width="350">
+<img src="Docs/menu_icons/default.png" alt="" width="350">
 </div>
 
 #### 2. 아래아 '한' 아이콘 (Arae-a 'Han')
 <div align="center">
-<img src="docs/menu_icons/arae-a-han.png" alt="" width="350">
+<img src="Docs/menu_icons/arae-a-han.png" alt="" width="350">
 </div>
 
 #### 3. '한' (Han)
 <div align="center">
-<img src="docs/menu_icons/han.png" alt="" width="350">
+<img src="Docs/menu_icons/han.png" alt="" width="350">
 </div>
 
 #### 4. '가' (Ga)
 <div align="center">
-<img src="docs/menu_icons/ga.png" alt="" width="350">
+<img src="Docs/menu_icons/ga.png" alt="" width="350">
 </div>
 
 
 #### 5. '클래식' (Classic) *정식 탑재 미정
 <div align="center">
-<img src="docs/menu_icons/classic.png" alt="" width="350">
+<img src="Docs/menu_icons/classic.png" alt="" width="350">
 </div>
 
 #### 6. '앙' (Ang)
 <div align="center">
-<img src="docs/menu_icons/ang.png" alt="" width="350">
+<img src="Docs/menu_icons/ang.png" alt="" width="350">
 </div>
 
 #### 7. '앙' (Ang) 큰버젼
 <div align="center">
-<img src="docs/menu_icons/ang2.png" alt="" width="350">
+<img src="Docs/menu_icons/ang2.png" alt="" width="350">
 </div>
 
 
@@ -182,7 +182,7 @@ Mac의 고유한 사용 경험을 유지합니다.
 # 사용 설정 방법
 
 <div align="center">
-  <img src="./docs/Syetem_preferences.gif" alt="" width="800">
+  <img src="./Docs/Syetem_preferences.gif" alt="" width="800">
 </div>
 
 1. **시스템 설정 열기**: 화면 왼쪽 상단의 `애플 메뉴()` > `시스템 설정`을 클릭합니다.
@@ -191,7 +191,7 @@ Mac의 고유한 사용 경험을 유지합니다.
 1. **언어 추가**: 왼쪽 하단의 `+ (더하기)` 버튼을 클릭합니다.
 1. **언어 및 자판 선택**: 왼쪽 목록에서 `한국어`를 선택하고, 오른쪽에서 회색조 아이콘의 `한글` 선택한 후 추가를 클릭합니다.
 
-**[macOS용 DKST 한글입력기 환경설정 설명](Preferences.md)** 에서 상세 사용법을 확인하세요.
+**[macOS용 DKST 한글입력기 환경설정 설명](Docs/SETTINGS.md)** 에서 상세 사용법을 확인하세요.
 
 ---
 
@@ -219,7 +219,7 @@ Mac의 고유한 사용 경험을 유지합니다.
 ## 응원과 후원
 
 <div align="center">
-<img src="docs/star.png" alt="" width="130"><br>
+<img src="Docs/star.png" alt="" width="130"><br>
   이 프로젝트가 유용하셨다면, Star를 눌러 응원해주세요.<br><br>
 </div>
 
