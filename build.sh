@@ -145,7 +145,6 @@ cat > build/DKSTSettings.app/Contents/Info.plist <<EOF
 EOF
 set_plist_string build/DKSTSettings.app/Contents/Info.plist CFBundleShortVersionString "$DKST_BUNDLE_SHORT_VERSION"
 set_plist_string build/DKSTSettings.app/Contents/Info.plist CFBundleVersion "$DKST_BUNDLE_VERSION"
-set_plist_string build/DKSTSettings.app/Contents/Info.plist DKSTVersionDisplay "$DKST_VERSION_DISPLAY"
 
 # Copy Icon
 cp Resources/DKST_pref.icns build/DKSTSettings.app/Contents/Resources/

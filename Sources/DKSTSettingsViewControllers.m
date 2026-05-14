@@ -13,6 +13,52 @@ static NSUserDefaults *sharedDefaults() {
   return suiteDefaults;
 }
 
+static NSArray *DKSTIMEInfoPlistCandidatePaths() {
+  NSMutableArray *paths = [NSMutableArray array];
+  NSBundle *mainBundle = [NSBundle mainBundle];
+  NSString *settingsBundlePath = [mainBundle bundlePath];
+
+  if ([settingsBundlePath length] > 0) {
+    NSString *resourcesPath = [settingsBundlePath stringByDeletingLastPathComponent];
+    NSString *contentsPath = [resourcesPath stringByDeletingLastPathComponent];
+    NSString *imeBundlePath = [contentsPath stringByDeletingLastPathComponent];
+
+    if ([[settingsBundlePath lastPathComponent] isEqualToString:@"DKSTSettings.app"] &&
+        [[resourcesPath lastPathComponent] isEqualToString:@"Resources"] &&
+        [[contentsPath lastPathComponent] isEqualToString:@"Contents"] &&
+        [[imeBundlePath pathExtension] isEqualToString:@"app"]) {
+      [paths addObject:[imeBundlePath
+                           stringByAppendingPathComponent:@"Contents/Info.plist"]];
+    }
+
+    NSString *siblingIMEPath = [[settingsBundlePath stringByDeletingLastPathComponent]
+        stringByAppendingPathComponent:@"DKST.app/Contents/Info.plist"];
+    [paths addObject:siblingIMEPath];
+  }
+
+  [paths addObject:[@"~/Library/Input Methods/DKST.app/Contents/Info.plist"
+                       stringByExpandingTildeInPath]];
+  [paths addObject:@"/Library/Input Methods/DKST.app/Contents/Info.plist"];
+
+  return paths;
+}
+
+static NSDictionary *DKSTIMEInfoPlist() {
+  NSFileManager *fm = [NSFileManager defaultManager];
+  for (NSString *path in DKSTIMEInfoPlistCandidatePaths()) {
+    if (![path length] || ![fm fileExistsAtPath:path]) {
+      continue;
+    }
+
+    NSDictionary *plist = [NSDictionary dictionaryWithContentsOfFile:path];
+    if ([plist isKindOfClass:[NSDictionary class]]) {
+      return plist;
+    }
+  }
+
+  return [[NSBundle mainBundle] infoDictionary];
+}
+
 #pragma mark - Tab 1: General Settings
 
 @implementation DKSTGeneralViewController {
@@ -824,9 +870,8 @@ static NSUserDefaults *sharedDefaults() {
   titleLabel.alignment = NSTextAlignmentCenter;
   [stackView addView:titleLabel inGravity:NSStackViewGravityTop];
 
-  // Read IME Version from Info.plist
-  NSString *imePath = @"/Library/Input Methods/DKST.app/Contents/Info.plist";
-  NSDictionary *imePlist = [NSDictionary dictionaryWithContentsOfFile:imePath];
+  // Read IME Version from the bundled or installed input method Info.plist.
+  NSDictionary *imePlist = DKSTIMEInfoPlist();
   NSString *imeVersion = imePlist[@"DKSTVersionDisplay"] ?: imePlist[@"CFBundleShortVersionString"] ?: @"Unknown";
 
   NSTextField *imeVerLabel = [NSTextField
