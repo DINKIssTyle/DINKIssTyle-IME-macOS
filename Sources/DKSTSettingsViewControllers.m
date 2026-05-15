@@ -13,6 +13,20 @@ static NSUserDefaults *sharedDefaults() {
   return suiteDefaults;
 }
 
+static NSString *DKSTShellSingleQuotedString(NSString *value) {
+  NSString *escaped =
+      [value stringByReplacingOccurrencesOfString:@"'" withString:@"'\\''"];
+  return [NSString stringWithFormat:@"'%@'", escaped];
+}
+
+static NSString *DKSTAppleScriptDoubleQuotedString(NSString *value) {
+  NSString *escaped =
+      [value stringByReplacingOccurrencesOfString:@"\\" withString:@"\\\\"];
+  escaped = [escaped stringByReplacingOccurrencesOfString:@"\""
+                                               withString:@"\\\""];
+  return escaped;
+}
+
 static NSArray *DKSTIMEInfoPlistCandidatePaths() {
   NSMutableArray *paths = [NSMutableArray array];
   NSBundle *mainBundle = [NSBundle mainBundle];
@@ -501,17 +515,13 @@ static NSDictionary *DKSTIMEInfoPlist() {
 }
 
 - (void)detectAndLoadFile {
-  NSString *userPath =
-      [@"~/Library/Input Methods/DKST.app/Contents/Resources/hanja.txt"
-          stringByExpandingTildeInPath];
   NSString *systemPath =
       @"/Library/Input Methods/DKST.app/Contents/Resources/hanja.txt";
   NSFileManager *fm = [NSFileManager defaultManager];
 
-  if ([fm fileExistsAtPath:userPath])
-    [self loadFile:userPath];
-  else if ([fm fileExistsAtPath:systemPath])
+  if ([fm fileExistsAtPath:systemPath]) {
     [self loadFile:systemPath];
+  }
 }
 
 - (void)loadFile:(NSString *)path {
@@ -658,31 +668,50 @@ static NSDictionary *DKSTIMEInfoPlist() {
 - (void)updateDictionary:(id)sender {
   // Use the script to update
   NSString *scriptPath = [[NSBundle mainBundle] pathForResource:@"dictup" ofType:@"sh"];
-  // If not in bundle, try the one in the project root for dev
+  // Fallback for development environment
   if (!scriptPath) {
+    scriptPath = [[[[[NSBundle mainBundle] bundlePath] 
+                   stringByDeletingLastPathComponent] 
+                  stringByDeletingLastPathComponent] 
+                 stringByAppendingPathComponent:@"dictup.sh"];
+  }
+
+  if (![[NSFileManager defaultManager] fileExistsAtPath:scriptPath]) {
+    // Try one more common dev path
     scriptPath = @"/Users/dinki/Documents/GitHub/DINKIssTyle-IME-macOS/dictup.sh";
   }
 
-  NSTask *task = [[NSTask alloc] init];
-  [task setLaunchPath:@"/bin/bash"];
-  [task setArguments:@[ scriptPath ]];
+  NSString *command = [NSString
+      stringWithFormat:@"/bin/bash %@",
+                       DKSTShellSingleQuotedString(scriptPath)];
+  NSString *appleScriptSource = [NSString stringWithFormat:
+      @"do shell script \"%@\" with administrator privileges",
+      DKSTAppleScriptDoubleQuotedString(command)];
   
-  NSError *error = nil;
-  if ([task launchAndReturnError:&error]) {
-    [task waitUntilExit];
-    if ([task terminationStatus] == 0) {
-      [self loadFile:currentFilePath];
-      NSAlert *a = [[NSAlert alloc] init];
-      a.messageText = @"온라인 업데이트가 완료되었습니다.";
-      [a runModal];
-    } else {
-      NSAlert *a = [[NSAlert alloc] init];
-      a.messageText = @"업데이트 중 오류가 발생했습니다.";
-      [a runModal];
+  NSAppleScript *appleScript = [[NSAppleScript alloc] initWithSource:appleScriptSource];
+  NSDictionary *errorInfo = nil;
+  NSAppleEventDescriptor *result = [appleScript executeAndReturnError:&errorInfo];
+  
+  if (result) {
+    NSString *updatedPath = currentFilePath;
+    if (![updatedPath length]) {
+      updatedPath =
+          @"/Library/Input Methods/DKST.app/Contents/Resources/hanja.txt";
     }
-  } else {
+    [self loadFile:updatedPath];
+    [[NSDistributedNotificationCenter defaultCenter]
+        postNotificationName:kDKSTDictionaryDidChangeNotification
+                      object:nil
+                    userInfo:nil
+          deliverImmediately:YES];
     NSAlert *a = [[NSAlert alloc] init];
-    a.messageText = [NSString stringWithFormat:@"업데이트 스크립트를 실행할 수 없습니다: %@", error.localizedDescription];
+    a.messageText = @"온라인 업데이트가 완료되었습니다.";
+    [a runModal];
+  } else {
+    DKSTLog(@"Update failed: %@", errorInfo);
+    NSAlert *a = [[NSAlert alloc] init];
+    a.messageText = [NSString stringWithFormat:@"업데이트 중 오류가 발생했습니다: %@", 
+                     errorInfo[NSAppleScriptErrorMessage] ?: @"알 수 없는 오류"];
     [a runModal];
   }
 }
