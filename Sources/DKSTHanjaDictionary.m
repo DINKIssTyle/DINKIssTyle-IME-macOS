@@ -94,8 +94,17 @@ static void DKSTAppleHanjaHitCallback(DKSTIDXIndexRef index,
 
 - (NSDictionary *)dictionaryFromBundledHanjaFileWithLogPrefix:(NSString *)prefix {
     NSMutableDictionary *dict = [NSMutableDictionary dictionary];
-    NSString *path =
-        [[NSBundle mainBundle] pathForResource:@"hanja" ofType:@"txt"];
+    NSString *userPath = [@"~/Library/Input Methods/DKST.app/Contents/Resources/hanja.txt"
+        stringByExpandingTildeInPath];
+    NSString *bundledPath = [[NSBundle mainBundle] pathForResource:@"hanja" ofType:@"txt"];
+    
+    NSString *path = nil;
+    if ([[NSFileManager defaultManager] fileExistsAtPath:userPath]) {
+        path = userPath;
+    } else {
+        path = bundledPath;
+    }
+    
     DKSTLog(@"%@ Hanja dictionary from: %@", prefix, path);
 
     if (path) {
@@ -108,10 +117,10 @@ static void DKSTAppleHanjaHitCallback(DKSTIDXIndexRef index,
             for (NSString *line in lines) {
                 if ([line length] == 0)
                     continue;
-                NSArray *parts = [line componentsSeparatedByString:@":"];
-                if ([parts count] == 2) {
-                    NSString *key = [parts objectAtIndex:0];
-                    NSString *valuesStr = [parts objectAtIndex:1];
+                NSRange colonRange = [line rangeOfString:@":"];
+                if (colonRange.location != NSNotFound) {
+                    NSString *key = [line substringToIndex:colonRange.location];
+                    NSString *valuesStr = [line substringFromIndex:colonRange.location + 1];
                     NSArray *values =
                         [valuesStr componentsSeparatedByString:@","];
                     NSMutableArray *trimmedValues = [NSMutableArray array];

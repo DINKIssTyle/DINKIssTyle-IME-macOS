@@ -150,6 +150,7 @@ set_plist_string build/DKSTSettings.app/Contents/Info.plist CFBundleVersion "$DK
 cp Resources/DKST_pref.icns build/DKSTSettings.app/Contents/Resources/
 cp Resources/SettingsIcons/*.pdf build/DKSTSettings.app/Contents/Resources/
 cp Resources/SettingsIcons/icon.png build/DKSTSettings.app/Contents/Resources/
+cp dictup.sh build/DKSTSettings.app/Contents/Resources/
 
 # Copy Settings app into Input Method Resources
 rm -rf build/DKST.app/Contents/Resources/DKSTSettings.app

@@ -417,7 +417,15 @@ static NSDictionary *DKSTIMEInfoPlist() {
 
   NSStackView *topRow = [NSStackView stackViewWithViews:@[
     searchField =
-        [[NSSearchField alloc] initWithFrame:NSMakeRect(0, 0, 300, 22)],
+        [[NSSearchField alloc] initWithFrame:NSMakeRect(0, 0, 240, 22)],
+    ({
+      NSButton *btn = [[NSButton alloc] initWithFrame:NSMakeRect(0, 0, 100, 26)];
+      btn.title = @"온라인 업데이트";
+      btn.bezelStyle = NSBezelStyleRounded;
+      btn.target = self;
+      btn.action = @selector(updateDictionary:);
+      btn;
+    }),
     ({
       NSButton *btn = [[NSButton alloc] initWithFrame:NSMakeRect(0, 0, 80, 26)];
       btn.title = @"저장";
@@ -536,6 +544,11 @@ static NSDictionary *DKSTIMEInfoPlist() {
           addObject:[NSMutableDictionary
                         dictionaryWithObjectsAndKeys:trigger, @"trigger",
                                                      values, @"values", nil]];
+    } else if ([line containsString:@"###DKST"]) {
+      [allEntries
+          addObject:[NSMutableDictionary
+                        dictionaryWithObjectsAndKeys:@"###DKST", @"trigger",
+                                                     @"--- 사용자 데이터 구분선 ---", @"values", nil]];
     }
   }
   filteredEntries = [allEntries mutableCopy];
@@ -588,10 +601,7 @@ static NSDictionary *DKSTIMEInfoPlist() {
 
   // Real-time Correction for "values" column
   if ([tableColumn.identifier isEqualToString:@"values"]) {
-    // 1. Strip colons — they would break the trigger:values format
-    newValue = [newValue stringByReplacingOccurrencesOfString:@":"
-                                                   withString:@""];
-    // 2. Normalize comma spacing
+    // 1. Normalize comma spacing
     newValue = [newValue stringByReplacingOccurrencesOfString:@", "
                                                    withString:@","];
     newValue = [newValue stringByReplacingOccurrencesOfString:@" ,"
@@ -645,15 +655,46 @@ static NSDictionary *DKSTIMEInfoPlist() {
   }
 }
 
+- (void)updateDictionary:(id)sender {
+  // Use the script to update
+  NSString *scriptPath = [[NSBundle mainBundle] pathForResource:@"dictup" ofType:@"sh"];
+  // If not in bundle, try the one in the project root for dev
+  if (!scriptPath) {
+    scriptPath = @"/Users/dinki/Documents/GitHub/DINKIssTyle-IME-macOS/dictup.sh";
+  }
+
+  NSTask *task = [[NSTask alloc] init];
+  [task setLaunchPath:@"/bin/bash"];
+  [task setArguments:@[ scriptPath ]];
+  
+  NSError *error = nil;
+  if ([task launchAndReturnError:&error]) {
+    [task waitUntilExit];
+    if ([task terminationStatus] == 0) {
+      [self loadFile:currentFilePath];
+      NSAlert *a = [[NSAlert alloc] init];
+      a.messageText = @"온라인 업데이트가 완료되었습니다.";
+      [a runModal];
+    } else {
+      NSAlert *a = [[NSAlert alloc] init];
+      a.messageText = @"업데이트 중 오류가 발생했습니다.";
+      [a runModal];
+    }
+  } else {
+    NSAlert *a = [[NSAlert alloc] init];
+    a.messageText = [NSString stringWithFormat:@"업데이트 스크립트를 실행할 수 없습니다: %@", error.localizedDescription];
+    [a runModal];
+  }
+}
+
 - (void)saveDictionary:(id)sender {
   NSMutableString *outS = [NSMutableString string];
   for (NSDictionary *e in allEntries) {
     NSString *trigger = e[@"trigger"];
     NSString *values = e[@"values"];
 
-    // Strip colons and normalize spacing before saving
-    NSString *cleanValues = [values stringByReplacingOccurrencesOfString:@":"
-                                                              withString:@""];
+    // Normalize spacing before saving
+    NSString *cleanValues = values;
     cleanValues = [cleanValues stringByReplacingOccurrencesOfString:@", "
                                                          withString:@","];
     cleanValues = [cleanValues stringByReplacingOccurrencesOfString:@" ,"
@@ -678,7 +719,11 @@ static NSDictionary *DKSTIMEInfoPlist() {
     NSString *cleanTrigger =
         [trigger stringByReplacingOccurrencesOfString:@":" withString:@""];
 
-    [outS appendFormat:@"%@:%@\n", cleanTrigger, cleanValues];
+    if ([cleanTrigger isEqualToString:@"###DKST"]) {
+      [outS appendFormat:@"\n###DKST\n"];
+    } else {
+      [outS appendFormat:@"%@:%@\n", cleanTrigger, cleanValues];
+    }
   }
 
   NSError *error = nil;
