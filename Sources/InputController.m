@@ -1574,7 +1574,7 @@ static IMKCandidates *DKSTSharedCandidatesForMacOS26;
     _useMarkedTextForClient = YES;
     _temporaryMarkedTextForComposition = YES;
     _useMarkedTextForNextComposition = NO;
-    DKSTLog(@"Using temporary marked text for line-start composition");
+    DKSTLog(@"Using temporary marked text for line-start word");
   }
 
   NSUInteger previousComposedLength = 0;
@@ -1609,9 +1609,6 @@ static IMKCandidates *DKSTSharedCandidatesForMacOS26;
         [self commitMarkedText:commit
             previousComposedLength:previousComposedLength
                             client:sender];
-        if (_temporaryMarkedTextForComposition) {
-          [self endTemporaryMarkedTextForClient:sender];
-        }
       }
       // REMOVED: repairFirstMarkedTextLeakForClient call (Phase 1 Method 3)
       // This heuristic was found to cause issues in some applications.
@@ -1751,9 +1748,8 @@ static IMKCandidates *DKSTSharedCandidatesForMacOS26;
 
   // 6. Enter — commit and pass through
   if (keyCode == kDKSTKeyCodeReturn && !candidatesVisible) {
-    BOOL shouldUseTemporaryMarkedTextAfterReturn = !_useMarkedTextForClient;
     [self commitComposition:sender];
-    if (shouldUseTemporaryMarkedTextAfterReturn) {
+    if (!_useMarkedTextForClient) {
       _useMarkedTextForNextComposition = YES;
     }
     return NO;
