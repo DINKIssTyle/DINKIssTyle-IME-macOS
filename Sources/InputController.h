@@ -31,8 +31,6 @@
   NSMutableString *_markedTextCommittedPrefix;
   NSUInteger _hanjaMarkedPrefixLength;
   BOOL _hanjaReplacementUsesMarkedPrefix;
-  BOOL _temporaryMarkedTextForComposition;
-  BOOL _useMarkedTextForNextComposition;
   DKSTCompositionState *_compositionState;
   NSMutableDictionary *_chromiumDetectionCache;
   // Custom Hanja shortcut — MUST remain at the end of the ivar list

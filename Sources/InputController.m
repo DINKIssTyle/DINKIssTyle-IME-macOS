@@ -15,12 +15,6 @@
                    keyCode:(unsigned short)keyCode
                     client:(id)sender
          candidatesVisible:(BOOL)candidatesVisible;
-- (BOOL)directInputRangeIsCurrent:(NSRange)range client:(id)sender;
-- (void)endTemporaryMarkedTextForClient:(id)sender;
-- (BOOL)repairFirstMarkedTextLeakForClient:(id)sender
-                                   keyCode:(unsigned short)keyCode
-                                 modifiers:(NSUInteger)modifiers
-                       selectedRangeBefore:(NSRange)selectedRangeBefore;
 @end
 
 static NSInteger DKSTCandidateIndexForNumberKeyCode(unsigned short keyCode) {
@@ -227,8 +221,6 @@ static IMKCandidates *DKSTSharedCandidatesForMacOS26;
     _markedTextCommittedPrefix = [[NSMutableString alloc] init];
     _hanjaMarkedPrefixLength = 0;
     _hanjaReplacementUsesMarkedPrefix = NO;
-    _temporaryMarkedTextForComposition = NO;
-    _useMarkedTextForNextComposition = NO;
     _compositionState = [[DKSTCompositionState alloc] init];
     _chromiumDetectionCache = [[NSMutableDictionary alloc] init];
 
@@ -1068,23 +1060,7 @@ static IMKCandidates *DKSTSharedCandidatesForMacOS26;
   [_markedTextCommittedPrefix setString:@""];
   _hanjaMarkedPrefixLength = 0;
   _hanjaReplacementUsesMarkedPrefix = NO;
-  _useMarkedTextForNextComposition = NO;
-  if (_temporaryMarkedTextForComposition) {
-    _temporaryMarkedTextForComposition = NO;
-    if (_lastInputClient) {
-      [self refreshMarkedTextPolicyForClient:_lastInputClient];
-    }
-  }
   [_compositionState reset];
-}
-
-- (void)endTemporaryMarkedTextForClient:(id)sender {
-  if (!_temporaryMarkedTextForComposition) {
-    return;
-  }
-
-  _temporaryMarkedTextForComposition = NO;
-  [self refreshMarkedTextPolicyForClient:sender];
 }
 
 - (BOOL)hasPendingComposition {
@@ -1128,8 +1104,6 @@ static IMKCandidates *DKSTSharedCandidatesForMacOS26;
   BOOL clientChanged = (_lastInputClient && _lastInputClient != sender);
   if (clientChanged) {
     DKSTLog(@"Input client changed; clearing pending composition");
-    _temporaryMarkedTextForComposition = NO;
-    _useMarkedTextForNextComposition = NO;
 
     @try {
       if ([_candidates isVisible]) {
@@ -1170,6 +1144,20 @@ static IMKCandidates *DKSTSharedCandidatesForMacOS26;
                                      client:sender]) {
           _lastClientSelectedRange = selectedRange;
           return;
+        }
+
+        if (_directInputComposedLength > 0 &&
+            selectedRange.location >= _directInputComposedLength &&
+            [_directInputComposedText length] == _directInputComposedLength) {
+          NSRange backtrackRange = NSMakeRange(selectedRange.location - _directInputComposedLength,
+                                               _directInputComposedLength);
+          if ([self directInputRangeIsCurrent:backtrackRange client:sender]) {
+            _directInputComposedRange = backtrackRange;
+            _lastClientSelectedRange = selectedRange;
+            DKSTLog(@"Self-healed direct composition range in prepareForInputClient to %@",
+                    NSStringFromRange(backtrackRange));
+            return;
+          }
         }
 
         DKSTLog(@"Selection changed during composition; next key starts a new "
@@ -1569,14 +1557,6 @@ static IMKCandidates *DKSTSharedCandidatesForMacOS26;
                    keyCode:(unsigned short)keyCode
                     client:(id)sender
          candidatesVisible:(BOOL)candidatesVisible {
-  if (!_useMarkedTextForClient && _useMarkedTextForNextComposition &&
-      ![self hasPendingComposition]) {
-    _useMarkedTextForClient = YES;
-    _temporaryMarkedTextForComposition = YES;
-    _useMarkedTextForNextComposition = NO;
-    DKSTLog(@"Using temporary marked text for line-start word");
-  }
-
   NSUInteger previousComposedLength = 0;
   NSRange selectedRangeBefore = NSMakeRange(NSNotFound, 0);
   if (_useMarkedTextForClient) {
@@ -1749,9 +1729,6 @@ static IMKCandidates *DKSTSharedCandidatesForMacOS26;
   // 6. Enter — commit and pass through
   if (keyCode == kDKSTKeyCodeReturn && !candidatesVisible) {
     [self commitComposition:sender];
-    if (!_useMarkedTextForClient) {
-      _useMarkedTextForNextComposition = YES;
-    }
     return NO;
   }
 
@@ -1791,8 +1768,6 @@ static IMKCandidates *DKSTSharedCandidatesForMacOS26;
       _directInputComposedRange = NSMakeRange(NSNotFound, 0);
       [self clearMarkedReplacementRange];
       [_markedTextCommittedPrefix setString:@""];
-      [self endTemporaryMarkedTextForClient:sender];
-      _useMarkedTextForNextComposition = NO;
       [self rememberSelectedRangeForClient:sender];
 
       return YES;
@@ -1925,17 +1900,26 @@ static IMKCandidates *DKSTSharedCandidatesForMacOS26;
     expectedLocation = replacementStart + commitLength + composedLength;
   }
 
-  if (expectedLocation != NSNotFound && composedLength > 0 &&
+  if (expectedLocation != NSNotFound && composedLength > 0 && _directInputComposedLength > 0 &&
       ![self shouldTrustDirectCompositionRangeForClient:sender]) {
     @try {
       NSRange selectedRange = [sender selectedRange];
+      
+      // Allow self-healing or asynchronous lag:
+      // If the cursor is still at the insertion start (expectedLocation - composedLength)
+      // or at the previous selected location, it's just lag!
+      BOOL isLag = (selectedRange.location != NSNotFound &&
+                    (selectedRange.location == expectedLocation - composedLength ||
+                     selectedRange.location == _lastClientSelectedRange.location));
+
       if (selectedRange.location == NSNotFound ||
-          selectedRange.location != expectedLocation) {
+          (selectedRange.location != expectedLocation && !isLag)) {
         [self forceMarkedTextForClient:sender
                                 reason:@"direct insert cursor mismatch"];
-        DKSTLog(@"Direct insert mismatch: expected %lu, got %lu",
+        DKSTLog(@"Direct insert mismatch: expected %lu, got %lu (lag allowed: %d)",
                 (unsigned long)expectedLocation,
-                (unsigned long)selectedRange.location);
+                (unsigned long)selectedRange.location,
+                isLag);
         return NO;
       }
     } @catch (NSException *exception) {
@@ -2058,8 +2042,6 @@ static IMKCandidates *DKSTSharedCandidatesForMacOS26;
   _directInputComposedRange = NSMakeRange(NSNotFound, 0);
   [self clearMarkedReplacementRange];
   [_markedTextCommittedPrefix setString:@""];
-  [self endTemporaryMarkedTextForClient:sender];
-  _useMarkedTextForNextComposition = NO;
   [self rememberSelectedRangeForClient:sender];
 }
 
