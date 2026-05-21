@@ -32,6 +32,29 @@ static BOOL DKSTDictionaryEntryIsSeparator(NSDictionary *entry) {
          [[entry objectForKey:@"trigger"] isEqualToString:@"###DKST"];
 }
 
+static NSMutableArray *DKSTCopyMarkedTextBundleIDsForSettings(void) {
+  NSArray *saved =
+      [sharedDefaults() arrayForKey:kDKSTMarkedTextAppBundleIDsKey];
+  if (![saved count]) {
+    saved = DKSTDefaultMarkedTextAppBundleIDs();
+  }
+
+  NSMutableArray *result = [[NSMutableArray alloc] init];
+  NSCharacterSet *whitespace =
+      [NSCharacterSet whitespaceAndNewlineCharacterSet];
+  for (id object in saved) {
+    if (![object isKindOfClass:[NSString class]]) {
+      continue;
+    }
+    NSString *bundleID =
+        [object stringByTrimmingCharactersInSet:whitespace];
+    if ([bundleID length] > 0 && ![result containsObject:bundleID]) {
+      [result addObject:bundleID];
+    }
+  }
+  return result;
+}
+
 static NSArray *DKSTIMEInfoPlistCandidatePaths() {
   NSMutableArray *paths = [NSMutableArray array];
   NSBundle *mainBundle = [NSBundle mainBundle];
@@ -946,13 +969,15 @@ static NSDictionary *DKSTIMEInfoPlist() {
 
 - (void)viewWillAppear {
   [super viewWillAppear];
-  NSArray *saved =
-      [sharedDefaults() arrayForKey:kDKSTMarkedTextAppBundleIDsKey];
-  bundleIDs = saved ? [saved mutableCopy] : [NSMutableArray array];
+  [bundleIDs release];
+  bundleIDs = DKSTCopyMarkedTextBundleIDsForSettings();
   [tableView reloadData];
 }
 
 - (void)saveData {
+  if (!bundleIDs) {
+    bundleIDs = [[NSMutableArray alloc] init];
+  }
   [sharedDefaults() setObject:bundleIDs forKey:kDKSTMarkedTextAppBundleIDsKey];
   [sharedDefaults() synchronize];
 }
@@ -963,13 +988,26 @@ static NSDictionary *DKSTIMEInfoPlist() {
 - (id)tableView:(NSTableView *)tableView
     objectValueForTableColumn:(NSTableColumn *)tableColumn
                           row:(NSInteger)row {
+  if (row < 0 || row >= bundleIDs.count) {
+    return @"";
+  }
   return bundleIDs[row];
 }
 - (void)tableView:(NSTableView *)tableView
     setObjectValue:(id)object
     forTableColumn:(NSTableColumn *)tableColumn
                row:(NSInteger)row {
-  bundleIDs[row] = (NSString *)object;
+  if (row < 0 || row >= bundleIDs.count ||
+      ![object isKindOfClass:[NSString class]]) {
+    return;
+  }
+  NSString *bundleID = [(NSString *)object
+      stringByTrimmingCharactersInSet:
+          [NSCharacterSet whitespaceAndNewlineCharacterSet]];
+  if (![bundleID length]) {
+    return;
+  }
+  bundleIDs[row] = bundleID;
   [self saveData];
 }
 
@@ -978,6 +1016,9 @@ static NSDictionary *DKSTIMEInfoPlist() {
   p.allowedFileTypes = @[ @"app" ];
   if ([p runModal] == NSModalResponseOK) {
     NSString *bid = [[NSBundle bundleWithURL:p.URL] bundleIdentifier];
+    if (!bundleIDs) {
+      bundleIDs = [[NSMutableArray alloc] init];
+    }
     if (bid && ![bundleIDs containsObject:bid]) {
       [bundleIDs addObject:bid];
       [tableView reloadData];
@@ -988,11 +1029,16 @@ static NSDictionary *DKSTIMEInfoPlist() {
 
 - (void)removeApp:(id)sender {
   NSInteger row = tableView.selectedRow;
-  if (row >= 0) {
+  if (row >= 0 && row < bundleIDs.count) {
     [bundleIDs removeObjectAtIndex:row];
     [tableView reloadData];
     [self saveData];
   }
+}
+
+- (void)dealloc {
+  [bundleIDs release];
+  [super dealloc];
 }
 
 @end
