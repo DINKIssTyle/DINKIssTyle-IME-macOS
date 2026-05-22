@@ -1038,9 +1038,6 @@ static IMKCandidates *DKSTSharedCandidatesForMacOS26;
 
   @try {
     [sender overrideKeyboardWithKeyboardNamed:kUSKeylayout];
-    if (force) {
-      [sender selectInputMode:currentMode];
-    }
     _lastClientSyncTime = now;
   } @catch (NSException *exception) {
     DKSTLog(@"Exception in syncInputClient: %@", exception);
