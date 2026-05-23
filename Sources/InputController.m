@@ -156,7 +156,7 @@ static NSUInteger DKSTModifierMaskForKeyCode(unsigned short keyCode) {
 
 @implementation InputController
 
-static IMKCandidates *DKSTSharedCandidatesForMacOS26;
+static IMKCandidates *DKSTSharedCandidates;
 
 - (id)initWithServer:(IMKServer *)server
             delegate:(id)delegate
@@ -189,22 +189,17 @@ static IMKCandidates *DKSTSharedCandidatesForMacOS26;
       DKSTLog(@"Initialized for Preferences App");
     }
 
-    // Always keep IMKCandidates available for all clients. On macOS 26 beta,
-    // InputMethodKit may keep using the object after controller dealloc, so
-    // reuse one process-wide instance instead of leaking one per controller.
-    if (@available(macOS 26, *)) {
-      @synchronized([InputController class]) {
-        if (!DKSTSharedCandidatesForMacOS26) {
-          DKSTSharedCandidatesForMacOS26 = [[IMKCandidates alloc]
-              initWithServer:server
-                   panelType:kIMKSingleColumnScrollingCandidatePanel];
-        }
-        _candidates = DKSTSharedCandidatesForMacOS26;
+    // Always keep IMKCandidates available for all clients.
+    // Reuse one process-wide instance instead of allocating and releasing
+    // one per controller, which causes heavy XPC connection churn with
+    // CursorUIViewService and dangling pointer crashes in InputMethodKit.
+    @synchronized([InputController class]) {
+      if (!DKSTSharedCandidates) {
+        DKSTSharedCandidates = [[IMKCandidates alloc]
+            initWithServer:server
+                 panelType:kIMKSingleColumnScrollingCandidatePanel];
       }
-    } else {
-      _candidates = [[IMKCandidates alloc]
-          initWithServer:server
-               panelType:kIMKSingleColumnScrollingCandidatePanel];
+      _candidates = DKSTSharedCandidates;
     }
     _lastClientSyncTime = 0;
     _directInputComposedLength = 0;
@@ -277,18 +272,9 @@ static IMKCandidates *DKSTSharedCandidatesForMacOS26;
   [[NSNotificationCenter defaultCenter] removeObserver:self];
   [[NSDistributedNotificationCenter defaultCenter] removeObserver:self];
 
-  // InputMethodKit on macOS 26 beta internally caches a reference to the
-  // IMKCandidates object and may call methods on it after our dealloc is
-  // called. The shared instance is intentionally kept alive for the process,
-  // which avoids a per-controller leak while preserving the crash workaround.
-  if (@available(macOS 26, *)) {
-    _candidates = nil;
-  } else {
-    if (_candidates) {
-      [_candidates release];
-      _candidates = nil;
-    }
-  }
+  // The shared candidates instance is intentionally kept alive for the process,
+  // which avoids per-controller connection churn and use-after-free crashes.
+  _candidates = nil;
 
   if (_currentHanjaCandidates) {
     [_currentHanjaCandidates release];
