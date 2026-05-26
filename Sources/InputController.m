@@ -1123,13 +1123,6 @@ static IMKCandidates *DKSTSharedCandidates;
       if (selectedRange.location != NSNotFound &&
           !NSEqualRanges(selectedRange, _lastClientSelectedRange)) {
         if (_directInputComposedLength > 0 &&
-            [self directInputRangeIsCurrent:_directInputComposedRange
-                                     client:sender]) {
-          _lastClientSelectedRange = selectedRange;
-          return;
-        }
-
-        if (_directInputComposedLength > 0 &&
             selectedRange.location >= _directInputComposedLength &&
             [_directInputComposedText length] == _directInputComposedLength) {
           NSRange backtrackRange = NSMakeRange(selectedRange.location - _directInputComposedLength,
@@ -1323,6 +1316,35 @@ static IMKCandidates *DKSTSharedCandidates;
 
   // Call super - this is required for proper cleanup
   [super deactivateServer:sender];
+}
+
+- (void)selectionChanged:(id)sender {
+  DKSTLog(@"selectionChanged called");
+  if (!sender) {
+    return;
+  }
+
+  @try {
+    if ([sender respondsToSelector:@selector(selectedRange)]) {
+      NSRange selectedRange = [sender selectedRange];
+      if (selectedRange.location != NSNotFound) {
+        if (_lastClientSelectedRange.location != NSNotFound &&
+            !NSEqualRanges(selectedRange, _lastClientSelectedRange)) {
+          
+          if ([self hasPendingComposition]) {
+            DKSTLog(@"Selection changed to %@ (was %@) by user; committing composition",
+                    NSStringFromRange(selectedRange),
+                    NSStringFromRange(_lastClientSelectedRange));
+            [self commitComposition:sender];
+          } else {
+            _lastClientSelectedRange = selectedRange;
+          }
+        }
+      }
+    }
+  } @catch (NSException *exception) {
+    DKSTLog(@"Exception in selectionChanged: %@", exception);
+  }
 }
 
 // MARK: - Extracted Input Handling Methods
