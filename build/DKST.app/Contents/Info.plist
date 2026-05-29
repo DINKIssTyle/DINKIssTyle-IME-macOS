@@ -19,11 +19,11 @@
 	<key>CFBundlePackageType</key>
 	<string>APPL</string>
 	<key>CFBundleShortVersionString</key>
-	<string>2.7.4b1</string>
+	<string>2.7.4</string>
 	<key>CFBundleSignature</key>
 	<string>????</string>
 	<key>CFBundleVersion</key>
-	<string>2.7.4.1</string>
+	<string>2.7.4.2</string>
 	<key>ComponentInputModeDict</key>
 	<dict>
 		<key>TISUnifiedUIForInputMethodEnabling</key>
@@ -58,7 +58,7 @@
 		</array>
 	</dict>
 	<key>DKSTVersionDisplay</key>
-	<string>2.7.4b1</string>
+	<string>2.7.4</string>
 	<key>InputMethodConnectionName</key>
 	<string>DKST_1_Connection</string>
 	<key>InputMethodServerControllerClass</key>
