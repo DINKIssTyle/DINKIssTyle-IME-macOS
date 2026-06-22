@@ -1444,11 +1444,15 @@ static IMKCandidates *DKSTSharedCandidates;
   // Number keys 1-9 for direct candidate selection
   NSInteger index = DKSTCandidateIndexForNumberKeyCode(keyCode);
   if (index >= 0) {
-    if (hasCandidates && index < [_currentHanjaCandidates count]) {
-      _currentHanjaIndex = index;
-      NSString *selected =
-          [_currentHanjaCandidates objectAtIndex:_currentHanjaIndex];
-      [self commitCandidate:selected client:sender];
+    if (hasCandidates) {
+      NSInteger pageStartIndex = (_currentHanjaIndex / 9) * 9;
+      NSInteger targetIndex = pageStartIndex + index;
+      if (targetIndex < [_currentHanjaCandidates count]) {
+        _currentHanjaIndex = targetIndex;
+        NSString *selected =
+            [_currentHanjaCandidates objectAtIndex:_currentHanjaIndex];
+        [self commitCandidate:selected client:sender];
+      }
     }
     return YES;
   }
@@ -2261,6 +2265,18 @@ static IMKCandidates *DKSTSharedCandidates;
 // Candidate Selection Handler
 - (void)candidateSelected:(NSAttributedString *)candidateString {
   [self commitCandidate:candidateString client:[self client]];
+}
+
+- (void)candidateSelectionChanged:(NSAttributedString *)candidateString {
+  if (candidateString && _currentHanjaCandidates) {
+    NSString *selectedStr = [candidateString string];
+    NSUInteger idx = [_currentHanjaCandidates indexOfObject:selectedStr];
+    if (idx != NSNotFound) {
+      _currentHanjaIndex = idx;
+      DKSTLog(@"candidateSelectionChanged: updated _currentHanjaIndex to %lu for '%@'",
+              (unsigned long)_currentHanjaIndex, selectedStr);
+    }
+  }
 }
 
 @end
