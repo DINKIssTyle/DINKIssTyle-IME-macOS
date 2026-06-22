@@ -33,6 +33,7 @@
   BOOL _hanjaReplacementUsesMarkedPrefix;
   DKSTCompositionState *_compositionState;
   NSMutableDictionary *_chromiumDetectionCache;
+  BOOL _ignoreSelectionChanged;
   // Custom Hanja shortcut — MUST remain at the end of the ivar list
   // to avoid InputMethodKit memory layout conflicts.
   unsigned short _hanjaShortcutKeyCode;

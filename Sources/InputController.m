@@ -167,6 +167,7 @@ static IMKCandidates *DKSTSharedCandidates;
             server, delegate, inputClient);
     engine = [[DKSTHangul alloc] init];
     currentMode = [kDKSTHangulMode retain]; // Default to Hangul (Retain)
+    _ignoreSelectionChanged = NO;
 
     // Set default preference
     [[NSUserDefaults standardUserDefaults] registerDefaults:@{
@@ -1119,6 +1120,7 @@ static IMKCandidates *DKSTSharedCandidates;
   if (!_useMarkedTextForClient && [self hasPendingComposition] &&
       _lastClientSelectedRange.location != NSNotFound &&
       [sender respondsToSelector:@selector(selectedRange)]) {
+    _ignoreSelectionChanged = YES;
     @try {
       NSRange selectedRange = [sender selectedRange];
       if (selectedRange.location != NSNotFound &&
@@ -1147,6 +1149,8 @@ static IMKCandidates *DKSTSharedCandidates;
     } @catch (NSException *exception) {
       DKSTLog(@"Exception checking selected range on client prepare: %@",
               exception);
+    } @finally {
+      _ignoreSelectionChanged = NO;
     }
   }
 
@@ -1320,6 +1324,9 @@ static IMKCandidates *DKSTSharedCandidates;
 }
 
 - (void)selectionChanged:(id)sender {
+  if (_ignoreSelectionChanged) {
+    return;
+  }
   DKSTLog(@"selectionChanged called");
   if (!sender) {
     return;
@@ -1625,6 +1632,23 @@ static IMKCandidates *DKSTSharedCandidates;
     [_candidates hide];
   }
 
+  NSString *chars = [event characters];
+  unichar firstChar = [chars length] > 0 ? [chars characterAtIndex:0] : 0;
+  BOOL isControlOrFunction = NO;
+  if ([chars length] > 0) {
+    if ([[NSCharacterSet controlCharacterSet] characterIsMember:firstChar]) {
+      isControlOrFunction = YES;
+    } else if (firstChar >= 0xF700 && firstChar <= 0xF8FF) {
+      isControlOrFunction = YES;
+    }
+  }
+  BOOL isPrintable = ([chars length] > 0 && !isControlOrFunction);
+
+  if (isPrintable && [self hasPendingComposition]) {
+    [self commitComposition:sender withSuffix:chars];
+    return YES;
+  }
+
   [self commitComposition:sender];
   return NO;
 }
@@ -1632,170 +1656,202 @@ static IMKCandidates *DKSTSharedCandidates;
 // MARK: - Input Method Kit Methods (handleEvent)
 
 - (BOOL)handleEvent:(NSEvent *)event client:(id)sender {
-  unsigned short keyCode = [event keyCode];
+  _ignoreSelectionChanged = YES;
+  @try {
+    unsigned short keyCode = [event keyCode];
 
-  // Handle modifier-only Hanja shortcut (e.g., Option + Control)
-  if ([event type] == NSEventTypeFlagsChanged && _hanjaEnabled &&
-      DKSTIsModifierKeyCode(_hanjaShortcutKeyCode)) {
-    if (keyCode == _hanjaShortcutKeyCode) {
-      NSUInteger flags = [event modifierFlags] &
-                         (NSEventModifierFlagCommand | NSEventModifierFlagControl |
-                          NSEventModifierFlagOption | NSEventModifierFlagShift);
+    // Handle modifier-only Hanja shortcut (e.g., Option + Control)
+    if ([event type] == NSEventTypeFlagsChanged && _hanjaEnabled &&
+        DKSTIsModifierKeyCode(_hanjaShortcutKeyCode)) {
+      if (keyCode == _hanjaShortcutKeyCode) {
+        NSUInteger flags = [event modifierFlags] &
+                           (NSEventModifierFlagCommand | NSEventModifierFlagControl |
+                            NSEventModifierFlagOption | NSEventModifierFlagShift);
 
-      NSUInteger requiredFlags =
-          _hanjaShortcutModifiers |
-          DKSTModifierMaskForKeyCode(_hanjaShortcutKeyCode);
+        NSUInteger requiredFlags =
+            _hanjaShortcutModifiers |
+            DKSTModifierMaskForKeyCode(_hanjaShortcutKeyCode);
 
-      if (DKSTModifierKeyIsPress(keyCode, flags)) {
-        if (flags == requiredFlags) {
-          _hanjaModifierPending = YES;
-        } else {
+        if (DKSTModifierKeyIsPress(keyCode, flags)) {
+          if (flags == requiredFlags) {
+            _hanjaModifierPending = YES;
+          } else {
+            _hanjaModifierPending = NO;
+          }
+        } else if (_hanjaModifierPending) {
+          // Modifier released without intervening keyDown → trigger
           _hanjaModifierPending = NO;
-        }
-      } else if (_hanjaModifierPending) {
-        // Modifier released without intervening keyDown → trigger
-        _hanjaModifierPending = NO;
-        NSRange conversionRange = NSMakeRange(NSNotFound, 0);
-        NSString *conversionText =
-            [self hangulTextForHanjaConversion:sender range:&conversionRange];
-        if ([self showHanjaCandidatesForText:conversionText
-                            replacementRange:conversionRange
-                                      client:sender]) {
-          return YES;
+          NSRange conversionRange = NSMakeRange(NSNotFound, 0);
+          NSString *conversionText =
+              [self hangulTextForHanjaConversion:sender range:&conversionRange];
+          if ([self showHanjaCandidatesForText:conversionText
+                              replacementRange:conversionRange
+                                        client:sender]) {
+            return YES;
+          }
         }
       }
+      return NO;
     }
-    return NO;
-  }
 
-  // Item 6: KIM pattern - Reset buffer for events other than
-  // KeyDown/FlagsChanged
-  if ([event type] != NSEventTypeKeyDown) {
-    if ([event type] != NSEventTypeFlagsChanged) {
-      [self resetCompositionState];
+    // Item 6: KIM pattern - Reset buffer for events other than
+    // KeyDown/FlagsChanged
+    if ([event type] != NSEventTypeKeyDown) {
+      if ([event type] != NSEventTypeFlagsChanged) {
+        [self resetCompositionState];
+      }
+      return NO;
     }
-    return NO;
-  }
 
-  // Any keyDown clears modifier-only pending state
-  _hanjaModifierPending = NO;
+    // Any keyDown clears modifier-only pending state
+    _hanjaModifierPending = NO;
 
-  [self prepareForInputClient:sender];
+    [self prepareForInputClient:sender];
 
-  // 1. Candidate window navigation
-  BOOL candidatesVisible = [_candidates isVisible];
-  if (candidatesVisible) {
-    if ([self handleCandidateNavigation:keyCode client:sender]) {
+    // 1. Candidate window navigation
+    BOOL candidatesVisible = [_candidates isVisible];
+    if (candidatesVisible) {
+      if ([self handleCandidateNavigation:keyCode client:sender]) {
+        return YES;
+      }
+      // handleCandidateNavigation hides candidates if key wasn't navigation
+      candidatesVisible = NO;
+    }
+
+    NSUInteger modifiers =
+        [event modifierFlags] &
+        (NSEventModifierFlagCommand | NSEventModifierFlagControl |
+         NSEventModifierFlagOption | NSEventModifierFlagShift);
+
+    // 2. Hanja conversion (custom shortcut, default: Option + Return)
+    if ([self handleHanjaConversion:keyCode modifiers:modifiers client:sender]) {
       return YES;
     }
-    // handleCandidateNavigation hides candidates if key wasn't navigation
-    candidatesVisible = NO;
-  }
 
-  NSUInteger modifiers =
-      [event modifierFlags] &
-      (NSEventModifierFlagCommand | NSEventModifierFlagControl |
-       NSEventModifierFlagOption | NSEventModifierFlagShift);
+    // 3. Pass through Command/Ctrl/Option modified keys
+    if ((modifiers & (NSEventModifierFlagCommand | NSEventModifierFlagControl |
+                      NSEventModifierFlagOption)) != 0) {
+      [self commitComposition:sender];
+      return NO;
+    }
 
-  // 2. Hanja conversion (custom shortcut, default: Option + Return)
-  if ([self handleHanjaConversion:keyCode modifiers:modifiers client:sender]) {
-    return YES;
-  }
+    // 4. Tab — commit and pass through
+    if (keyCode == kDKSTKeyCodeTab) {
+      [self commitComposition:sender];
+      return NO;
+    }
 
-  // 3. Pass through Command/Ctrl/Option modified keys
-  if ((modifiers & (NSEventModifierFlagCommand | NSEventModifierFlagControl |
-                    NSEventModifierFlagOption)) != 0) {
-    [self commitComposition:sender];
-    return NO;
-  }
+    // 5. Backspace
+    if (keyCode == kDKSTKeyCodeBackspace) {
+      if ([engine backspace]) {
+        if (!_useMarkedTextForClient) {
+          NSString *composedAfterBackspace = [engine composedString];
+          if ([composedAfterBackspace length] == 0 &&
+              _directInputComposedLength > 0) {
+            _directInputComposedLength = 0;
+            [_directInputComposedText release];
+            _directInputComposedText = nil;
+            _directInputComposedRange = NSMakeRange(NSNotFound, 0);
+            [self clearMarkedReplacementRange];
+            return NO;
+          }
+        }
+        [self updateInlineForClient:sender];
+        return YES;
+      }
+      return NO;
+    }
 
-  // 4. Tab — commit and pass through
-  if (keyCode == kDKSTKeyCodeTab) {
-    [self commitComposition:sender];
-    return NO;
-  }
-
-  // 5. Backspace
-  if (keyCode == kDKSTKeyCodeBackspace) {
-    if ([engine backspace]) {
-      if (!_useMarkedTextForClient) {
-        NSString *composedAfterBackspace = [engine composedString];
-        if ([composedAfterBackspace length] == 0 &&
-            _directInputComposedLength > 0) {
+    // 6. Enter — commit and pass through
+    if (keyCode == kDKSTKeyCodeReturn && !candidatesVisible) {
+      if ([self hasPendingComposition]) {
+        NSString *className = NSStringFromClass([sender class]);
+        if ([className isEqualToString:@"RenderWidgetHostViewCocoa"] ||
+            [className isEqualToString:@"WKContentView"]) {
+          // For Chromium-based (RenderWidgetHostViewCocoa) and WebKit/Wails/Tauri (WKContentView) apps,
+          // the browser's asynchronous text stack natively commits the marked text when it receives
+          // the Return key event. Calling commitComposition: would call insertText:, which causes
+          // a race condition where the text is inserted after JS clears the input field.
+          // Thus, we clean up the IME state and return NO to let the browser commit natively.
+          [engine reset];
           _directInputComposedLength = 0;
           [_directInputComposedText release];
           _directInputComposedText = nil;
           _directInputComposedRange = NSMakeRange(NSNotFound, 0);
           [self clearMarkedReplacementRange];
+          [_markedTextCommittedPrefix setString:@""];
+          [self rememberSelectedRangeForClient:sender];
           return NO;
         }
-      }
-      [self updateInlineForClient:sender];
-      return YES;
-    }
-    return NO;
-  }
 
-  // 6. Enter — commit and pass through
-  if (keyCode == kDKSTKeyCodeReturn && !candidatesVisible) {
-    [self commitComposition:sender];
-    return NO;
-  }
-
-  // 6b. Space — KIM pattern: commit composed text + Space atomically
-  if (keyCode == kDKSTKeyCodeSpace && !candidatesVisible) {
-    if ([self hasPendingComposition]) {
-      NSString *commit = [engine commitString];
-      NSString *composed = [engine composedString];
-      NSMutableString *finalText = [NSMutableString string];
-
-      if ([commit length] > 0) {
-        [finalText appendString:commit];
-      }
-      if ([composed length] > 0) {
-        [finalText appendString:composed];
-      }
-      [finalText appendString:@" "];
-
-      NSRange replacementRange = NSMakeRange(NSNotFound, NSNotFound);
-      if (!_useMarkedTextForClient &&
-          _directInputComposedRange.location != NSNotFound) {
-        replacementRange = [self directInputReplacementRange:sender];
+        [self commitComposition:sender];
       }
 
-      @try {
-        [sender insertText:finalText replacementRange:replacementRange];
-      } @catch (NSException *exception) {
-        DKSTLog(@"Exception inserting Space commit: %@", exception);
-        [sender insertText:finalText
-            replacementRange:NSMakeRange(NSNotFound, NSNotFound)];
-      }
-
-      [engine reset];
-      _directInputComposedLength = 0;
-      [_directInputComposedText release];
-      _directInputComposedText = nil;
-      _directInputComposedRange = NSMakeRange(NSNotFound, 0);
-      [self clearMarkedReplacementRange];
-      [_markedTextCommittedPrefix setString:@""];
-      [self rememberSelectedRangeForClient:sender];
-
-      return YES;
+      return NO;
     }
 
-    return NO;
-  }
+    // 6b. Space — KIM pattern: commit composed text + Space atomically
+    if (keyCode == kDKSTKeyCodeSpace && !candidatesVisible) {
+      if ([self hasPendingComposition]) {
+        _ignoreSelectionChanged = YES;
+        @try {
+          NSString *commit = [engine commitString];
+          NSString *composed = [engine composedString];
+          NSMutableString *finalText = [NSMutableString string];
 
-  // 7. Custom shift mappings
-  if ([self handleCustomShift:keyCode modifiers:modifiers client:sender]) {
-    return YES;
-  }
+          if ([commit length] > 0) {
+            [finalText appendString:commit];
+          }
+          if ([composed length] > 0) {
+            [finalText appendString:composed];
+          }
+          [finalText appendString:@" "];
 
-  // 8. Hangul processing
-  return [self processHangulInput:event
-                          keyCode:keyCode
-                           client:sender
-                candidatesVisible:candidatesVisible];
+          NSRange replacementRange = NSMakeRange(NSNotFound, NSNotFound);
+          if (!_useMarkedTextForClient &&
+              _directInputComposedRange.location != NSNotFound) {
+            replacementRange = [self directInputReplacementRange:sender];
+          }
+
+          @try {
+            [sender insertText:finalText replacementRange:replacementRange];
+          } @catch (NSException *exception) {
+            DKSTLog(@"Exception inserting Space commit: %@", exception);
+            [sender insertText:finalText
+                replacementRange:NSMakeRange(NSNotFound, NSNotFound)];
+          }
+
+          [engine reset];
+          _directInputComposedLength = 0;
+          [_directInputComposedText release];
+          _directInputComposedText = nil;
+          _directInputComposedRange = NSMakeRange(NSNotFound, 0);
+          [self clearMarkedReplacementRange];
+          [_markedTextCommittedPrefix setString:@""];
+          [self rememberSelectedRangeForClient:sender];
+        } @finally {
+          _ignoreSelectionChanged = NO;
+        }
+
+        return YES;
+      }
+
+      return NO;
+    }
+
+    // 7. Custom shift mappings
+    if ([self handleCustomShift:keyCode modifiers:modifiers client:sender]) {
+      return YES;
+    }
+
+    // 8. Hangul processing
+    return [self processHangulInput:event
+                            keyCode:keyCode
+                             client:sender
+                  candidatesVisible:candidatesVisible];
+  } @finally {
+    _ignoreSelectionChanged = NO;
+  }
 }
 
 - (void)commitMarkedText:(NSString *)commit
@@ -1805,154 +1861,169 @@ static IMKCandidates *DKSTSharedCandidates;
     return;
   }
 
-  if (_useMarkedTextForClient) {
-    [_markedTextCommittedPrefix appendString:commit];
-    if ([_markedTextCommittedPrefix length] > 20) {
-      [_markedTextCommittedPrefix
-          deleteCharactersInRange:NSMakeRange(
-                                      0, [_markedTextCommittedPrefix length] -
-                                             20)];
-    }
-  }
-
-  // Item 4: Always use NSNotFound for replacementRange to let IMK handle it
-  // unless a specific replacement range is already set.
-  NSRange replacementRange = NSMakeRange(NSNotFound, NSNotFound);
-  if (_markedReplacementRange.location != NSNotFound) {
-    replacementRange = _markedReplacementRange;
-  }
-
+  _ignoreSelectionChanged = YES;
   @try {
-    [sender insertText:commit replacementRange:replacementRange];
-  } @catch (NSException *exception) {
-    DKSTLog(@"Exception committing marked text: %@", exception);
-    [sender insertText:commit
-        replacementRange:NSMakeRange(NSNotFound, NSNotFound)];
-  }
+    if (_useMarkedTextForClient) {
+      [_markedTextCommittedPrefix appendString:commit];
+      if ([_markedTextCommittedPrefix length] > 20) {
+        [_markedTextCommittedPrefix
+            deleteCharactersInRange:NSMakeRange(
+                                        0, [_markedTextCommittedPrefix length] -
+                                               20)];
+      }
+    }
 
-  [self clearMarkedReplacementRange];
-  [self rememberSelectedRangeForClient:sender];
+    // Item 4: Always use NSNotFound for replacementRange to let IMK handle it
+    // unless a specific replacement range is already set.
+    NSRange replacementRange = NSMakeRange(NSNotFound, NSNotFound);
+    if (_markedReplacementRange.location != NSNotFound) {
+      replacementRange = _markedReplacementRange;
+    }
+
+    @try {
+      [sender insertText:commit replacementRange:replacementRange];
+    } @catch (NSException *exception) {
+      DKSTLog(@"Exception committing marked text: %@", exception);
+      [sender insertText:commit
+          replacementRange:NSMakeRange(NSNotFound, NSNotFound)];
+    }
+
+    [self clearMarkedReplacementRange];
+    [self rememberSelectedRangeForClient:sender];
+  } @finally {
+    _ignoreSelectionChanged = NO;
+  }
 }
 
 - (void)updateComposition:(id)sender {
-  NSString *composed = [engine composedString];
-  if ([composed length] > 0) {
-    NSMutableAttributedString *attrString = [[[NSMutableAttributedString alloc]
-        initWithString:composed] autorelease];
+  _ignoreSelectionChanged = YES;
+  @try {
+    NSString *composed = [engine composedString];
+    if ([composed length] > 0) {
+      NSMutableAttributedString *attrString = [[[NSMutableAttributedString alloc]
+          initWithString:composed] autorelease];
 
-    // Add underline style
-    [attrString addAttribute:NSUnderlineStyleAttributeName
-                       value:[NSNumber numberWithInt:NSUnderlineStyleSingle]
-                       range:NSMakeRange(0, [composed length])];
+      // Add underline style
+      [attrString addAttribute:NSUnderlineStyleAttributeName
+                         value:[NSNumber numberWithInt:NSUnderlineStyleSingle]
+                         range:NSMakeRange(0, [composed length])];
 
-    [sender setMarkedText:attrString
-           selectionRange:NSMakeRange([composed length], 0)
-         replacementRange:_markedReplacementRange];
+      [sender setMarkedText:attrString
+             selectionRange:NSMakeRange([composed length], 0)
+           replacementRange:_markedReplacementRange];
 
-    // Item 3: Check for inline consistency (KIM's inlineInconsistent pattern)
-    @try {
-      if ([sender respondsToSelector:@selector(markedRange)]) {
-        NSRange markedRange = [sender markedRange];
-        if (markedRange.location == NSNotFound || markedRange.length == 0) {
-          DKSTLog(
-              @"Inline inconsistent: markedRange not set after setMarkedText "
-              @"for %@",
-              [self bundleIdentifierForClient:sender]);
+      // Item 3: Check for inline consistency (KIM's inlineInconsistent pattern)
+      @try {
+        if ([sender respondsToSelector:@selector(markedRange)]) {
+          NSRange markedRange = [sender markedRange];
+          if (markedRange.location == NSNotFound || markedRange.length == 0) {
+            DKSTLog(
+                @"Inline inconsistent: markedRange not set after setMarkedText "
+                @"for %@",
+                [self bundleIdentifierForClient:sender]);
+          }
         }
+      } @catch (NSException *exception) {
+        DKSTLog(@"Exception checking inline consistency: %@", exception);
       }
-    } @catch (NSException *exception) {
-      DKSTLog(@"Exception checking inline consistency: %@", exception);
-    }
 
-    [self rememberSelectedRangeForClient:sender];
-  } else {
-    [sender setMarkedText:@""
-           selectionRange:NSMakeRange(0, 0)
-         replacementRange:NSMakeRange(NSNotFound, NSNotFound)];
-    [self clearMarkedReplacementRange];
-    [self rememberSelectedRangeForClient:sender];
+      [self rememberSelectedRangeForClient:sender];
+    } else {
+      [sender setMarkedText:@""
+             selectionRange:NSMakeRange(0, 0)
+           replacementRange:NSMakeRange(NSNotFound, NSNotFound)];
+      [self clearMarkedReplacementRange];
+      [self rememberSelectedRangeForClient:sender];
+    }
+  } @finally {
+    _ignoreSelectionChanged = NO;
   }
 }
 
 - (BOOL)updateDirectComposition:(id)sender {
-  NSString *commit = [engine commitString];
-  NSString *composed = [engine composedString];
-  NSUInteger commitLength = [commit length];
-  NSUInteger composedLength = [composed length];
-  NSMutableString *replacement = [NSMutableString string];
+  _ignoreSelectionChanged = YES;
+  @try {
+    NSString *commit = [engine commitString];
+    NSString *composed = [engine composedString];
+    NSUInteger commitLength = [commit length];
+    NSUInteger composedLength = [composed length];
+    NSMutableString *replacement = [NSMutableString string];
 
-  if (commitLength > 0) {
-    [replacement appendString:commit];
-  }
-  if (composedLength > 0) {
-    [replacement appendString:composed];
-  }
-
-  NSRange replacementRange = [self directInputReplacementRange:sender];
-  NSUInteger replacementStart = replacementRange.location;
-  if (replacementStart == NSNotFound) {
-    @try {
-      NSRange selectedRange = [sender selectedRange];
-      if (selectedRange.location != NSNotFound && selectedRange.length == 0) {
-        replacementStart = selectedRange.location;
-      }
-    } @catch (NSException *exception) {
-      DKSTLog(@"Exception getting insertion location: %@", exception);
+    if (commitLength > 0) {
+      [replacement appendString:commit];
     }
-  }
+    if (composedLength > 0) {
+      [replacement appendString:composed];
+    }
 
-  if ([replacement length] > 0 || replacementRange.location != NSNotFound) {
-    [sender insertText:replacement replacementRange:replacementRange];
-  }
+    NSRange replacementRange = [self directInputReplacementRange:sender];
+    NSUInteger replacementStart = replacementRange.location;
+    if (replacementStart == NSNotFound) {
+      @try {
+        NSRange selectedRange = [sender selectedRange];
+        if (selectedRange.location != NSNotFound && selectedRange.length == 0) {
+          replacementStart = selectedRange.location;
+        }
+      } @catch (NSException *exception) {
+        DKSTLog(@"Exception getting insertion location: %@", exception);
+      }
+    }
 
-  NSUInteger expectedLocation = NSNotFound;
-  if (replacementStart != NSNotFound) {
-    expectedLocation = replacementStart + commitLength + composedLength;
-  }
+    if ([replacement length] > 0 || replacementRange.location != NSNotFound) {
+      [sender insertText:replacement replacementRange:replacementRange];
+    }
 
-  if (expectedLocation != NSNotFound && composedLength > 0 && _directInputComposedLength > 0 &&
-      ![self shouldTrustDirectCompositionRangeForClient:sender]) {
-    @try {
-      NSRange selectedRange = [sender selectedRange];
-      
-      // Allow self-healing or asynchronous lag:
-      // If the cursor is still at the insertion start (expectedLocation - composedLength)
-      // or at the previous selected location, it's just lag!
-      BOOL isLag = (selectedRange.location != NSNotFound &&
-                    (selectedRange.location == expectedLocation - composedLength ||
-                     selectedRange.location == _lastClientSelectedRange.location));
+    NSUInteger expectedLocation = NSNotFound;
+    if (replacementStart != NSNotFound) {
+      expectedLocation = replacementStart + commitLength + composedLength;
+    }
 
-      if (selectedRange.location == NSNotFound ||
-          (selectedRange.location != expectedLocation && !isLag)) {
+    if (expectedLocation != NSNotFound && composedLength > 0 && _directInputComposedLength > 0 &&
+        ![self shouldTrustDirectCompositionRangeForClient:sender]) {
+      @try {
+        NSRange selectedRange = [sender selectedRange];
+        
+        // Allow self-healing or asynchronous lag:
+        // If the cursor is still at the insertion start (expectedLocation - composedLength)
+        // or at the previous selected location, it's just lag!
+        BOOL isLag = (selectedRange.location != NSNotFound &&
+                      (selectedRange.location == expectedLocation - composedLength ||
+                       selectedRange.location == _lastClientSelectedRange.location));
+
+        if (selectedRange.location == NSNotFound ||
+            (selectedRange.location != expectedLocation && !isLag)) {
+          [self forceMarkedTextForClient:sender
+                                  reason:@"direct insert cursor mismatch"];
+          DKSTLog(@"Direct insert mismatch: expected %lu, got %lu (lag allowed: %d)",
+                  (unsigned long)expectedLocation,
+                  (unsigned long)selectedRange.location,
+                  isLag);
+          return NO;
+        }
+      } @catch (NSException *exception) {
+        DKSTLog(@"Exception checking direct insert result: %@", exception);
         [self forceMarkedTextForClient:sender
-                                reason:@"direct insert cursor mismatch"];
-        DKSTLog(@"Direct insert mismatch: expected %lu, got %lu (lag allowed: %d)",
-                (unsigned long)expectedLocation,
-                (unsigned long)selectedRange.location,
-                isLag);
+                                reason:@"direct insert selectedRange exception"];
         return NO;
       }
-    } @catch (NSException *exception) {
-      DKSTLog(@"Exception checking direct insert result: %@", exception);
-      [self forceMarkedTextForClient:sender
-                              reason:@"direct insert selectedRange exception"];
-      return NO;
     }
+
+    [_compositionState updateBufferContents:replacement];
+    [_compositionState noteInsertedTextWithReplacementRange:replacementRange
+                                          insertionLocation:replacementStart
+                                            committedLength:commitLength
+                                             composedLength:composedLength];
+    _directInputComposedLength = composedLength;
+    [_directInputComposedText release];
+    _directInputComposedText = [composed copy];
+    _directInputComposedRange = [_compositionState inlineRange];
+    [self clearMarkedReplacementRange];
+    [self rememberSelectedRangeForClient:sender];
+
+    return YES;
+  } @finally {
+    _ignoreSelectionChanged = NO;
   }
-
-  [_compositionState updateBufferContents:replacement];
-  [_compositionState noteInsertedTextWithReplacementRange:replacementRange
-                                        insertionLocation:replacementStart
-                                          committedLength:commitLength
-                                           composedLength:composedLength];
-  _directInputComposedLength = composedLength;
-  [_directInputComposedText release];
-  _directInputComposedText = [composed copy];
-  _directInputComposedRange = [_compositionState inlineRange];
-  [self clearMarkedReplacementRange];
-  [self rememberSelectedRangeForClient:sender];
-
-  return YES;
 }
 
 - (void)updateInlineForClient:(id)sender {
@@ -1990,7 +2061,7 @@ static IMKCandidates *DKSTSharedCandidates;
   [self updateComposition:sender];
 }
 
-- (void)commitComposition:(id)sender {
+- (void)commitComposition:(id)sender withSuffix:(NSString *)suffix {
   // If Candidate window is visible, we are likely in the middle of choosing a
   // Hanja. Committing now would flush the Hangul and result in double insertion
   // when Hanja is picked.
@@ -1998,7 +2069,64 @@ static IMKCandidates *DKSTSharedCandidates;
     return;
   }
 
-  if (_directInputComposedLength > 0) {
+  _ignoreSelectionChanged = YES;
+  @try {
+    if (_directInputComposedLength > 0) {
+      [engine reset];
+      _directInputComposedLength = 0;
+      [_directInputComposedText release];
+      _directInputComposedText = nil;
+      _directInputComposedRange = NSMakeRange(NSNotFound, 0);
+      [self clearMarkedReplacementRange];
+      [_markedTextCommittedPrefix setString:@""];
+      
+      NSString *insertText = suffix ? suffix : @"";
+      [sender setMarkedText:@""
+             selectionRange:NSMakeRange(0, 0)
+           replacementRange:NSMakeRange(NSNotFound, NSNotFound)];
+      if ([insertText length] > 0) {
+        [sender insertText:insertText replacementRange:NSMakeRange(NSNotFound, NSNotFound)];
+      }
+      [self rememberSelectedRangeForClient:sender];
+      return;
+    }
+
+    // Check if there is anything to commit
+    NSString *commit = [engine commitString]; // This also clears internal buffer
+    NSString *composed = [engine composedString]; // Should be empty after reset
+                                                  // usually, unless engine splits
+
+    // In simple engine, commitString usually consumes all.
+    // If engine has composed string, force commit it.
+    // Wait, SimpleEngine 'commitString' getter clears 'completed'.
+    // 'composedString' comes from _cho/_jung/_jong. We should flush composed to
+    // commit.
+
+    // Hard reset engine to flush
+    // Insert text in correct order: Completed first, then Composed
+    NSString *finalText = @"";
+    if ([commit length] > 0 && [composed length] > 0) {
+      finalText = [commit stringByAppendingString:composed];
+    } else if ([commit length] > 0) {
+      finalText = commit;
+    } else if ([composed length] > 0) {
+      finalText = composed;
+    }
+
+    if (suffix) {
+      finalText = [finalText stringByAppendingString:suffix];
+    }
+
+    if ([finalText length] > 0) {
+      [sender insertText:finalText
+          replacementRange:NSMakeRange(NSNotFound, NSNotFound)];
+    } else {
+      // Only if nothing was inserted, clear marked text explicitly
+      [sender setMarkedText:@""
+             selectionRange:NSMakeRange(0, 0)
+           replacementRange:NSMakeRange(NSNotFound, NSNotFound)];
+    }
+
     [engine reset];
     _directInputComposedLength = 0;
     [_directInputComposedText release];
@@ -2006,53 +2134,14 @@ static IMKCandidates *DKSTSharedCandidates;
     _directInputComposedRange = NSMakeRange(NSNotFound, 0);
     [self clearMarkedReplacementRange];
     [_markedTextCommittedPrefix setString:@""];
-    [sender setMarkedText:@""
-           selectionRange:NSMakeRange(0, 0)
-         replacementRange:NSMakeRange(NSNotFound, NSNotFound)];
     [self rememberSelectedRangeForClient:sender];
-    return;
+  } @finally {
+    _ignoreSelectionChanged = NO;
   }
+}
 
-  // Check if there is anything to commit
-  NSString *commit = [engine commitString]; // This also clears internal buffer
-  NSString *composed = [engine composedString]; // Should be empty after reset
-                                                // usually, unless engine splits
-
-  // In simple engine, commitString usually consumes all.
-  // If engine has composed string, force commit it.
-  // Wait, SimpleEngine 'commitString' getter clears 'completed'.
-  // 'composedString' comes from _cho/_jung/_jong. We should flush composed to
-  // commit.
-
-  // Hard reset engine to flush
-  // Insert text in correct order: Completed first, then Composed
-  NSString *finalText = @"";
-  if ([commit length] > 0 && [composed length] > 0) {
-    finalText = [commit stringByAppendingString:composed];
-  } else if ([commit length] > 0) {
-    finalText = commit;
-  } else if ([composed length] > 0) {
-    finalText = composed;
-  }
-
-  if ([finalText length] > 0) {
-    [sender insertText:finalText
-        replacementRange:NSMakeRange(NSNotFound, NSNotFound)];
-  } else {
-    // Only if nothing was inserted, clear marked text explicitly
-    [sender setMarkedText:@""
-           selectionRange:NSMakeRange(0, 0)
-         replacementRange:NSMakeRange(NSNotFound, NSNotFound)];
-  }
-
-  [engine reset];
-  _directInputComposedLength = 0;
-  [_directInputComposedText release];
-  _directInputComposedText = nil;
-  _directInputComposedRange = NSMakeRange(NSNotFound, 0);
-  [self clearMarkedReplacementRange];
-  [_markedTextCommittedPrefix setString:@""];
-  [self rememberSelectedRangeForClient:sender];
+- (void)commitComposition:(id)sender {
+  [self commitComposition:sender withSuffix:nil];
 }
 
 - (void)setValue:(id)value forTag:(long)tag client:(id)sender {
@@ -2178,87 +2267,92 @@ static IMKCandidates *DKSTSharedCandidates;
 }
 
 - (void)commitCandidate:(id)candidate client:(id)sender {
-  NSString *selected = nil;
-  if (candidate && [candidate isKindOfClass:[NSAttributedString class]]) {
-    selected = [candidate string];
-  } else if (candidate && [candidate isKindOfClass:[NSString class]]) {
-    selected = candidate;
-  }
-
-  // Fallback: If no candidate provided or nil, use the first available
-  // candidate
-  if (!selected && _currentHanjaCandidates &&
-      [_currentHanjaCandidates count] > 0) {
-    selected = [_currentHanjaCandidates objectAtIndex:0];
-  }
-
-  // Debug log
-  DKSTLog(@"commitCandidate selected='%@'", selected);
-
-  if (selected) {
-    NSString *hanja = [[selected componentsSeparatedByString:@" "] firstObject];
-    if (hanja && [hanja length] > 0) {
-      NSRange replacementRange;
-
-      // Check if we're replacing selected text or composed text
-      if (_selectedTextRange.location != NSNotFound &&
-          _selectedTextRange.length > 0) {
-        // Replacing selected text
-        replacementRange = _selectedTextRange;
-        DKSTLog(@"Replacing selected text at range: location=%lu, length=%lu",
-                (unsigned long)replacementRange.location,
-                (unsigned long)replacementRange.length);
-      } else {
-        replacementRange = [self compositionReplacementRange:sender];
-        DKSTLog(@"Replacing composition text: location=%lu, length=%lu",
-                (unsigned long)replacementRange.location,
-                (unsigned long)replacementRange.length);
-      }
-
-      // Insert Hanja, replacing the text
-      if (_hanjaReplacementUsesMarkedPrefix && _hanjaMarkedPrefixLength > 0) {
-        @try {
-          [sender setMarkedText:@""
-                 selectionRange:NSMakeRange(0, 0)
-               replacementRange:NSMakeRange(NSNotFound, NSNotFound)];
-          NSRange selectedRange = [sender selectedRange];
-          if (selectedRange.location != NSNotFound &&
-              selectedRange.location >= _hanjaMarkedPrefixLength) {
-            replacementRange =
-                NSMakeRange(selectedRange.location - _hanjaMarkedPrefixLength,
-                            _hanjaMarkedPrefixLength);
-          }
-        } @catch (NSException *exception) {
-          DKSTLog(@"Exception preparing marked-prefix Hanja replacement: %@",
-                  exception);
-        }
-      }
-      [sender insertText:hanja replacementRange:replacementRange];
-      [engine reset];
-      _directInputComposedLength = 0;
-      [_directInputComposedText release];
-      _directInputComposedText = nil;
-      _directInputComposedRange = NSMakeRange(NSNotFound, 0);
-      [self clearMarkedReplacementRange];
-    } else {
-      DKSTLog(@"Failed to extract hanja from '%@'", selected);
+  _ignoreSelectionChanged = YES;
+  @try {
+    NSString *selected = nil;
+    if (candidate && [candidate isKindOfClass:[NSAttributedString class]]) {
+      selected = [candidate string];
+    } else if (candidate && [candidate isKindOfClass:[NSString class]]) {
+      selected = candidate;
     }
-  } else {
-    DKSTLog(@"No candidate selected to commit");
-  }
 
-  // Reset selected range
-  _selectedTextRange = NSMakeRange(NSNotFound, 0);
-  [self clearMarkedReplacementRange];
-  [_markedTextCommittedPrefix setString:@""];
-  _hanjaMarkedPrefixLength = 0;
-  _hanjaReplacementUsesMarkedPrefix = NO;
-  _currentHanjaIndex = 0; // Reset index
+    // Fallback: If no candidate provided or nil, use the first available
+    // candidate
+    if (!selected && _currentHanjaCandidates &&
+        [_currentHanjaCandidates count] > 0) {
+      selected = [_currentHanjaCandidates objectAtIndex:0];
+    }
 
-  [_candidates hide];
-  if (_currentHanjaCandidates) {
-    [_currentHanjaCandidates release];
-    _currentHanjaCandidates = nil;
+    // Debug log
+    DKSTLog(@"commitCandidate selected='%@'", selected);
+
+    if (selected) {
+      NSString *hanja = [[selected componentsSeparatedByString:@" "] firstObject];
+      if (hanja && [hanja length] > 0) {
+        NSRange replacementRange;
+
+        // Check if we're replacing selected text or composed text
+        if (_selectedTextRange.location != NSNotFound &&
+            _selectedTextRange.length > 0) {
+          // Replacing selected text
+          replacementRange = _selectedTextRange;
+          DKSTLog(@"Replacing selected text at range: location=%lu, length=%lu",
+                  (unsigned long)replacementRange.location,
+                  (unsigned long)replacementRange.length);
+        } else {
+          replacementRange = [self compositionReplacementRange:sender];
+          DKSTLog(@"Replacing composition text: location=%lu, length=%lu",
+                  (unsigned long)replacementRange.location,
+                  (unsigned long)replacementRange.length);
+        }
+
+        // Insert Hanja, replacing the text
+        if (_hanjaReplacementUsesMarkedPrefix && _hanjaMarkedPrefixLength > 0) {
+          @try {
+            [sender setMarkedText:@""
+                   selectionRange:NSMakeRange(0, 0)
+                 replacementRange:NSMakeRange(NSNotFound, NSNotFound)];
+            NSRange selectedRange = [sender selectedRange];
+            if (selectedRange.location != NSNotFound &&
+                selectedRange.location >= _hanjaMarkedPrefixLength) {
+              replacementRange =
+                  NSMakeRange(selectedRange.location - _hanjaMarkedPrefixLength,
+                              _hanjaMarkedPrefixLength);
+            }
+          } @catch (NSException *exception) {
+            DKSTLog(@"Exception preparing marked-prefix Hanja replacement: %@",
+                    exception);
+          }
+        }
+        [sender insertText:hanja replacementRange:replacementRange];
+        [engine reset];
+        _directInputComposedLength = 0;
+        [_directInputComposedText release];
+        _directInputComposedText = nil;
+        _directInputComposedRange = NSMakeRange(NSNotFound, 0);
+        [self clearMarkedReplacementRange];
+      } else {
+        DKSTLog(@"Failed to extract hanja from '%@'", selected);
+      }
+    } else {
+      DKSTLog(@"No candidate selected to commit");
+    }
+
+    // Reset selected range
+    _selectedTextRange = NSMakeRange(NSNotFound, 0);
+    [self clearMarkedReplacementRange];
+    [_markedTextCommittedPrefix setString:@""];
+    _hanjaMarkedPrefixLength = 0;
+    _hanjaReplacementUsesMarkedPrefix = NO;
+    _currentHanjaIndex = 0; // Reset index
+
+    [_candidates hide];
+    if (_currentHanjaCandidates) {
+      [_currentHanjaCandidates release];
+      _currentHanjaCandidates = nil;
+    }
+  } @finally {
+    _ignoreSelectionChanged = NO;
   }
 }
 
