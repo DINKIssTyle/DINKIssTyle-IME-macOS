@@ -326,9 +326,10 @@ static IMKCandidates *DKSTSharedCandidates;
 
 - (NSString *)bundleIdentifierForClient:(id)sender {
   // IMK clients are XPC proxies, so bundleIdentifier can cross process
-  // boundaries. Cache it for this activation and clear it in activateServer:
-  // to keep the hot key path from paying that IPC cost repeatedly.
-  if ([_lastInputClientBundleID length] > 0) {
+  // boundaries. Cache it for the specific client that supplied it; policy
+  // decisions must not reuse another app's bundle identifier after focus moves.
+  if (sender && _lastBundleIdentifierClient == sender &&
+      [_lastInputClientBundleID length] > 0) {
     return _lastInputClientBundleID;
   }
 
@@ -348,7 +349,7 @@ static IMKCandidates *DKSTSharedCandidates;
 
   [_lastInputClientBundleID release];
   _lastInputClientBundleID = [bundleID copy];
-  _lastBundleIdentifierClient = nil;
+  _lastBundleIdentifierClient = sender;
 
   return bundleID;
 }
@@ -807,12 +808,9 @@ static IMKCandidates *DKSTSharedCandidates;
     [allCandidates addObjectsFromArray:candidates];
   }
 
-  NSString *originalText = text;
-  if ([originalText length] > 10) {
-    originalText =
-        [[originalText substringToIndex:10] stringByAppendingString:@"..."];
-  }
-  [allCandidates addObject:originalText];
+  // Keep the original text as the replacement value. Truncating here corrupts
+  // the committed text when the user chooses the "leave unchanged" candidate.
+  [allCandidates addObject:text];
 
   if (_currentHanjaCandidates) {
     [_currentHanjaCandidates release];
@@ -1087,6 +1085,9 @@ static IMKCandidates *DKSTSharedCandidates;
   BOOL clientChanged = (_lastInputClient && _lastInputClient != sender);
   if (clientChanged) {
     DKSTLog(@"Input client changed; clearing pending composition");
+    [_lastInputClientBundleID release];
+    _lastInputClientBundleID = nil;
+    _lastBundleIdentifierClient = nil;
 
     @try {
       if ([_candidates isVisible]) {
