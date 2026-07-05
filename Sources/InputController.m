@@ -557,6 +557,12 @@ static IMKCandidates *DKSTSharedCandidates;
 }
 
 - (BOOL)directInputRangeIsCurrent:(NSRange)range client:(id)sender {
+  return [self directInputRangeIsCurrent:range client:sender allowSelection:NO];
+}
+
+- (BOOL)directInputRangeIsCurrent:(NSRange)range
+                           client:(id)sender
+                   allowSelection:(BOOL)allowSelection {
   if (!sender || range.location == NSNotFound ||
       range.length != _directInputComposedLength ||
       _directInputComposedLength == 0 ||
@@ -569,7 +575,8 @@ static IMKCandidates *DKSTSharedCandidates;
   }
 
   @try {
-    if ([sender respondsToSelector:@selector(selectedRange)]) {
+    if (!allowSelection &&
+        [sender respondsToSelector:@selector(selectedRange)]) {
       NSRange selectedRange = [sender selectedRange];
       if (selectedRange.location != NSNotFound && selectedRange.length > 0) {
         return NO;
@@ -608,13 +615,25 @@ static IMKCandidates *DKSTSharedCandidates;
 
   @try {
     NSRange selectedRange = [sender selectedRange];
-    if (selectedRange.location != NSNotFound && selectedRange.length == 0 &&
+    if (selectedRange.location != NSNotFound &&
         selectedRange.location >= _directInputComposedLength) {
       NSRange selectedBacktrackRange =
           NSMakeRange(selectedRange.location - _directInputComposedLength,
                       _directInputComposedLength);
+      // When selectedRange.length > 0, it may be an autocomplete suggestion
+      // (e.g. Excel). Allow the backtrack if the text in the range matches
+      // our composed text, using allowSelection:YES to skip the selection
+      // length guard inside directInputRangeIsCurrent.
+      BOOL hasSelection = selectedRange.length > 0;
       if ([self directInputRangeIsCurrent:selectedBacktrackRange
-                                   client:sender]) {
+                                   client:sender
+                           allowSelection:hasSelection]) {
+        if (hasSelection) {
+          // Matches Apple's native IME behavior: NSUnionRange(inlineRange, selectedRange).
+          // Expand the replacement range to cover both the composed text and
+          // the autocomplete selection so the suggestion is properly replaced.
+          return NSUnionRange(selectedBacktrackRange, selectedRange);
+        }
         return selectedBacktrackRange;
       }
     }
@@ -1333,10 +1352,48 @@ static IMKCandidates *DKSTSharedCandidates;
             !NSEqualRanges(selectedRange, _lastClientSelectedRange)) {
           
           if ([self hasPendingComposition]) {
-            DKSTLog(@"Selection changed to %@ (was %@) by user; committing composition",
-                    NSStringFromRange(selectedRange),
-                    NSStringFromRange(_lastClientSelectedRange));
-            [self commitComposition:sender];
+            BOOL isAutocompleteSuggestion = NO;
+            
+            // 1. Check if the selection change matches client's inline autocomplete suggestion
+            @try {
+              if ([sender respondsToSelector:@selector(markedRange)]) {
+                NSRange markedRange = [sender markedRange];
+                if (markedRange.location != NSNotFound && markedRange.length > 0) {
+                  // If the selection range starts exactly at the end of the marked range,
+                  // and length > 0, this represents an inline autocomplete suggestion.
+                  if (selectedRange.location == markedRange.location + markedRange.length &&
+                      selectedRange.length > 0) {
+                    isAutocompleteSuggestion = YES;
+                    DKSTLog(@"selectionChanged: Detected inline autocomplete by markedRange (marked=%@, selection=%@)",
+                            NSStringFromRange(markedRange), NSStringFromRange(selectedRange));
+                  }
+                }
+              }
+            } @catch (NSException *ex) {
+              DKSTLog(@"selectionChanged: Exception checking markedRange: %@", ex);
+            }
+            
+            // 2. Fallback: check if the selection location remains the same but length increases from 0
+            if (!isAutocompleteSuggestion) {
+              if (selectedRange.location == _lastClientSelectedRange.location &&
+                  _lastClientSelectedRange.length == 0 &&
+                  selectedRange.length > 0) {
+                isAutocompleteSuggestion = YES;
+                DKSTLog(@"selectionChanged: Detected inline autocomplete by selection location comparison (selection=%@, last=%@)",
+                        NSStringFromRange(selectedRange), NSStringFromRange(_lastClientSelectedRange));
+              }
+            }
+            
+            if (isAutocompleteSuggestion) {
+              // Save the autocomplete selection to track the current cursor state, but do not commit composition.
+              _lastClientSelectedRange = selectedRange;
+              DKSTLog(@"selectionChanged: Autocomplete suggestion detected; bypassing premature commit");
+            } else {
+              DKSTLog(@"Selection changed to %@ (was %@) by user; committing composition",
+                      NSStringFromRange(selectedRange),
+                      NSStringFromRange(_lastClientSelectedRange));
+              [self commitComposition:sender];
+            }
           } else {
             _lastClientSelectedRange = selectedRange;
           }
