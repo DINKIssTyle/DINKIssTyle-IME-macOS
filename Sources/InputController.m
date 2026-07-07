@@ -1147,6 +1147,25 @@ static IMKCandidates *DKSTSharedCandidates;
             [_directInputComposedText length] == _directInputComposedLength) {
           NSRange backtrackRange = NSMakeRange(selectedRange.location - _directInputComposedLength,
                                                _directInputComposedLength);
+          // If the composed text is still intact at its original position,
+          // the caret has simply moved elsewhere (e.g. a mouse click the
+          // client never reported via selectionChanged). Adopting an
+          // identical-looking character next to the new caret would turn
+          // the next backspace into jamo deletion of unrelated text, so
+          // finish the old composition and start clean at the new caret.
+          if (!NSEqualRanges(backtrackRange, _directInputComposedRange) &&
+              _directInputComposedRange.location != NSNotFound &&
+              [self directInputRangeIsCurrent:_directInputComposedRange
+                                       client:sender
+                               allowSelection:YES]) {
+            DKSTLog(@"Caret moved away from intact composition at %@; "
+                    @"committing instead of adopting %@",
+                    NSStringFromRange(_directInputComposedRange),
+                    NSStringFromRange(backtrackRange));
+            [self commitComposition:sender];
+            return;
+          }
+
           // Inline autocomplete (e.g. Safari address bar) selects its
           // suggestion right after the composed text without notifying
           // selectionChanged. Allow the selection here so the content check
