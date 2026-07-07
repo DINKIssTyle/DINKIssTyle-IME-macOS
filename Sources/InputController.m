@@ -1147,7 +1147,14 @@ static IMKCandidates *DKSTSharedCandidates;
             [_directInputComposedText length] == _directInputComposedLength) {
           NSRange backtrackRange = NSMakeRange(selectedRange.location - _directInputComposedLength,
                                                _directInputComposedLength);
-          if ([self directInputRangeIsCurrent:backtrackRange client:sender]) {
+          // Inline autocomplete (e.g. Safari address bar) selects its
+          // suggestion right after the composed text without notifying
+          // selectionChanged. Allow the selection here so the content check
+          // can still validate the composed text; the replacement range for
+          // the next insert is handled by directInputReplacementRange.
+          if ([self directInputRangeIsCurrent:backtrackRange
+                                       client:sender
+                               allowSelection:selectedRange.length > 0]) {
             _directInputComposedRange = backtrackRange;
             _lastClientSelectedRange = selectedRange;
             DKSTLog(@"Self-healed direct composition range in prepareForInputClient to %@",
