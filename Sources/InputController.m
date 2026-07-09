@@ -5,6 +5,42 @@
 #import <objc/message.h>
 
 @interface InputController ()
+- (NSString *)bundleIdentifierForClient:(id)sender;
+- (void)forceMarkedTextForClient:(id)sender reason:(NSString *)reason;
+- (BOOL)bundleIdentifierMatchesMarkedTextConfiguration:(NSString *)bundleID;
+- (BOOL)bundleIdentifierUsesWebKitTextStack:(NSString *)bundleID;
+- (BOOL)shouldAvoidEagerSyncForClient:(id)sender;
+- (BOOL)shouldTrustDirectCompositionRangeForClient:(id)sender;
+- (BOOL)bundleIdentifierUsesChromiumMarkedTextPolicy:(NSString *)bundleID;
+- (BOOL)applicationBundleUsesChromiumTextStack:(NSURL *)bundleURL;
+- (BOOL)runningApplicationUsesChromiumTextStack:(NSString *)bundleID;
+- (BOOL)directInputRangeIsCurrent:(NSRange)range client:(id)sender;
+- (NSRange)directInputReplacementRange:(id)sender;
+- (NSRange)compositionReplacementRange:(id)sender;
+- (NSString *)textBeforeCursorForClient:(id)sender
+                                  limit:(NSUInteger)limit
+                                  range:(NSRange *)outRange;
+- (NSString *)hangulTextForHanjaConversion:(id)sender
+                                     range:(NSRange *)outRange;
+- (BOOL)showHanjaCandidatesForText:(NSString *)text
+                  replacementRange:(NSRange)replacementRange
+                            client:(id)sender;
+- (BOOL)shouldUseMarkedTextForClient:(id)sender;
+- (void)refreshMarkedTextPolicyForClient:(id)sender;
+- (BOOL)isHangulKeyCode:(unsigned short)keyCode;
+- (void)syncInputClient:(id)sender force:(BOOL)force;
+- (void)resetCompositionState;
+- (BOOL)hasPendingComposition;
+- (void)setMarkedReplacementRange:(NSRange)range;
+- (void)clearMarkedReplacementRange;
+- (void)clearDirectCompositionStatePreservingMarkedRange:(BOOL)preserveMarkedRange;
+- (void)rememberSelectedRangeForClient:(id)sender;
+- (void)prepareForInputClient:(id)sender;
+- (void)reloadUserPreferences;
+- (void)reloadHanjaShortcut;
+- (void)preferencesDidChange:(NSNotification *)notification;
+- (void)dictionaryDidChange:(NSNotification *)notification;
+- (void)hanjaShortcutDidChange:(NSNotification *)notification;
 - (BOOL)handleCandidateNavigation:(unsigned short)keyCode client:(id)sender;
 - (BOOL)handleHanjaConversion:(unsigned short)keyCode
                     modifiers:(NSUInteger)modifiers
@@ -16,6 +52,12 @@
                    keyCode:(unsigned short)keyCode
                     client:(id)sender
          candidatesVisible:(BOOL)candidatesVisible;
+- (void)commitMarkedText:(NSString *)commit client:(id)sender;
+- (void)updateComposition:(id)sender;
+- (BOOL)updateDirectComposition:(id)sender;
+- (void)updateInlineForClient:(id)sender;
+- (void)commitComposition:(id)sender;
+- (void)commitCandidate:(id)candidate client:(id)sender;
 @end
 
 static NSInteger DKSTCandidateIndexForNumberKeyCode(unsigned short keyCode) {
@@ -111,7 +153,6 @@ static IMKCandidates *DKSTSharedCandidates;
     // Default Hanja shortcut: Option + Return
     _hanjaShortcutKeyCode = kDKSTKeyCodeReturn;
     _hanjaShortcutModifiers = NSEventModifierFlagOption;
-    _hanjaShortcutIsCustom = NO;
     _hanjaModifierPending = NO;
 
     [self reloadUserPreferences];
@@ -537,11 +578,7 @@ static IMKCandidates *DKSTSharedCandidates;
 
   DKSTLog(@"Dropping stale direct input range %@",
           NSStringFromRange(_directInputComposedRange));
-  _directInputComposedLength = 0;
-  [_directInputComposedText release];
-  _directInputComposedText = nil;
-  _directInputComposedRange = NSMakeRange(NSNotFound, 0);
-  [self clearMarkedReplacementRange];
+  [self clearDirectCompositionStatePreservingMarkedRange:NO];
   [_compositionState resetTransientRanges];
   return NSMakeRange(NSNotFound, 0);
 }
@@ -827,62 +864,6 @@ static IMKCandidates *DKSTSharedCandidates;
   return DKSTIsHangulANSIKeyCode(keyCode);
 }
 
-- (BOOL)repairFirstMarkedTextLeakForClient:(id)sender
-                                   keyCode:(unsigned short)keyCode
-                                 modifiers:(NSUInteger)modifiers
-                       selectedRangeBefore:(NSRange)selectedRangeBefore {
-  if (!_useMarkedTextForClient || !sender ||
-      _markedReplacementRange.location != NSNotFound ||
-      _directInputComposedLength != 0 ||
-      selectedRangeBefore.location == NSNotFound ||
-      selectedRangeBefore.length != 0) {
-    return NO;
-  }
-
-  NSString *bundleID = [self bundleIdentifierForClient:sender];
-  BOOL isMarkedPolicyTarget =
-      _useMarkedTextForAllApps ||
-      ([bundleID length] > 0 &&
-       ([_forcedMarkedTextBundleIDs containsObject:bundleID] ||
-        [self bundleIdentifierMatchesMarkedTextConfiguration:bundleID] ||
-        [self bundleIdentifierUsesChromiumMarkedTextPolicy:bundleID] ||
-        [self runningApplicationUsesChromiumTextStack:bundleID]));
-  if (!isMarkedPolicyTarget ||
-      [self bundleIdentifierUsesWebKitTextStack:bundleID]) {
-    return NO;
-  }
-
-  NSString *roman = DKSTRomanStringForANSIKeyCode(keyCode, modifiers);
-  if ([roman length] == 0 ||
-      ![sender respondsToSelector:@selector(selectedRange)] ||
-      ![sender respondsToSelector:@selector(attributedSubstringFromRange:)]) {
-    return NO;
-  }
-
-  @try {
-    NSRange selectedRangeAfter = [sender selectedRange];
-    if (selectedRangeAfter.location != selectedRangeBefore.location + 1 ||
-        selectedRangeAfter.length != 0 || selectedRangeAfter.location == 0) {
-      return NO;
-    }
-
-    NSRange leakedRange = NSMakeRange(selectedRangeAfter.location - 1, 1);
-    NSAttributedString *leakedText =
-        [sender attributedSubstringFromRange:leakedRange];
-    if (![[leakedText string] isEqualToString:roman]) {
-      return NO;
-    }
-
-    [self setMarkedReplacementRange:leakedRange];
-    DKSTLog(@"Repairing first marked-text roman leak at %@ for %@",
-            NSStringFromRange(leakedRange), bundleID ?: @"unknown client");
-    return YES;
-  } @catch (NSException *exception) {
-    DKSTLog(@"Exception repairing first marked-text leak: %@", exception);
-    return NO;
-  }
-}
-
 - (void)syncInputClient:(id)sender force:(BOOL)force {
   if (!sender) {
     return;
@@ -908,11 +889,7 @@ static IMKCandidates *DKSTSharedCandidates;
 
 - (void)resetCompositionState {
   [engine reset];
-  _directInputComposedLength = 0;
-  [_directInputComposedText release];
-  _directInputComposedText = nil;
-  _directInputComposedRange = NSMakeRange(NSNotFound, 0);
-  _markedReplacementRange = NSMakeRange(NSNotFound, 0);
+  [self clearDirectCompositionStatePreservingMarkedRange:NO];
   _selectedTextRange = NSMakeRange(NSNotFound, 0);
   _lastClientSelectedRange = NSMakeRange(NSNotFound, 0);
   _currentHanjaIndex = 0;
@@ -939,6 +916,17 @@ static IMKCandidates *DKSTSharedCandidates;
 
 - (void)clearMarkedReplacementRange {
   [self setMarkedReplacementRange:NSMakeRange(NSNotFound, 0)];
+}
+
+- (void)clearDirectCompositionStatePreservingMarkedRange:
+    (BOOL)preserveMarkedRange {
+  _directInputComposedLength = 0;
+  [_directInputComposedText release];
+  _directInputComposedText = nil;
+  _directInputComposedRange = NSMakeRange(NSNotFound, 0);
+  if (!preserveMarkedRange) {
+    [self clearMarkedReplacementRange];
+  }
 }
 
 - (void)rememberSelectedRangeForClient:(id)sender {
@@ -1060,12 +1048,12 @@ static IMKCandidates *DKSTSharedCandidates;
 - (void)reloadUserPreferences {
   NSUserDefaults *defaults = [NSUserDefaults standardUserDefaults];
 
-  _moaJjikiEnabled = [defaults boolForKey:kDKSTEnableMoaJjikiKey];
-  [engine setMoaJjikiEnabled:_moaJjikiEnabled];
+  BOOL moaJjikiEnabled = [defaults boolForKey:kDKSTEnableMoaJjikiKey];
+  [engine setMoaJjikiEnabled:moaJjikiEnabled];
 
-  _fullCharacterDeleteEnabled =
+  BOOL fullCharacterDeleteEnabled =
       [defaults boolForKey:kDKSTFullCharacterDeleteKey];
-  [engine setFullCharacterDelete:_fullCharacterDeleteEnabled];
+  [engine setFullCharacterDelete:fullCharacterDeleteEnabled];
 
   _customShiftEnabled = [defaults boolForKey:kDKSTEnableCustomShiftKey];
   _useMarkedTextForAllApps =
@@ -1124,14 +1112,12 @@ static IMKCandidates *DKSTSharedCandidates;
         (unsigned short)[((__bridge NSNumber *)keyCodeRef) integerValue];
     _hanjaShortcutModifiers =
         (NSUInteger)[((__bridge NSNumber *)modifiersRef) unsignedIntegerValue];
-    _hanjaShortcutIsCustom = YES;
     DKSTLog(@"Loaded custom Hanja shortcut: keyCode=%d modifiers=0x%lx",
             _hanjaShortcutKeyCode, (unsigned long)_hanjaShortcutModifiers);
   } else {
     // Fallback to default: Option + Return
     _hanjaShortcutKeyCode = kDKSTKeyCodeReturn;
     _hanjaShortcutModifiers = NSEventModifierFlagOption;
-    _hanjaShortcutIsCustom = NO;
     DKSTLog(@"Using default Hanja shortcut: Option + Return");
   }
 
@@ -1510,25 +1496,6 @@ static IMKCandidates *DKSTSharedCandidates;
                    keyCode:(unsigned short)keyCode
                     client:(id)sender
          candidatesVisible:(BOOL)candidatesVisible {
-  NSUInteger previousComposedLength = 0;
-  NSRange selectedRangeBefore = NSMakeRange(NSNotFound, 0);
-  if (_useMarkedTextForClient) {
-    previousComposedLength = [[engine composedString] length];
-    // The roman-leak repair only runs when a new marked composition starts.
-    // selectedRange is another IPC call, so skip it while a composition is
-    // already active and the captured range would be ignored anyway.
-    if (previousComposedLength == 0) {
-      @try {
-        if ([sender respondsToSelector:@selector(selectedRange)]) {
-          selectedRangeBefore = [sender selectedRange];
-        }
-      } @catch (NSException *exception) {
-        DKSTLog(@"Exception checking selected range before input: %@",
-                exception);
-      }
-    }
-  }
-
   BOOL processed = [engine processCode:keyCode modifiers:[event modifierFlags]];
 
   if (processed) {
@@ -1539,12 +1506,8 @@ static IMKCandidates *DKSTSharedCandidates;
     if (_useMarkedTextForClient) {
       NSString *commit = [engine commitString];
       if ([commit length] > 0) {
-        [self commitMarkedText:commit
-            previousComposedLength:previousComposedLength
-                            client:sender];
+        [self commitMarkedText:commit client:sender];
       }
-      // REMOVED: repairFirstMarkedTextLeakForClient call (Phase 1 Method 3)
-      // This heuristic was found to cause issues in some applications.
     }
     [self updateInlineForClient:sender];
     return YES;
@@ -1665,11 +1628,7 @@ static IMKCandidates *DKSTSharedCandidates;
         NSString *composedAfterBackspace = [engine composedString];
         if ([composedAfterBackspace length] == 0 &&
             _directInputComposedLength > 0) {
-          _directInputComposedLength = 0;
-          [_directInputComposedText release];
-          _directInputComposedText = nil;
-          _directInputComposedRange = NSMakeRange(NSNotFound, 0);
-          [self clearMarkedReplacementRange];
+          [self clearDirectCompositionStatePreservingMarkedRange:NO];
           return NO;
         }
       }
@@ -1715,11 +1674,7 @@ static IMKCandidates *DKSTSharedCandidates;
       }
 
       [engine reset];
-      _directInputComposedLength = 0;
-      [_directInputComposedText release];
-      _directInputComposedText = nil;
-      _directInputComposedRange = NSMakeRange(NSNotFound, 0);
-      [self clearMarkedReplacementRange];
+      [self clearDirectCompositionStatePreservingMarkedRange:NO];
       [_markedTextCommittedPrefix setString:@""];
       [self rememberSelectedRangeForClient:sender];
 
@@ -1741,9 +1696,7 @@ static IMKCandidates *DKSTSharedCandidates;
                 candidatesVisible:candidatesVisible];
 }
 
-- (void)commitMarkedText:(NSString *)commit
-    previousComposedLength:(NSUInteger)previousComposedLength
-                    client:(id)sender {
+- (void)commitMarkedText:(NSString *)commit client:(id)sender {
   if ([commit length] == 0) {
     return;
   }
@@ -1910,10 +1863,7 @@ static IMKCandidates *DKSTSharedCandidates;
       if (_directInputComposedRange.location != NSNotFound) {
         [self setMarkedReplacementRange:_directInputComposedRange];
       }
-      _directInputComposedLength = 0;
-      [_directInputComposedText release];
-      _directInputComposedText = nil;
-      _directInputComposedRange = NSMakeRange(NSNotFound, 0);
+      [self clearDirectCompositionStatePreservingMarkedRange:YES];
 
       // Re-update using marked text mode immediately
       [self updateComposition:sender];
@@ -1926,10 +1876,7 @@ static IMKCandidates *DKSTSharedCandidates;
       _directInputComposedRange.location != NSNotFound) {
     [self setMarkedReplacementRange:_directInputComposedRange];
   }
-  _directInputComposedLength = 0;
-  [_directInputComposedText release];
-  _directInputComposedText = nil;
-  _directInputComposedRange = NSMakeRange(NSNotFound, 0);
+  [self clearDirectCompositionStatePreservingMarkedRange:YES];
   [self updateComposition:sender];
 }
 
@@ -1943,11 +1890,7 @@ static IMKCandidates *DKSTSharedCandidates;
 
   if (_directInputComposedLength > 0) {
     [engine reset];
-    _directInputComposedLength = 0;
-    [_directInputComposedText release];
-    _directInputComposedText = nil;
-    _directInputComposedRange = NSMakeRange(NSNotFound, 0);
-    [self clearMarkedReplacementRange];
+    [self clearDirectCompositionStatePreservingMarkedRange:NO];
     [_markedTextCommittedPrefix setString:@""];
     [sender setMarkedText:@""
            selectionRange:NSMakeRange(0, 0)
@@ -1989,11 +1932,7 @@ static IMKCandidates *DKSTSharedCandidates;
   }
 
   [engine reset];
-  _directInputComposedLength = 0;
-  [_directInputComposedText release];
-  _directInputComposedText = nil;
-  _directInputComposedRange = NSMakeRange(NSNotFound, 0);
-  [self clearMarkedReplacementRange];
+  [self clearDirectCompositionStatePreservingMarkedRange:NO];
   [_markedTextCommittedPrefix setString:@""];
   [self rememberSelectedRangeForClient:sender];
 }
@@ -2021,7 +1960,9 @@ static IMKCandidates *DKSTSharedCandidates;
     [[NSWorkspace sharedWorkspace]
         openApplicationAtURL:url
                configuration:[NSWorkspaceOpenConfiguration configuration]
-           completionHandler:^(NSRunningApplication *app, NSError *error) {
+           completionHandler:^(NSRunningApplication *unusedApp,
+                               NSError *error) {
+             (void)unusedApp;
              if (error) {
                DKSTLog(@"Failed to launch Settings app: %@", error);
              }
@@ -2035,27 +1976,6 @@ static IMKCandidates *DKSTSharedCandidates;
   [self showPreferences:sender];
 }
 
-- (void)launchDictEditor:(id)sender {
-  NSString *appPath = [[NSBundle mainBundle] pathForResource:@"DKSTDictEditor"
-                                                      ofType:@"app"];
-  if (appPath) {
-    NSURL *appUrl = [NSURL fileURLWithPath:appPath];
-    NSWorkspaceOpenConfiguration *config =
-        [NSWorkspaceOpenConfiguration configuration];
-    [[NSWorkspace sharedWorkspace]
-        openApplicationAtURL:appUrl
-               configuration:config
-           completionHandler:^(NSRunningApplication *_Nullable app,
-                               NSError *_Nullable error) {
-             if (error) {
-               DKSTLog(@"DKST: Failed to launch DictEditor: %@", error);
-             }
-           }];
-  } else {
-    DKSTLog(@"DKST: DKSTDictEditor.app not found in bundle resources.");
-  }
-}
-
 - (NSMenu *)menu {
   NSMenu *menu = [[[NSMenu alloc] initWithTitle:@"DKST"] autorelease];
 
@@ -2066,41 +1986,7 @@ static IMKCandidates *DKSTSharedCandidates;
   [settingsItem setTarget:self];
   [menu addItem:settingsItem];
 
-  /* functionality not yet implemented
-  NSMenuItem *englishItem = [[[NSMenuItem alloc] initWithTitle:@"English"
-  action:@selector(selectInputMode:) keyEquivalent:@""] autorelease];
-  [englishItem setTag:0];
-  if ([currentMode isEqualToString:kDKSTEnglishMode]) {
-      [englishItem setState:NSControlStateValueOn];
-  } else {
-      [englishItem setState:NSControlStateValueOff];
-  }
-  [menu addItem:englishItem];
-
-  NSMenuItem *hangulItem = [[[NSMenuItem alloc] initWithTitle:@"Hangul"
-  action:@selector(selectInputMode:) keyEquivalent:@""] autorelease];
-  [hangulItem setTag:1];
-  if ([currentMode isEqualToString:kDKSTHangulMode]) {
-      [hangulItem setState:NSControlStateValueOn];
-  } else {
-      [hangulItem setState:NSControlStateValueOff];
-  }
-  [menu addItem:hangulItem];
-  */
-
   return menu;
-}
-
-- (void)selectInputMode:(id)sender {
-  NSInteger tag = [sender tag];
-  NSString *newMode = (tag == 0) ? kDKSTEnglishMode : kDKSTHangulMode;
-
-  if (currentMode != newMode) {
-    [currentMode release];
-    currentMode = [newMode retain];
-  }
-
-  [[self client] selectInputMode:newMode];
 }
 
 // Required methods?
@@ -2178,11 +2064,7 @@ static IMKCandidates *DKSTSharedCandidates;
       }
       [sender insertText:hanja replacementRange:replacementRange];
       [engine reset];
-      _directInputComposedLength = 0;
-      [_directInputComposedText release];
-      _directInputComposedText = nil;
-      _directInputComposedRange = NSMakeRange(NSNotFound, 0);
-      [self clearMarkedReplacementRange];
+      [self clearDirectCompositionStatePreservingMarkedRange:NO];
     } else {
       DKSTLog(@"Failed to extract hanja from '%@'", selected);
     }
