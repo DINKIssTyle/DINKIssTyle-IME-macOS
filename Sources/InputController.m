@@ -1,77 +1,8 @@
-#import "InputController.h"
+#import "InputController+Private.h"
 #import "DKSTConstants.h"
 #import "DKSTHanjaDictionary.h"
 #import "DKSTKeyMap.h"
 #import <objc/message.h>
-
-@interface InputController ()
-- (NSString *)bundleIdentifierForClient:(id)sender;
-- (void)forceMarkedTextForClient:(id)sender reason:(NSString *)reason;
-- (BOOL)bundleIdentifierMatchesMarkedTextConfiguration:(NSString *)bundleID;
-- (BOOL)bundleIdentifierUsesWebKitTextStack:(NSString *)bundleID;
-- (BOOL)clientUsesWebKitTextStack:(id)sender;
-- (BOOL)shouldAvoidEagerSyncForClient:(id)sender;
-- (BOOL)shouldTrustDirectCompositionRangeForClient:(id)sender;
-- (BOOL)bundleIdentifierUsesChromiumMarkedTextPolicy:(NSString *)bundleID;
-- (BOOL)applicationBundleUsesChromiumTextStack:(NSURL *)bundleURL;
-- (BOOL)runningApplicationUsesChromiumTextStack:(NSString *)bundleID;
-- (BOOL)directInputRangeIsCurrent:(NSRange)range client:(id)sender;
-- (NSRange)directInputReplacementRange:(id)sender;
-- (NSRange)compositionReplacementRange:(id)sender;
-- (NSString *)textBeforeCursorForClient:(id)sender
-                                  limit:(NSUInteger)limit
-                                  range:(NSRange *)outRange;
-- (NSString *)firstHanjaDictionaryMatchInText:(NSString *)text
-                                   startIndex:(NSUInteger *)outStartIndex;
-- (NSString *)selectedTextForHanjaConversion:(id)sender
-                                       range:(NSRange *)outRange;
-- (NSString *)markedPrefixTextForHanjaConversion:(id)sender
-                                        composed:(NSString *)composed
-                                           range:(NSRange *)outRange;
-- (NSString *)contextTextForHanjaConversion:(id)sender
-                                      range:(NSRange *)outRange;
-- (NSString *)composedTextForHanjaConversion:(NSString *)composed
-                                      client:(id)sender
-                                       range:(NSRange *)outRange;
-- (NSString *)hangulTextForHanjaConversion:(id)sender
-                                     range:(NSRange *)outRange;
-- (BOOL)showHanjaCandidatesForText:(NSString *)text
-                  replacementRange:(NSRange)replacementRange
-                            client:(id)sender;
-- (BOOL)shouldUseMarkedTextForClient:(id)sender;
-- (void)refreshMarkedTextPolicyForClient:(id)sender;
-- (BOOL)isHangulKeyCode:(unsigned short)keyCode;
-- (void)syncInputClient:(id)sender force:(BOOL)force;
-- (void)resetCompositionState;
-- (BOOL)hasPendingComposition;
-- (void)setMarkedReplacementRange:(NSRange)range;
-- (void)clearMarkedReplacementRange;
-- (void)clearDirectCompositionStatePreservingMarkedRange:(BOOL)preserveMarkedRange;
-- (void)rememberSelectedRangeForClient:(id)sender;
-- (void)prepareForInputClient:(id)sender;
-- (void)reloadUserPreferences;
-- (void)reloadHanjaShortcut;
-- (void)preferencesDidChange:(NSNotification *)notification;
-- (void)dictionaryDidChange:(NSNotification *)notification;
-- (void)hanjaShortcutDidChange:(NSNotification *)notification;
-- (BOOL)handleCandidateNavigation:(unsigned short)keyCode client:(id)sender;
-- (BOOL)handleHanjaConversion:(unsigned short)keyCode
-                    modifiers:(NSUInteger)modifiers
-                       client:(id)sender;
-- (BOOL)handleCustomShift:(unsigned short)keyCode
-                modifiers:(NSUInteger)modifiers
-                   client:(id)sender;
-- (BOOL)processHangulInput:(NSEvent *)event
-                   keyCode:(unsigned short)keyCode
-                    client:(id)sender
-         candidatesVisible:(BOOL)candidatesVisible;
-- (void)commitMarkedText:(NSString *)commit client:(id)sender;
-- (void)updateComposition:(id)sender;
-- (BOOL)updateDirectComposition:(id)sender;
-- (void)updateInlineForClient:(id)sender;
-- (void)commitComposition:(id)sender;
-- (void)commitCandidate:(id)candidate client:(id)sender;
-@end
 
 static NSInteger DKSTCandidateIndexForNumberKeyCode(unsigned short keyCode) {
   switch (keyCode) {
@@ -96,10 +27,6 @@ static NSInteger DKSTCandidateIndexForNumberKeyCode(unsigned short keyCode) {
   default:
     return -1;
   }
-}
-
-static BOOL DKSTIsHangulSyllable(unichar character) {
-  return character >= 0xAC00 && character <= 0xD7A3;
 }
 
 @implementation InputController
@@ -271,241 +198,6 @@ static IMKCandidates *DKSTSharedCandidates;
   [super dealloc];
 }
 
-- (NSString *)bundleIdentifierForClient:(id)sender {
-  // IMK clients are XPC proxies, so bundleIdentifier can cross process
-  // boundaries. Cache it for the specific client that supplied it; policy
-  // decisions must not reuse another app's bundle identifier after focus moves.
-  if (sender && _lastBundleIdentifierClient == sender &&
-      [_lastInputClientBundleID length] > 0) {
-    return _lastInputClientBundleID;
-  }
-
-  NSString *bundleID = nil;
-
-  @try {
-    if (sender && [sender respondsToSelector:@selector(bundleIdentifier)]) {
-      bundleID = [sender bundleIdentifier];
-    }
-    if (!bundleID &&
-        [[self client] respondsToSelector:@selector(bundleIdentifier)]) {
-      bundleID = [[self client] bundleIdentifier];
-    }
-  } @catch (NSException *exception) {
-    DKSTLog(@"Exception getting client bundle id: %@", exception);
-  }
-
-  [_lastInputClientBundleID release];
-  _lastInputClientBundleID = [bundleID copy];
-  _lastBundleIdentifierClient = sender;
-
-  return bundleID;
-}
-
-- (void)forceMarkedTextForClient:(id)sender reason:(NSString *)reason {
-  NSString *bundleID = [self bundleIdentifierForClient:sender];
-  if ([bundleID length] > 0) {
-    [_forcedMarkedTextBundleIDs addObject:bundleID];
-  }
-  _useMarkedTextForClient = YES;
-  DKSTLog(@"Forcing marked text for %@: %@", bundleID ?: @"unknown client",
-          reason);
-}
-
-- (BOOL)bundleIdentifier:(NSString *)bundleID
-          matchesPattern:(NSString *)pattern {
-  if (![bundleID length] || ![pattern length]) {
-    return NO;
-  }
-
-  NSRange wildcardRange = [pattern rangeOfString:@"*"];
-  if (wildcardRange.location == NSNotFound) {
-    return [bundleID isEqualToString:pattern];
-  }
-
-  NSString *prefix = [pattern substringToIndex:wildcardRange.location];
-  NSString *suffix = [pattern substringFromIndex:NSMaxRange(wildcardRange)];
-  return ([prefix length] == 0 || [bundleID hasPrefix:prefix]) &&
-         ([suffix length] == 0 || [bundleID hasSuffix:suffix]) &&
-         [bundleID length] >= [prefix length] + [suffix length];
-}
-
-- (BOOL)bundleIdentifierMatchesMarkedTextConfiguration:(NSString *)bundleID {
-  if (![bundleID length]) {
-    return NO;
-  }
-
-  for (NSString *pattern in _markedTextBundleIDSet) {
-    if (![pattern isKindOfClass:[NSString class]]) {
-      continue;
-    }
-    if ([self bundleIdentifier:bundleID matchesPattern:pattern]) {
-      return YES;
-    }
-  }
-
-  return NO;
-}
-
-- (BOOL)bundleIdentifierUsesWebKitTextStack:(NSString *)bundleID {
-  if (![bundleID length]) {
-    return NO;
-  }
-
-  NSArray *webkitBundlePrefixes =
-      [NSArray arrayWithObjects:@"com.apple.Safari", @"com.apple.WebKit",
-                                @"com.apple.mobilesafari", nil];
-
-  for (NSString *prefix in webkitBundlePrefixes) {
-    if ([bundleID isEqualToString:prefix] ||
-        [bundleID hasPrefix:[prefix stringByAppendingString:@"."]]) {
-      return YES;
-    }
-  }
-
-  return NO;
-}
-
-- (BOOL)clientUsesWebKitTextStack:(id)sender {
-  NSString *bundleID = [self bundleIdentifierForClient:sender];
-  return [self bundleIdentifierUsesWebKitTextStack:bundleID];
-}
-
-- (BOOL)shouldAvoidEagerSyncForClient:(id)sender {
-  return [self clientUsesWebKitTextStack:sender];
-}
-
-- (BOOL)shouldTrustDirectCompositionRangeForClient:(id)sender {
-  return [self clientUsesWebKitTextStack:sender];
-}
-
-- (BOOL)bundleIdentifierUsesChromiumMarkedTextPolicy:(NSString *)bundleID {
-  if (![bundleID length]) {
-    return NO;
-  }
-
-  NSArray *chromiumBundlePrefixes = [NSArray
-      arrayWithObjects:@"org.chromium.Chromium", @"com.google.Chrome",
-                       @"com.google.Chrome.canary", @"com.microsoft.edgemac",
-                       @"com.brave.Browser", @"com.vivaldi.Vivaldi",
-                       @"com.operasoftware.Opera", @"com.naver.Whale",
-                       @"company.thebrowser.Browser", @"ai.perplexity.comet",
-                       @"com.perplexity.Comet", @"com.perplexity.comet",
-                       @"com.openai.atlas", @"com.openai.Atlas",
-                       @"com.openai.chatgpt.atlas", nil];
-
-  for (NSString *prefix in chromiumBundlePrefixes) {
-    if ([bundleID isEqualToString:prefix] ||
-        [bundleID hasPrefix:[prefix stringByAppendingString:@"."]]) {
-      return YES;
-    }
-  }
-
-  return NO;
-}
-
-- (BOOL)applicationBundleUsesChromiumTextStack:(NSURL *)bundleURL {
-  if (!bundleURL) {
-    return NO;
-  }
-
-  NSString *bundlePath = [bundleURL path];
-  if (![bundlePath length]) {
-    return NO;
-  }
-
-  NSNumber *cachedResult = [_chromiumDetectionCache objectForKey:bundlePath];
-  if (cachedResult) {
-    return [cachedResult boolValue];
-  }
-
-  NSString *frameworksPath =
-      [bundlePath stringByAppendingPathComponent:@"Contents/Frameworks"];
-  NSFileManager *fm = [NSFileManager defaultManager];
-  BOOL isDirectory = NO;
-  if (![fm fileExistsAtPath:frameworksPath isDirectory:&isDirectory] ||
-      !isDirectory) {
-    [_chromiumDetectionCache setObject:[NSNumber numberWithBool:NO]
-                                forKey:bundlePath];
-    return NO;
-  }
-
-  NSArray *frameworkNames = [fm contentsOfDirectoryAtPath:frameworksPath
-                                                    error:nil];
-  NSArray *chromiumFrameworkNames =
-      [NSArray arrayWithObjects:@"Electron Framework.framework",
-                                @"Chromium Embedded Framework.framework",
-                                @"Google Chrome Framework.framework",
-                                @"Microsoft Edge Framework.framework",
-                                @"Brave Browser Framework.framework",
-                                @"Vivaldi Framework.framework",
-                                @"Opera Framework.framework", nil];
-
-  for (NSString *frameworkName in frameworkNames) {
-    if ([chromiumFrameworkNames containsObject:frameworkName]) {
-      [_chromiumDetectionCache setObject:[NSNumber numberWithBool:YES]
-                                  forKey:bundlePath];
-      return YES;
-    }
-    if ([frameworkName rangeOfString:@"Chromium"
-                             options:NSCaseInsensitiveSearch]
-                .location != NSNotFound ||
-        [frameworkName rangeOfString:@"Electron"
-                             options:NSCaseInsensitiveSearch]
-                .location != NSNotFound) {
-      [_chromiumDetectionCache setObject:[NSNumber numberWithBool:YES]
-                                  forKey:bundlePath];
-      return YES;
-    }
-  }
-
-  [_chromiumDetectionCache setObject:[NSNumber numberWithBool:NO]
-                              forKey:bundlePath];
-  return NO;
-}
-
-- (BOOL)runningApplicationUsesChromiumTextStack:(NSString *)bundleID {
-  if (![bundleID length]) {
-    return NO;
-  }
-
-  // The fallback Chromium check can enumerate running apps and inspect bundle
-  // frameworks on disk. Cache both YES and NO by bundle ID so first-key policy
-  // detection does not repeatedly block the input path.
-  NSString *cacheKey = [@"bundle:" stringByAppendingString:bundleID];
-  NSNumber *cachedResult = [_chromiumDetectionCache objectForKey:cacheKey];
-  if (cachedResult) {
-    return [cachedResult boolValue];
-  }
-
-  NSArray *runningApps =
-      [NSRunningApplication runningApplicationsWithBundleIdentifier:bundleID];
-  for (NSRunningApplication *app in runningApps) {
-    NSString *appName = [[app localizedName] lowercaseString];
-    NSString *bundleName = [[[[app bundleURL] lastPathComponent]
-        stringByDeletingPathExtension] lowercaseString];
-    if ([appName isEqualToString:@"comet"] ||
-        [bundleName isEqualToString:@"comet"] ||
-        [appName isEqualToString:@"atlas"] ||
-        [bundleName isEqualToString:@"atlas"] ||
-        [appName isEqualToString:@"chatgpt atlas"] ||
-        [bundleName isEqualToString:@"chatgpt atlas"]) {
-      [_chromiumDetectionCache setObject:[NSNumber numberWithBool:YES]
-                                  forKey:cacheKey];
-      return YES;
-    }
-
-    if ([self applicationBundleUsesChromiumTextStack:[app bundleURL]]) {
-      [_chromiumDetectionCache setObject:[NSNumber numberWithBool:YES]
-                                  forKey:cacheKey];
-      return YES;
-    }
-  }
-
-  [_chromiumDetectionCache setObject:[NSNumber numberWithBool:NO]
-                              forKey:cacheKey];
-  return NO;
-}
-
 - (BOOL)directInputRangeIsCurrent:(NSRange)range client:(id)sender {
   return [self directInputRangeIsCurrent:range client:sender allowSelection:NO];
 }
@@ -621,328 +313,6 @@ static IMKCandidates *DKSTSharedCandidates;
     return NSMakeRange(0, [composed length]);
   }
   return NSMakeRange(NSNotFound, 0);
-}
-
-- (NSString *)textBeforeCursorForClient:(id)sender
-                                  limit:(NSUInteger)limit
-                                  range:(NSRange *)outRange {
-  if (outRange) {
-    *outRange = NSMakeRange(NSNotFound, 0);
-  }
-  if (!sender || ![sender respondsToSelector:@selector(selectedRange)] ||
-      ![sender respondsToSelector:@selector(attributedSubstringFromRange:)]) {
-    return nil;
-  }
-
-  @try {
-    NSRange selectedRange = [sender selectedRange];
-    if (selectedRange.location == NSNotFound || selectedRange.length > 0) {
-      return nil;
-    }
-
-    NSUInteger length = MIN(limit, selectedRange.location);
-    if (length == 0) {
-      return nil;
-    }
-
-    NSRange contextRange = NSMakeRange(selectedRange.location - length, length);
-    NSAttributedString *contextAttr =
-        [sender attributedSubstringFromRange:contextRange];
-    NSString *context = [contextAttr string];
-    if ([context length] == 0) {
-      return nil;
-    }
-
-    if (outRange) {
-      *outRange = contextRange;
-    }
-    return context;
-  } @catch (NSException *exception) {
-    DKSTLog(@"textBeforeCursorForClient failed: %@", exception);
-    return nil;
-  }
-}
-
-- (NSString *)firstHanjaDictionaryMatchInText:(NSString *)text
-                                   startIndex:(NSUInteger *)outStartIndex {
-  if (outStartIndex) {
-    *outStartIndex = NSNotFound;
-  }
-
-  for (NSUInteger start = 0; start < [text length]; start++) {
-    NSString *candidateText = [text substringFromIndex:start];
-    NSArray *matches =
-        [[DKSTHanjaDictionary sharedDictionary] hanjaForHangul:candidateText];
-    if ([matches count] > 0) {
-      if (outStartIndex) {
-        *outStartIndex = start;
-      }
-      return candidateText;
-    }
-  }
-
-  return nil;
-}
-
-- (NSString *)selectedTextForHanjaConversion:(id)sender
-                                       range:(NSRange *)outRange {
-  @try {
-    if ([sender respondsToSelector:@selector(selectedRange)] &&
-        [sender respondsToSelector:@selector(attributedSubstringFromRange:)]) {
-      NSRange selectedRange = [sender selectedRange];
-      if (selectedRange.location != NSNotFound && selectedRange.length > 0) {
-        NSAttributedString *selectedAttr =
-            [sender attributedSubstringFromRange:selectedRange];
-        NSString *selectedText = [selectedAttr string];
-        if ([selectedText length] > 0) {
-          if (outRange) {
-            *outRange = selectedRange;
-          }
-          return selectedText;
-        }
-      }
-    }
-  } @catch (NSException *exception) {
-    DKSTLog(@"selected text Hanja target lookup failed: %@", exception);
-  }
-
-  return nil;
-}
-
-- (NSString *)markedPrefixTextForHanjaConversion:(id)sender
-                                        composed:(NSString *)composed
-                                           range:(NSRange *)outRange {
-  if (!_useMarkedTextForClient || [composed length] == 0 ||
-      [_markedTextCommittedPrefix length] == 0) {
-    return nil;
-  }
-
-  NSString *markedText =
-      [_markedTextCommittedPrefix stringByAppendingString:composed];
-  NSString *candidateText =
-      [self firstHanjaDictionaryMatchInText:markedText startIndex:NULL];
-  if (![candidateText length]) {
-    return nil;
-  }
-
-  if (outRange) {
-    NSRange compositionRange = [self compositionReplacementRange:sender];
-    *outRange = NSMakeRange(compositionRange.location, [candidateText length]);
-  }
-  _hanjaMarkedPrefixLength =
-      [candidateText length] > [composed length]
-          ? [candidateText length] - [composed length]
-          : 0;
-  _hanjaReplacementUsesMarkedPrefix = (_hanjaMarkedPrefixLength > 0);
-  return candidateText;
-}
-
-- (NSString *)contextTextForHanjaConversion:(id)sender
-                                      range:(NSRange *)outRange {
-  NSRange contextRange = NSMakeRange(NSNotFound, 0);
-  NSString *context = [self textBeforeCursorForClient:sender
-                                                limit:20
-                                                range:&contextRange];
-  if ([context length] == 0) {
-    return nil;
-  }
-
-  NSUInteger suffixStart = [context length];
-  while (suffixStart > 0) {
-    unichar c = [context characterAtIndex:suffixStart - 1];
-    if (!DKSTIsHangulSyllable(c)) {
-      break;
-    }
-    suffixStart--;
-  }
-
-  NSString *hangulSuffix = [context substringFromIndex:suffixStart];
-  NSUInteger candidateStart = NSNotFound;
-  NSString *candidateText =
-      [self firstHanjaDictionaryMatchInText:hangulSuffix
-                                 startIndex:&candidateStart];
-  if (![candidateText length]) {
-    return nil;
-  }
-
-  if (outRange) {
-    NSRange range =
-        NSMakeRange(contextRange.location + suffixStart + candidateStart,
-                    [candidateText length]);
-    *outRange = range;
-  }
-  return candidateText;
-}
-
-- (NSString *)composedTextForHanjaConversion:(NSString *)composed
-                                      client:(id)sender
-                                       range:(NSRange *)outRange {
-  if ([composed length] == 0) {
-    return nil;
-  }
-
-  if (outRange) {
-    *outRange = [self compositionReplacementRange:sender];
-  }
-  return composed;
-}
-
-- (NSString *)hangulTextForHanjaConversion:(id)sender
-                                     range:(NSRange *)outRange {
-  _hanjaMarkedPrefixLength = 0;
-  _hanjaReplacementUsesMarkedPrefix = NO;
-
-  if (outRange) {
-    *outRange = NSMakeRange(NSNotFound, 0);
-  }
-
-  NSString *selectedText =
-      [self selectedTextForHanjaConversion:sender range:outRange];
-  if ([selectedText length] > 0) {
-    return selectedText;
-  }
-
-  NSString *composed = [engine composedString];
-  NSString *markedPrefixText =
-      [self markedPrefixTextForHanjaConversion:sender
-                                      composed:composed
-                                         range:outRange];
-  if ([markedPrefixText length] > 0) {
-    return markedPrefixText;
-  }
-
-  NSString *contextText =
-      [self contextTextForHanjaConversion:sender range:outRange];
-  if ([contextText length] > 0) {
-    return contextText;
-  }
-
-  return [self composedTextForHanjaConversion:composed
-                                       client:sender
-                                        range:outRange];
-}
-
-- (BOOL)showHanjaCandidatesForText:(NSString *)text
-                  replacementRange:(NSRange)replacementRange
-                            client:(id)sender {
-  if ([text length] == 0 || replacementRange.location == NSNotFound ||
-      replacementRange.length == 0) {
-    return NO;
-  }
-
-  NSArray *candidates =
-      [[DKSTHanjaDictionary sharedDictionary] hanjaForHangul:text];
-
-  NSMutableArray *allCandidates = [NSMutableArray array];
-  if ([candidates count] > 0) {
-    [allCandidates addObjectsFromArray:candidates];
-  }
-
-  // Keep the original text as the replacement value. Truncating here corrupts
-  // the committed text when the user chooses the "leave unchanged" candidate.
-  [allCandidates addObject:text];
-
-  if (_currentHanjaCandidates) {
-    [_currentHanjaCandidates release];
-  }
-  _currentHanjaCandidates = [allCandidates retain];
-  _selectedTextRange = replacementRange;
-  [self setMarkedReplacementRange:replacementRange];
-
-  DKSTLog(@"Candidates for '%@': count=%lu range=(%lu,%lu)", text,
-          (unsigned long)[allCandidates count],
-          (unsigned long)replacementRange.location,
-          (unsigned long)replacementRange.length);
-
-  [_candidates updateCandidates];
-  [_candidates show:kIMKLocateCandidatesBelowHint];
-
-  _currentHanjaIndex = 0;
-  NSInteger firstId = [_candidates candidateIdentifierAtLineNumber:0];
-  if (firstId != NSNotFound) {
-    [_candidates selectCandidateWithIdentifier:firstId];
-  }
-  return YES;
-}
-
-- (BOOL)shouldUseMarkedTextForClient:(id)sender {
-  if (_useMarkedTextForAllApps) {
-    return YES;
-  }
-
-  // 1. Apple Private API: Query showsComposingTextAsMarkedText
-  // This is the most reliable way to detect if a client needs marked text.
-  // KIM_Extension uses textDocument proxy for this query.
-  SEL textDocSel = NSSelectorFromString(@"textDocument");
-  id textDocument = nil;
-  if ([self respondsToSelector:textDocSel]) {
-#pragma clang diagnostic push
-#pragma clang diagnostic ignored "-Warc-performSelector-leaks"
-    textDocument = [self performSelector:textDocSel];
-#pragma clang diagnostic pop
-  }
-
-  SEL showsComposingTextSel =
-      NSSelectorFromString(@"showsComposingTextAsMarkedText");
-
-  // Check textDocument proxy first (standard IMK behavior)
-  if (textDocument && [textDocument respondsToSelector:showsComposingTextSel]) {
-    BOOL showsMarked = ((BOOL (*)(
-        id, SEL))[textDocument methodForSelector:showsComposingTextSel])(
-        textDocument, showsComposingTextSel);
-    return showsMarked;
-  }
-
-  // Fallback: Check sender directly (some apps might implement it)
-  if ([sender respondsToSelector:showsComposingTextSel]) {
-    BOOL showsMarked =
-        ((BOOL (*)(id, SEL))[sender methodForSelector:showsComposingTextSel])(
-            sender, showsComposingTextSel);
-    return showsMarked;
-  }
-
-  NSString *bundleID = [self bundleIdentifierForClient:sender];
-
-  if (![bundleID length]) {
-    return YES;
-  }
-
-  if ([_forcedMarkedTextBundleIDs containsObject:bundleID]) {
-    return YES;
-  }
-
-  if ([self bundleIdentifierUsesWebKitTextStack:bundleID]) {
-    return NO;
-  }
-
-  if ([self bundleIdentifierMatchesMarkedTextConfiguration:bundleID]) {
-    return YES;
-  }
-
-  if ([self bundleIdentifierUsesChromiumMarkedTextPolicy:bundleID] ||
-      [self runningApplicationUsesChromiumTextStack:bundleID]) {
-    return YES;
-  }
-
-  @try {
-    if (![sender respondsToSelector:@selector(selectedRange)]) {
-      return YES;
-    }
-    NSRange selectedRange = [sender selectedRange];
-    if (selectedRange.location == NSNotFound) {
-      return YES;
-    }
-  } @catch (NSException *exception) {
-    DKSTLog(@"Exception checking selected range for direct input: %@",
-            exception);
-    return YES;
-  }
-
-  return NO;
-}
-
-- (void)refreshMarkedTextPolicyForClient:(id)sender {
-  _useMarkedTextForClient = [self shouldUseMarkedTextForClient:sender];
 }
 
 - (BOOL)isHangulKeyCode:(unsigned short)keyCode {
@@ -1307,10 +677,10 @@ static IMKCandidates *DKSTSharedCandidates;
       if (selectedRange.location != NSNotFound) {
         if (_lastClientSelectedRange.location != NSNotFound &&
             !NSEqualRanges(selectedRange, _lastClientSelectedRange)) {
-          
+
           if ([self hasPendingComposition]) {
             BOOL isAutocompleteSuggestion = NO;
-            
+
             // 1. Check if the selection change matches client's inline autocomplete suggestion
             @try {
               if ([sender respondsToSelector:@selector(markedRange)]) {
@@ -1329,7 +699,7 @@ static IMKCandidates *DKSTSharedCandidates;
             } @catch (NSException *ex) {
               DKSTLog(@"selectionChanged: Exception checking markedRange: %@", ex);
             }
-            
+
             // 2. Fallback: check if the selection location remains the same but length increases from 0
             if (!isAutocompleteSuggestion) {
               if (selectedRange.location == _lastClientSelectedRange.location &&
@@ -1340,7 +710,7 @@ static IMKCandidates *DKSTSharedCandidates;
                         NSStringFromRange(selectedRange), NSStringFromRange(_lastClientSelectedRange));
               }
             }
-            
+
             if (isAutocompleteSuggestion) {
               // Save the autocomplete selection to track the current cursor state, but do not commit composition.
               _lastClientSelectedRange = selectedRange;
@@ -1474,22 +844,6 @@ static IMKCandidates *DKSTSharedCandidates;
   // Character key while candidates open: hide and fall through
   [_candidates hide];
   return NO;
-}
-
-- (BOOL)handleHanjaConversion:(unsigned short)keyCode
-                    modifiers:(NSUInteger)modifiers
-                       client:(id)sender {
-  if (!_hanjaEnabled || keyCode != _hanjaShortcutKeyCode ||
-      modifiers != _hanjaShortcutModifiers) {
-    return NO;
-  }
-
-  NSRange conversionRange = NSMakeRange(NSNotFound, 0);
-  NSString *conversionText =
-      [self hangulTextForHanjaConversion:sender range:&conversionRange];
-  return [self showHanjaCandidatesForText:conversionText
-                         replacementRange:conversionRange
-                                   client:sender];
 }
 
 - (BOOL)handleCustomShift:(unsigned short)keyCode
@@ -1895,7 +1249,7 @@ static IMKCandidates *DKSTSharedCandidates;
       ![self shouldTrustDirectCompositionRangeForClient:sender]) {
     @try {
       NSRange selectedRange = [sender selectedRange];
-      
+
       // Allow self-healing or asynchronous lag:
       // If the cursor is still at the insertion start (expectedLocation - composedLength)
       // or at the previous selected location, it's just lag!
@@ -2037,7 +1391,7 @@ static IMKCandidates *DKSTSharedCandidates;
 }
 
 // Menu handling (Modes)
-- (void)showPreferences:(id)sender {
+- (void)openSettingsApplication {
   NSString *path = [[NSBundle mainBundle] pathForResource:@"DKSTSettings"
                                                    ofType:@"app"];
   if (path) {
@@ -2057,8 +1411,14 @@ static IMKCandidates *DKSTSharedCandidates;
   }
 }
 
+- (void)showPreferences:(id)sender {
+  (void)sender;
+  [self openSettingsApplication];
+}
+
 - (void)showSettings:(id)sender {
-  [self showPreferences:sender];
+  (void)sender;
+  [self openSettingsApplication];
 }
 
 - (NSMenu *)menu {
@@ -2089,104 +1449,6 @@ static IMKCandidates *DKSTSharedCandidates;
     return _currentHanjaCandidates;
   }
   return nil;
-}
-
-- (void)commitCandidate:(id)candidate client:(id)sender {
-  NSString *selected = nil;
-  if (candidate && [candidate isKindOfClass:[NSAttributedString class]]) {
-    selected = [candidate string];
-  } else if (candidate && [candidate isKindOfClass:[NSString class]]) {
-    selected = candidate;
-  }
-
-  // Fallback: If no candidate provided or nil, use the first available
-  // candidate
-  if (!selected && _currentHanjaCandidates &&
-      [_currentHanjaCandidates count] > 0) {
-    selected = [_currentHanjaCandidates objectAtIndex:0];
-  }
-
-  // Debug log
-  DKSTLog(@"commitCandidate selected='%@'", selected);
-
-  if (selected) {
-    NSString *hanja = [[selected componentsSeparatedByString:@" "] firstObject];
-    if (hanja && [hanja length] > 0) {
-      NSRange replacementRange;
-
-      // Check if we're replacing selected text or composed text
-      if (_selectedTextRange.location != NSNotFound &&
-          _selectedTextRange.length > 0) {
-        // Replacing selected text
-        replacementRange = _selectedTextRange;
-        DKSTLog(@"Replacing selected text at range: location=%lu, length=%lu",
-                (unsigned long)replacementRange.location,
-                (unsigned long)replacementRange.length);
-      } else {
-        replacementRange = [self compositionReplacementRange:sender];
-        DKSTLog(@"Replacing composition text: location=%lu, length=%lu",
-                (unsigned long)replacementRange.location,
-                (unsigned long)replacementRange.length);
-      }
-
-      // Insert Hanja, replacing the text
-      if (_hanjaReplacementUsesMarkedPrefix && _hanjaMarkedPrefixLength > 0) {
-        @try {
-          [sender setMarkedText:@""
-                 selectionRange:NSMakeRange(0, 0)
-               replacementRange:NSMakeRange(NSNotFound, NSNotFound)];
-          NSRange selectedRange = [sender selectedRange];
-          if (selectedRange.location != NSNotFound &&
-              selectedRange.location >= _hanjaMarkedPrefixLength) {
-            replacementRange =
-                NSMakeRange(selectedRange.location - _hanjaMarkedPrefixLength,
-                            _hanjaMarkedPrefixLength);
-          }
-        } @catch (NSException *exception) {
-          DKSTLog(@"Exception preparing marked-prefix Hanja replacement: %@",
-                  exception);
-        }
-      }
-      [sender insertText:hanja replacementRange:replacementRange];
-      [engine reset];
-      [self clearDirectCompositionStatePreservingMarkedRange:NO];
-    } else {
-      DKSTLog(@"Failed to extract hanja from '%@'", selected);
-    }
-  } else {
-    DKSTLog(@"No candidate selected to commit");
-  }
-
-  // Reset selected range
-  _selectedTextRange = NSMakeRange(NSNotFound, 0);
-  [self clearMarkedReplacementRange];
-  [_markedTextCommittedPrefix setString:@""];
-  _hanjaMarkedPrefixLength = 0;
-  _hanjaReplacementUsesMarkedPrefix = NO;
-  _currentHanjaIndex = 0; // Reset index
-
-  [_candidates hide];
-  if (_currentHanjaCandidates) {
-    [_currentHanjaCandidates release];
-    _currentHanjaCandidates = nil;
-  }
-}
-
-// Candidate Selection Handler
-- (void)candidateSelected:(NSAttributedString *)candidateString {
-  [self commitCandidate:candidateString client:[self client]];
-}
-
-- (void)candidateSelectionChanged:(NSAttributedString *)candidateString {
-  if (candidateString && _currentHanjaCandidates) {
-    NSString *selectedStr = [candidateString string];
-    NSUInteger idx = [_currentHanjaCandidates indexOfObject:selectedStr];
-    if (idx != NSNotFound) {
-      _currentHanjaIndex = idx;
-      DKSTLog(@"candidateSelectionChanged: updated _currentHanjaIndex to %lu for '%@'",
-              (unsigned long)_currentHanjaIndex, selectedStr);
-    }
-  }
 }
 
 @end
