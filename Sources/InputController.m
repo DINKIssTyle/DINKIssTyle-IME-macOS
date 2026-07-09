@@ -9,6 +9,7 @@
 - (void)forceMarkedTextForClient:(id)sender reason:(NSString *)reason;
 - (BOOL)bundleIdentifierMatchesMarkedTextConfiguration:(NSString *)bundleID;
 - (BOOL)bundleIdentifierUsesWebKitTextStack:(NSString *)bundleID;
+- (BOOL)clientUsesWebKitTextStack:(id)sender;
 - (BOOL)shouldAvoidEagerSyncForClient:(id)sender;
 - (BOOL)shouldTrustDirectCompositionRangeForClient:(id)sender;
 - (BOOL)bundleIdentifierUsesChromiumMarkedTextPolicy:(NSString *)bundleID;
@@ -20,6 +21,18 @@
 - (NSString *)textBeforeCursorForClient:(id)sender
                                   limit:(NSUInteger)limit
                                   range:(NSRange *)outRange;
+- (NSString *)firstHanjaDictionaryMatchInText:(NSString *)text
+                                   startIndex:(NSUInteger *)outStartIndex;
+- (NSString *)selectedTextForHanjaConversion:(id)sender
+                                       range:(NSRange *)outRange;
+- (NSString *)markedPrefixTextForHanjaConversion:(id)sender
+                                        composed:(NSString *)composed
+                                           range:(NSRange *)outRange;
+- (NSString *)contextTextForHanjaConversion:(id)sender
+                                      range:(NSRange *)outRange;
+- (NSString *)composedTextForHanjaConversion:(NSString *)composed
+                                      client:(id)sender
+                                       range:(NSRange *)outRange;
 - (NSString *)hangulTextForHanjaConversion:(id)sender
                                      range:(NSRange *)outRange;
 - (BOOL)showHanjaCandidatesForText:(NSString *)text
@@ -83,6 +96,10 @@ static NSInteger DKSTCandidateIndexForNumberKeyCode(unsigned short keyCode) {
   default:
     return -1;
   }
+}
+
+static BOOL DKSTIsHangulSyllable(unichar character) {
+  return character >= 0xAC00 && character <= 0xD7A3;
 }
 
 @implementation InputController
@@ -348,14 +365,17 @@ static IMKCandidates *DKSTSharedCandidates;
   return NO;
 }
 
-- (BOOL)shouldAvoidEagerSyncForClient:(id)sender {
+- (BOOL)clientUsesWebKitTextStack:(id)sender {
   NSString *bundleID = [self bundleIdentifierForClient:sender];
   return [self bundleIdentifierUsesWebKitTextStack:bundleID];
 }
 
+- (BOOL)shouldAvoidEagerSyncForClient:(id)sender {
+  return [self clientUsesWebKitTextStack:sender];
+}
+
 - (BOOL)shouldTrustDirectCompositionRangeForClient:(id)sender {
-  NSString *bundleID = [self bundleIdentifierForClient:sender];
-  return [self bundleIdentifierUsesWebKitTextStack:bundleID];
+  return [self clientUsesWebKitTextStack:sender];
 }
 
 - (BOOL)bundleIdentifierUsesChromiumMarkedTextPolicy:(NSString *)bundleID {
@@ -643,15 +663,29 @@ static IMKCandidates *DKSTSharedCandidates;
   }
 }
 
-- (NSString *)hangulTextForHanjaConversion:(id)sender
-                                     range:(NSRange *)outRange {
-  _hanjaMarkedPrefixLength = 0;
-  _hanjaReplacementUsesMarkedPrefix = NO;
-
-  if (outRange) {
-    *outRange = NSMakeRange(NSNotFound, 0);
+- (NSString *)firstHanjaDictionaryMatchInText:(NSString *)text
+                                   startIndex:(NSUInteger *)outStartIndex {
+  if (outStartIndex) {
+    *outStartIndex = NSNotFound;
   }
 
+  for (NSUInteger start = 0; start < [text length]; start++) {
+    NSString *candidateText = [text substringFromIndex:start];
+    NSArray *matches =
+        [[DKSTHanjaDictionary sharedDictionary] hanjaForHangul:candidateText];
+    if ([matches count] > 0) {
+      if (outStartIndex) {
+        *outStartIndex = start;
+      }
+      return candidateText;
+    }
+  }
+
+  return nil;
+}
+
+- (NSString *)selectedTextForHanjaConversion:(id)sender
+                                       range:(NSRange *)outRange {
   @try {
     if ([sender respondsToSelector:@selector(selectedRange)] &&
         [sender respondsToSelector:@selector(attributedSubstringFromRange:)]) {
@@ -672,69 +706,120 @@ static IMKCandidates *DKSTSharedCandidates;
     DKSTLog(@"selected text Hanja target lookup failed: %@", exception);
   }
 
-  NSString *composed = [engine composedString];
-  if (_useMarkedTextForClient && [composed length] > 0 &&
-      [_markedTextCommittedPrefix length] > 0) {
-    NSString *markedText =
-        [_markedTextCommittedPrefix stringByAppendingString:composed];
-    for (NSUInteger start = 0; start < [markedText length]; start++) {
-      NSString *candidateText = [markedText substringFromIndex:start];
-      NSArray *matches =
-          [[DKSTHanjaDictionary sharedDictionary] hanjaForHangul:candidateText];
-      if ([matches count] > 0) {
-        if (outRange) {
-          NSRange compositionRange = [self compositionReplacementRange:sender];
-          *outRange =
-              NSMakeRange(compositionRange.location, [candidateText length]);
-        }
-        _hanjaMarkedPrefixLength =
-            [candidateText length] > [composed length]
-                ? [candidateText length] - [composed length]
-                : 0;
-        _hanjaReplacementUsesMarkedPrefix = (_hanjaMarkedPrefixLength > 0);
-        return candidateText;
-      }
-    }
+  return nil;
+}
+
+- (NSString *)markedPrefixTextForHanjaConversion:(id)sender
+                                        composed:(NSString *)composed
+                                           range:(NSRange *)outRange {
+  if (!_useMarkedTextForClient || [composed length] == 0 ||
+      [_markedTextCommittedPrefix length] == 0) {
+    return nil;
   }
 
+  NSString *markedText =
+      [_markedTextCommittedPrefix stringByAppendingString:composed];
+  NSString *candidateText =
+      [self firstHanjaDictionaryMatchInText:markedText startIndex:NULL];
+  if (![candidateText length]) {
+    return nil;
+  }
+
+  if (outRange) {
+    NSRange compositionRange = [self compositionReplacementRange:sender];
+    *outRange = NSMakeRange(compositionRange.location, [candidateText length]);
+  }
+  _hanjaMarkedPrefixLength =
+      [candidateText length] > [composed length]
+          ? [candidateText length] - [composed length]
+          : 0;
+  _hanjaReplacementUsesMarkedPrefix = (_hanjaMarkedPrefixLength > 0);
+  return candidateText;
+}
+
+- (NSString *)contextTextForHanjaConversion:(id)sender
+                                      range:(NSRange *)outRange {
   NSRange contextRange = NSMakeRange(NSNotFound, 0);
   NSString *context = [self textBeforeCursorForClient:sender
                                                 limit:20
                                                 range:&contextRange];
-  if ([context length] > 0) {
-    NSUInteger suffixStart = [context length];
-    while (suffixStart > 0) {
-      unichar c = [context characterAtIndex:suffixStart - 1];
-      if (c < 0xAC00 || c > 0xD7A3) {
-        break;
-      }
-      suffixStart--;
-    }
-
-    NSString *hangulSuffix = [context substringFromIndex:suffixStart];
-    for (NSUInteger start = 0; start < [hangulSuffix length]; start++) {
-      NSString *candidateText = [hangulSuffix substringFromIndex:start];
-      NSArray *matches =
-          [[DKSTHanjaDictionary sharedDictionary] hanjaForHangul:candidateText];
-      if ([matches count] > 0) {
-        NSRange range = NSMakeRange(contextRange.location + suffixStart + start,
-                                    [candidateText length]);
-        if (outRange) {
-          *outRange = range;
-        }
-        return candidateText;
-      }
-    }
+  if ([context length] == 0) {
+    return nil;
   }
 
-  if ([composed length] > 0) {
-    if (outRange) {
-      *outRange = [self compositionReplacementRange:sender];
+  NSUInteger suffixStart = [context length];
+  while (suffixStart > 0) {
+    unichar c = [context characterAtIndex:suffixStart - 1];
+    if (!DKSTIsHangulSyllable(c)) {
+      break;
     }
-    return composed;
+    suffixStart--;
   }
 
-  return nil;
+  NSString *hangulSuffix = [context substringFromIndex:suffixStart];
+  NSUInteger candidateStart = NSNotFound;
+  NSString *candidateText =
+      [self firstHanjaDictionaryMatchInText:hangulSuffix
+                                 startIndex:&candidateStart];
+  if (![candidateText length]) {
+    return nil;
+  }
+
+  if (outRange) {
+    NSRange range =
+        NSMakeRange(contextRange.location + suffixStart + candidateStart,
+                    [candidateText length]);
+    *outRange = range;
+  }
+  return candidateText;
+}
+
+- (NSString *)composedTextForHanjaConversion:(NSString *)composed
+                                      client:(id)sender
+                                       range:(NSRange *)outRange {
+  if ([composed length] == 0) {
+    return nil;
+  }
+
+  if (outRange) {
+    *outRange = [self compositionReplacementRange:sender];
+  }
+  return composed;
+}
+
+- (NSString *)hangulTextForHanjaConversion:(id)sender
+                                     range:(NSRange *)outRange {
+  _hanjaMarkedPrefixLength = 0;
+  _hanjaReplacementUsesMarkedPrefix = NO;
+
+  if (outRange) {
+    *outRange = NSMakeRange(NSNotFound, 0);
+  }
+
+  NSString *selectedText =
+      [self selectedTextForHanjaConversion:sender range:outRange];
+  if ([selectedText length] > 0) {
+    return selectedText;
+  }
+
+  NSString *composed = [engine composedString];
+  NSString *markedPrefixText =
+      [self markedPrefixTextForHanjaConversion:sender
+                                      composed:composed
+                                         range:outRange];
+  if ([markedPrefixText length] > 0) {
+    return markedPrefixText;
+  }
+
+  NSString *contextText =
+      [self contextTextForHanjaConversion:sender range:outRange];
+  if ([contextText length] > 0) {
+    return contextText;
+  }
+
+  return [self composedTextForHanjaConversion:composed
+                                       client:sender
+                                        range:outRange];
 }
 
 - (BOOL)showHanjaCandidatesForText:(NSString *)text
