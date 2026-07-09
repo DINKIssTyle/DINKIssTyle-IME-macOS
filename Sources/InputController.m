@@ -1,6 +1,7 @@
 #import "InputController.h"
 #import "DKSTConstants.h"
 #import "DKSTHanjaDictionary.h"
+#import "DKSTKeyMap.h"
 #import <objc/message.h>
 
 @interface InputController ()
@@ -42,118 +43,6 @@ static NSInteger DKSTCandidateIndexForNumberKeyCode(unsigned short keyCode) {
   }
 }
 
-static NSString *DKSTRomanStringForHangulKeyCode(unsigned short keyCode,
-                                                 NSUInteger modifiers) {
-  BOOL shift = (modifiers & NSEventModifierFlagShift) != 0;
-  switch (keyCode) {
-  case 0:
-    return shift ? @"A" : @"a";
-  case 1:
-    return shift ? @"S" : @"s";
-  case 2:
-    return shift ? @"D" : @"d";
-  case 3:
-    return shift ? @"F" : @"f";
-  case 4:
-    return shift ? @"H" : @"h";
-  case 5:
-    return shift ? @"G" : @"g";
-  case 6:
-    return shift ? @"Z" : @"z";
-  case 7:
-    return shift ? @"X" : @"x";
-  case 8:
-    return shift ? @"C" : @"c";
-  case 9:
-    return shift ? @"V" : @"v";
-  case 11:
-    return shift ? @"B" : @"b";
-  case 12:
-    return shift ? @"Q" : @"q";
-  case 13:
-    return shift ? @"W" : @"w";
-  case 14:
-    return shift ? @"E" : @"e";
-  case 15:
-    return shift ? @"R" : @"r";
-  case 16:
-    return shift ? @"Y" : @"y";
-  case 17:
-    return shift ? @"T" : @"t";
-  case 31:
-    return shift ? @"O" : @"o";
-  case 32:
-    return shift ? @"U" : @"u";
-  case 34:
-    return shift ? @"I" : @"i";
-  case 35:
-    return shift ? @"P" : @"p";
-  case 37:
-    return shift ? @"L" : @"l";
-  case 38:
-    return shift ? @"J" : @"j";
-  case 40:
-    return shift ? @"K" : @"k";
-  case 45:
-    return shift ? @"N" : @"n";
-  case 46:
-    return shift ? @"M" : @"m";
-  default:
-    return nil;
-  }
-}
-
-// Returns YES if the given keyCode is a modifier key (FlagsChanged only).
-static BOOL DKSTIsModifierKeyCode(unsigned short keyCode) {
-  switch (keyCode) {
-  case 0x3E: // kVK_RightControl
-  case 0x3B: // kVK_Control
-  case 0x3C: // kVK_RightShift
-  case 0x38: // kVK_Shift
-  case 0x3D: // kVK_RightOption
-  case 0x3A: // kVK_Option
-  case 0x36: // kVK_RightCommand
-  case 0x37: // kVK_Command
-    return YES;
-  default:
-    return NO;
-  }
-}
-
-static BOOL DKSTModifierKeyIsPress(unsigned short keyCode, NSUInteger flags) {
-  switch (keyCode) {
-  case 0x3E: case 0x3B:
-    return (flags & NSEventModifierFlagControl) != 0;
-  case 0x3C: case 0x38:
-    return (flags & NSEventModifierFlagShift) != 0;
-  case 0x3D: case 0x3A:
-    return (flags & NSEventModifierFlagOption) != 0;
-  case 0x36: case 0x37:
-    return (flags & NSEventModifierFlagCommand) != 0;
-  default:
-    return NO;
-  }
-}
-
-static NSUInteger DKSTModifierMaskForKeyCode(unsigned short keyCode) {
-  switch (keyCode) {
-  case 0x3B: // Control
-  case 0x3E: // Right Control
-    return NSEventModifierFlagControl;
-  case 0x38: // Shift
-  case 0x3C: // Right Shift
-    return NSEventModifierFlagShift;
-  case 0x3A: // Option
-  case 0x3D: // Right Option
-    return NSEventModifierFlagOption;
-  case 0x37: // Command
-  case 0x36: // Right Command
-    return NSEventModifierFlagCommand;
-  default:
-    return 0;
-  }
-}
-
 @implementation InputController
 
 static IMKCandidates *DKSTSharedCandidates;
@@ -170,9 +59,9 @@ static IMKCandidates *DKSTSharedCandidates;
 
     // Set default preference
     [[NSUserDefaults standardUserDefaults] registerDefaults:@{
-      @"EnableMoaJjiki" : @YES,
-      @"FullCharacterDelete" : @NO,
-      @"EnableCustomShift" : @NO,
+      kDKSTEnableMoaJjikiKey : @YES,
+      kDKSTFullCharacterDeleteKey : @NO,
+      kDKSTEnableCustomShiftKey : @NO,
       kDKSTUseMarkedTextForAllAppsKey : @NO,
       kDKSTUseAppleHanjaDictionaryKey : @YES,
       kDKSTMarkedTextAppBundleIDsKey : DKSTDefaultMarkedTextAppBundleIDs()
@@ -237,7 +126,7 @@ static IMKCandidates *DKSTSharedCandidates;
     [[NSDistributedNotificationCenter defaultCenter]
         addObserver:self
            selector:@selector(dictionaryDidChange:)
-               name:@"DKSTDictionaryDidChangeNotification"
+               name:kDKSTDictionaryDidChangeNotification
              object:nil];
 
     // Listen for Hanja shortcut changes from Preferences app
@@ -935,37 +824,7 @@ static IMKCandidates *DKSTSharedCandidates;
 }
 
 - (BOOL)isHangulKeyCode:(unsigned short)keyCode {
-  switch (keyCode) {
-  case 0:  // a
-  case 1:  // s
-  case 2:  // d
-  case 3:  // f
-  case 4:  // h
-  case 5:  // g
-  case 6:  // z
-  case 7:  // x
-  case 8:  // c
-  case 9:  // v
-  case 11: // b
-  case 12: // q
-  case 13: // w
-  case 14: // e
-  case 15: // r
-  case 16: // y
-  case 17: // t
-  case 31: // o
-  case 32: // u
-  case 34: // i
-  case 35: // p
-  case 37: // l
-  case 38: // j
-  case 40: // k
-  case 45: // n
-  case 46: // m
-    return YES;
-  default:
-    return NO;
-  }
+  return DKSTIsHangulANSIKeyCode(keyCode);
 }
 
 - (BOOL)repairFirstMarkedTextLeakForClient:(id)sender
@@ -993,7 +852,7 @@ static IMKCandidates *DKSTSharedCandidates;
     return NO;
   }
 
-  NSString *roman = DKSTRomanStringForHangulKeyCode(keyCode, modifiers);
+  NSString *roman = DKSTRomanStringForANSIKeyCode(keyCode, modifiers);
   if ([roman length] == 0 ||
       ![sender respondsToSelector:@selector(selectedRange)] ||
       ![sender respondsToSelector:@selector(attributedSubstringFromRange:)]) {
@@ -1201,23 +1060,24 @@ static IMKCandidates *DKSTSharedCandidates;
 - (void)reloadUserPreferences {
   NSUserDefaults *defaults = [NSUserDefaults standardUserDefaults];
 
-  _moaJjikiEnabled = [defaults boolForKey:@"EnableMoaJjiki"];
+  _moaJjikiEnabled = [defaults boolForKey:kDKSTEnableMoaJjikiKey];
   [engine setMoaJjikiEnabled:_moaJjikiEnabled];
 
-  _fullCharacterDeleteEnabled = [defaults boolForKey:@"FullCharacterDelete"];
+  _fullCharacterDeleteEnabled =
+      [defaults boolForKey:kDKSTFullCharacterDeleteKey];
   [engine setFullCharacterDelete:_fullCharacterDeleteEnabled];
 
-  _customShiftEnabled = [defaults boolForKey:@"EnableCustomShift"];
+  _customShiftEnabled = [defaults boolForKey:kDKSTEnableCustomShiftKey];
   _useMarkedTextForAllApps =
       [defaults boolForKey:kDKSTUseMarkedTextForAllAppsKey];
-  if ([defaults objectForKey:@"EnableHanja"] != nil) {
-    _hanjaEnabled = [defaults boolForKey:@"EnableHanja"];
+  if ([defaults objectForKey:kDKSTEnableHanjaKey] != nil) {
+    _hanjaEnabled = [defaults boolForKey:kDKSTEnableHanjaKey];
   } else {
     _hanjaEnabled = YES;
   }
 
   NSDictionary *mappings =
-      [defaults dictionaryForKey:@"DKSTCustomShiftMappings"];
+      [defaults dictionaryForKey:kDKSTCustomShiftMappingsKey];
   if (_customShiftMappings != mappings) {
     [_customShiftMappings release];
     _customShiftMappings = [mappings copy];
@@ -1249,7 +1109,7 @@ static IMKCandidates *DKSTSharedCandidates;
 }
 
 - (void)reloadHanjaShortcut {
-  CFStringRef appID = CFSTR("com.dinkisstyle.inputmethod.DKST");
+  CFStringRef appID = (__bridge CFStringRef)kDKSTBundleID;
 
   // Force re-read from disk (bypass in-memory cache)
   CFPreferencesAppSynchronize(appID);
@@ -1570,61 +1430,61 @@ static IMKCandidates *DKSTSharedCandidates;
 
   NSString *lookupKey = nil;
   switch (keyCode) {
-  case 16:
+  case kDKSTKeyCodeY:
     lookupKey = @"y (ㅛ)";
     break;
-  case 32:
+  case kDKSTKeyCodeU:
     lookupKey = @"u (ㅕ)";
     break;
-  case 34:
+  case kDKSTKeyCodeI:
     lookupKey = @"i (ㅑ)";
     break;
-  case 0:
+  case kDKSTKeyCodeA:
     lookupKey = @"a (ㅁ)";
     break;
-  case 1:
+  case kDKSTKeyCodeS:
     lookupKey = @"s (ㄴ)";
     break;
-  case 2:
+  case kDKSTKeyCodeD:
     lookupKey = @"d (ㅇ)";
     break;
-  case 3:
+  case kDKSTKeyCodeF:
     lookupKey = @"f (ㄹ)";
     break;
-  case 5:
+  case kDKSTKeyCodeG:
     lookupKey = @"g (ㅎ)";
     break;
-  case 4:
+  case kDKSTKeyCodeH:
     lookupKey = @"h (ㅗ)";
     break;
-  case 38:
+  case kDKSTKeyCodeJ:
     lookupKey = @"j (ㅓ)";
     break;
-  case 40:
+  case kDKSTKeyCodeK:
     lookupKey = @"k (ㅏ)";
     break;
-  case 37:
+  case kDKSTKeyCodeL:
     lookupKey = @"l (ㅣ)";
     break;
-  case 6:
+  case kDKSTKeyCodeZ:
     lookupKey = @"z (ㅋ)";
     break;
-  case 7:
+  case kDKSTKeyCodeX:
     lookupKey = @"x (ㅌ)";
     break;
-  case 8:
+  case kDKSTKeyCodeC:
     lookupKey = @"c (ㅊ)";
     break;
-  case 9:
+  case kDKSTKeyCodeV:
     lookupKey = @"v (ㅍ)";
     break;
-  case 11:
+  case kDKSTKeyCodeB:
     lookupKey = @"b (ㅠ)";
     break;
-  case 45:
+  case kDKSTKeyCodeN:
     lookupKey = @"n (ㅜ)";
     break;
-  case 46:
+  case kDKSTKeyCodeM:
     lookupKey = @"m (ㅡ)";
     break;
   default:

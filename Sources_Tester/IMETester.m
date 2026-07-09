@@ -2,6 +2,7 @@
 #import <ApplicationServices/ApplicationServices.h>
 #import <WebKit/WebKit.h>
 #import "../Sources/DKSTHangul.h"
+#import "../Sources/DKSTKeyMap.h"
 
 static NSString *const DKSTIMETesterBundleID =
     @"com.dinkisstyle.inputmethod.DKST.imetester";
@@ -96,37 +97,14 @@ static BOOL DKSTTextContainsRomanOrIsolatedJamo(NSString *text) {
 @implementation DKSTTesterDelegate
 
 static BOOL DKSTKeyCodeForCharacter(unichar character, CGKeyCode *keyCode) {
-  switch (character) {
-  case 'a': *keyCode = 0; return YES;
-  case 's': *keyCode = 1; return YES;
-  case 'd': *keyCode = 2; return YES;
-  case 'f': *keyCode = 3; return YES;
-  case 'h': *keyCode = 4; return YES;
-  case 'g': *keyCode = 5; return YES;
-  case 'z': *keyCode = 6; return YES;
-  case 'x': *keyCode = 7; return YES;
-  case 'c': *keyCode = 8; return YES;
-  case 'v': *keyCode = 9; return YES;
-  case 'b': *keyCode = 11; return YES;
-  case 'q': *keyCode = 12; return YES;
-  case 'w': *keyCode = 13; return YES;
-  case 'e': *keyCode = 14; return YES;
-  case 'r': *keyCode = 15; return YES;
-  case 'y': *keyCode = 16; return YES;
-  case 't': *keyCode = 17; return YES;
-  case 'o': *keyCode = 31; return YES;
-  case 'u': *keyCode = 32; return YES;
-  case 'i': *keyCode = 34; return YES;
-  case 'p': *keyCode = 35; return YES;
-  case 'l': *keyCode = 37; return YES;
-  case 'j': *keyCode = 38; return YES;
-  case 'k': *keyCode = 40; return YES;
-  case 'n': *keyCode = 45; return YES;
-  case 'm': *keyCode = 46; return YES;
-  case ' ': *keyCode = 49; return YES;
-  case '\n': *keyCode = 36; return YES;
-  default: return NO;
+  unsigned short sharedKeyCode = 0;
+  if (!DKSTKeyCodeForTypingCharacter(character, &sharedKeyCode)) {
+    return NO;
   }
+  if (keyCode) {
+    *keyCode = (CGKeyCode)sharedKeyCode;
+  }
+  return YES;
 }
 
 - (void)addItemWithTitle:(NSString *)title

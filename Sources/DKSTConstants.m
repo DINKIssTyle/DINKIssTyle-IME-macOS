@@ -34,6 +34,11 @@ NSString *const kDKSTUseMarkedTextForAllAppsKey =
     @"DKSTUseMarkedTextForAllApps";
 NSString *const kDKSTUseAppleHanjaDictionaryKey =
     @"DKSTUseAppleHanjaDictionary";
+NSString *const kDKSTEnableMoaJjikiKey = @"EnableMoaJjiki";
+NSString *const kDKSTFullCharacterDeleteKey = @"FullCharacterDelete";
+NSString *const kDKSTEnableHanjaKey = @"EnableHanja";
+NSString *const kDKSTEnableCustomShiftKey = @"EnableCustomShift";
+NSString *const kDKSTCustomShiftMappingsKey = @"DKSTCustomShiftMappings";
 
 // Hanja custom shortcut
 NSString *const kDKSTHanjaShortcutKeyCodeKey = @"DKSTHanjaShortcutKeyCode";

@@ -1,4 +1,5 @@
 #import "DKSTHangul.h"
+#import "DKSTKeyMap.h"
 #import <Cocoa/Cocoa.h>
 
 // Unicode Jamo Constants
@@ -305,38 +306,12 @@
 
 - (unichar)asciiFromKeyCode:(NSInteger)code modifiers:(NSUInteger)flags
 {
-    BOOL shift = (flags & NSEventModifierFlagShift) != 0;
-    // Map Mac keycodes to characters
-    if (code == 0) return shift ? 'A' : 'a';
-    if (code == 1) return shift ? 'S' : 's';
-    if (code == 2) return shift ? 'D' : 'd';
-    if (code == 3) return shift ? 'F' : 'f';
-    if (code == 5) return shift ? 'G' : 'g';
-    if (code == 4) return shift ? 'H' : 'h';
-    if (code == 38) return shift ? 'J' : 'j';
-    if (code == 40) return shift ? 'K' : 'k';
-    if (code == 37) return shift ? 'L' : 'l';
-    
-    if (code == 12) return shift ? 'Q' : 'q';
-    if (code == 13) return shift ? 'W' : 'w';
-    if (code == 14) return shift ? 'E' : 'e';
-    if (code == 15) return shift ? 'R' : 'r';
-    if (code == 17) return shift ? 'T' : 't';
-    if (code == 16) return shift ? 'Y' : 'y';
-    if (code == 32) return shift ? 'U' : 'u';
-    if (code == 34) return shift ? 'I' : 'i';
-    if (code == 31) return shift ? 'O' : 'o';
-    if (code == 35) return shift ? 'P' : 'p';
-    
-    if (code == 6) return shift ? 'Z' : 'z';
-    if (code == 7) return shift ? 'X' : 'x';
-    if (code == 8) return shift ? 'C' : 'c';
-    if (code == 9) return shift ? 'V' : 'v';
-    if (code == 11) return shift ? 'B' : 'b';
-    if (code == 45) return shift ? 'N' : 'n';
-    if (code == 46) return shift ? 'M' : 'm';
-    
-    return 0; 
+    unichar character = 0;
+    if (DKSTRomanCharacterForANSIKeyCode((unsigned short)code, flags,
+                                         &character)) {
+        return character;
+    }
+    return 0;
 }
 
 - (unichar)choToJong:(unichar)c {

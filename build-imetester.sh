@@ -11,6 +11,7 @@ clang -mmacosx-version-min=10.15 \
   -framework Cocoa -framework WebKit -framework ApplicationServices \
   -o "$MACOS/IMETester" \
   Sources_Tester/IMETester.m \
+  Sources/DKSTKeyMap.m \
   Sources/DKSTHangul.m
 
 cat > "$CONTENTS/Info.plist" <<EOF

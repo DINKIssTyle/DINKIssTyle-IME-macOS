@@ -8,7 +8,7 @@ static NSUserDefaults *sharedDefaults() {
   static dispatch_once_t onceToken;
   dispatch_once(&onceToken, ^{
     suiteDefaults = [[NSUserDefaults alloc]
-        initWithSuiteName:@"com.dinkisstyle.inputmethod.DKST"];
+        initWithSuiteName:kDKSTBundleID];
   });
   return suiteDefaults;
 }
@@ -30,6 +30,30 @@ static NSString *DKSTAppleScriptDoubleQuotedString(NSString *value) {
 static BOOL DKSTDictionaryEntryIsSeparator(NSDictionary *entry) {
   return [[entry objectForKey:@"separator"] boolValue] ||
          [[entry objectForKey:@"trigger"] isEqualToString:@"###DKST"];
+}
+
+static NSString *DKSTNormalizedDictionaryValues(NSString *values) {
+  if (![values isKindOfClass:[NSString class]]) {
+    return @"";
+  }
+
+  NSString *normalized =
+      [values stringByReplacingOccurrencesOfString:@", " withString:@","];
+  normalized =
+      [normalized stringByReplacingOccurrencesOfString:@" ," withString:@","];
+
+  NSArray *parts = [normalized componentsSeparatedByString:@","];
+  NSMutableArray *unique = [NSMutableArray array];
+  NSMutableSet *seen = [NSMutableSet set];
+  NSCharacterSet *whitespace = [NSCharacterSet whitespaceCharacterSet];
+  for (NSString *part in parts) {
+    NSString *trimmed = [part stringByTrimmingCharactersInSet:whitespace];
+    if ([trimmed length] > 0 && ![seen containsObject:trimmed]) {
+      [seen addObject:trimmed];
+      [unique addObject:trimmed];
+    }
+  }
+  return [unique componentsJoinedByString:@","];
 }
 
 static NSMutableArray *DKSTCopyMarkedTextBundleIDsForSettings(void) {
@@ -214,20 +238,20 @@ static NSDictionary *DKSTIMEInfoPlist() {
 - (void)refreshState {
   NSUserDefaults *defaults = sharedDefaults();
 
-  moaJjikiCheckbox.state = [defaults boolForKey:@"EnableMoaJjiki"]
+  moaJjikiCheckbox.state = [defaults boolForKey:kDKSTEnableMoaJjikiKey]
                                ? NSControlStateValueOn
                                : NSControlStateValueOff;
-  fullDeleteCheckbox.state = [defaults boolForKey:@"FullCharacterDelete"]
+  fullDeleteCheckbox.state = [defaults boolForKey:kDKSTFullCharacterDeleteKey]
                                  ? NSControlStateValueOn
                                  : NSControlStateValueOff;
-  hanjaConversionCheckbox.state = [defaults boolForKey:@"EnableHanja"]
+  hanjaConversionCheckbox.state = [defaults boolForKey:kDKSTEnableHanjaKey]
                                       ? NSControlStateValueOn
                                       : NSControlStateValueOff;
   appleHanjaDictionaryCheckbox.state =
       [defaults boolForKey:kDKSTUseAppleHanjaDictionaryKey]
           ? NSControlStateValueOn
           : NSControlStateValueOff;
-  customShiftCheckbox.state = [defaults boolForKey:@"EnableCustomShift"]
+  customShiftCheckbox.state = [defaults boolForKey:kDKSTEnableCustomShiftKey]
                                   ? NSControlStateValueOn
                                   : NSControlStateValueOff;
   useMarkedTextForAllAppsCheckbox.state =
@@ -239,7 +263,7 @@ static NSDictionary *DKSTIMEInfoPlist() {
 }
 
 - (void)loadHanjaShortcut {
-  CFStringRef appID = CFSTR("com.dinkisstyle.inputmethod.DKST");
+  CFStringRef appID = (__bridge CFStringRef)kDKSTBundleID;
   CFPropertyListRef keyCodeRef = CFPreferencesCopyAppValue(
       (__bridge CFStringRef)kDKSTHanjaShortcutKeyCodeKey, appID);
   CFPropertyListRef modifiersRef = CFPreferencesCopyAppValue(
@@ -260,20 +284,20 @@ static NSDictionary *DKSTIMEInfoPlist() {
 
 - (IBAction)toggleMoaJjiki:(id)sender {
   [sharedDefaults() setBool:(moaJjikiCheckbox.state == NSControlStateValueOn)
-                     forKey:@"EnableMoaJjiki"];
+                     forKey:kDKSTEnableMoaJjikiKey];
   [sharedDefaults() synchronize];
 }
 
 - (IBAction)toggleFullDelete:(id)sender {
   [sharedDefaults() setBool:(fullDeleteCheckbox.state == NSControlStateValueOn)
-                     forKey:@"FullCharacterDelete"];
+                     forKey:kDKSTFullCharacterDeleteKey];
   [sharedDefaults() synchronize];
 }
 
 - (IBAction)toggleHanjaConversion:(id)sender {
   [sharedDefaults()
       setBool:(hanjaConversionCheckbox.state == NSControlStateValueOn)
-       forKey:@"EnableHanja"];
+       forKey:kDKSTEnableHanjaKey];
   [sharedDefaults() synchronize];
 }
 
@@ -286,7 +310,7 @@ static NSDictionary *DKSTIMEInfoPlist() {
 
 - (IBAction)toggleCustomShift:(id)sender {
   [sharedDefaults() setBool:(customShiftCheckbox.state == NSControlStateValueOn)
-                     forKey:@"EnableCustomShift"];
+                     forKey:kDKSTEnableCustomShiftKey];
   [sharedDefaults() synchronize];
 }
 
@@ -300,7 +324,7 @@ static NSDictionary *DKSTIMEInfoPlist() {
 - (void)shortcutRecorder:(DKSTShortcutRecorder *)recorder
         didRecordKeyCode:(unsigned short)keyCode
                modifiers:(NSUInteger)modifiers {
-  CFStringRef appID = CFSTR("com.dinkisstyle.inputmethod.DKST");
+  CFStringRef appID = (__bridge CFStringRef)kDKSTBundleID;
   CFPreferencesSetAppValue((__bridge CFStringRef)kDKSTHanjaShortcutKeyCodeKey,
                            (__bridge CFPropertyListRef) @(keyCode), appID);
   CFPreferencesSetAppValue((__bridge CFStringRef)kDKSTHanjaShortcutModifiersKey,
@@ -315,7 +339,7 @@ static NSDictionary *DKSTIMEInfoPlist() {
 }
 
 - (void)shortcutRecorderDidClear:(DKSTShortcutRecorder *)recorder {
-  CFStringRef appID = CFSTR("com.dinkisstyle.inputmethod.DKST");
+  CFStringRef appID = (__bridge CFStringRef)kDKSTBundleID;
   CFPreferencesSetAppValue((__bridge CFStringRef)kDKSTHanjaShortcutKeyCodeKey,
                            NULL, appID);
   CFPreferencesSetAppValue((__bridge CFStringRef)kDKSTHanjaShortcutModifiersKey,
@@ -395,7 +419,7 @@ static NSDictionary *DKSTIMEInfoPlist() {
 - (void)loadData {
   NSUserDefaults *defaults = sharedDefaults();
 
-  NSDictionary *saved = [defaults dictionaryForKey:@"DKSTCustomShiftMappings"];
+  NSDictionary *saved = [defaults dictionaryForKey:kDKSTCustomShiftMappingsKey];
   if (mappingDict) {
     [mappingDict release];
     mappingDict = nil;
@@ -431,7 +455,8 @@ static NSDictionary *DKSTIMEInfoPlist() {
   if ([tableColumn.identifier isEqualToString:@"Output"]) {
     NSString *key = mappingKeys[row];
     [mappingDict setObject:(NSString *)object forKey:key];
-    [sharedDefaults() setObject:mappingDict forKey:@"DKSTCustomShiftMappings"];
+    [sharedDefaults() setObject:mappingDict
+                         forKey:kDKSTCustomShiftMappingsKey];
     [sharedDefaults() synchronize];
   }
 }
@@ -713,25 +738,7 @@ static NSDictionary *DKSTIMEInfoPlist() {
 
   // Real-time Correction for "values" column
   if ([tableColumn.identifier isEqualToString:@"values"]) {
-    // 1. Normalize comma spacing
-    newValue = [newValue stringByReplacingOccurrencesOfString:@", "
-                                                   withString:@","];
-    newValue = [newValue stringByReplacingOccurrencesOfString:@" ,"
-                                                   withString:@","];
-    // 3. Remove exact duplicate values
-    NSArray *parts = [newValue componentsSeparatedByString:@","];
-    NSMutableArray *unique = [NSMutableArray array];
-    NSMutableSet *seen = [NSMutableSet set];
-    for (NSString *part in parts) {
-      NSString *trimmed =
-          [part stringByTrimmingCharactersInSet:
-              [NSCharacterSet whitespaceCharacterSet]];
-      if ([trimmed length] > 0 && ![seen containsObject:trimmed]) {
-        [seen addObject:trimmed];
-        [unique addObject:trimmed];
-      }
-    }
-    newValue = [unique componentsJoinedByString:@","];
+    newValue = DKSTNormalizedDictionaryValues(newValue);
   }
 
   // Also strip colons from the trigger column
@@ -827,27 +834,7 @@ static NSDictionary *DKSTIMEInfoPlist() {
     NSString *trigger = e[@"trigger"];
     NSString *values = e[@"values"];
 
-    // Normalize spacing before saving
-    NSString *cleanValues = values;
-    cleanValues = [cleanValues stringByReplacingOccurrencesOfString:@", "
-                                                         withString:@","];
-    cleanValues = [cleanValues stringByReplacingOccurrencesOfString:@" ,"
-                                                         withString:@","];
-
-    // Remove exact duplicates
-    NSArray *parts = [cleanValues componentsSeparatedByString:@","];
-    NSMutableArray *unique = [NSMutableArray array];
-    NSMutableSet *seen = [NSMutableSet set];
-    for (NSString *part in parts) {
-      NSString *trimmed = [part
-          stringByTrimmingCharactersInSet:[NSCharacterSet
-                                              whitespaceCharacterSet]];
-      if ([trimmed length] > 0 && ![seen containsObject:trimmed]) {
-        [seen addObject:trimmed];
-        [unique addObject:trimmed];
-      }
-    }
-    cleanValues = [unique componentsJoinedByString:@","];
+    NSString *cleanValues = DKSTNormalizedDictionaryValues(values);
 
     // Also clean trigger
     NSString *cleanTrigger =
@@ -866,7 +853,7 @@ static NSDictionary *DKSTIMEInfoPlist() {
                encoding:NSUTF8StringEncoding
                   error:&error]) {
     [[NSDistributedNotificationCenter defaultCenter]
-        postNotificationName:@"DKSTDictionaryDidChangeNotification"
+        postNotificationName:kDKSTDictionaryDidChangeNotification
                       object:nil
                     userInfo:nil
           deliverImmediately:YES];
@@ -888,7 +875,7 @@ static NSDictionary *DKSTIMEInfoPlist() {
     NSAppleScript *as = [[NSAppleScript alloc] initWithSource:script];
     if ([as executeAndReturnError:nil]) {
       [[NSDistributedNotificationCenter defaultCenter]
-          postNotificationName:@"DKSTDictionaryDidChangeNotification"
+          postNotificationName:kDKSTDictionaryDidChangeNotification
                         object:nil
                       userInfo:nil
             deliverImmediately:YES];

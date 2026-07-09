@@ -1,4 +1,5 @@
 #import "DKSTShortcutRecorder.h"
+#import "DKSTKeyMap.h"
 #import <Carbon/Carbon.h>
 
 // Context Menu key (PC keyboards) — not defined in Carbon headers
@@ -31,54 +32,6 @@ static BOOL DKSTIsStandaloneAllowedKeyCode(unsigned short keyCode) {
             return YES;
         default:
             return NO;
-    }
-}
-
-// Returns YES if the keyCode is a modifier key (generates FlagsChanged, not KeyDown).
-static BOOL DKSTIsModifierKeyCode(unsigned short keyCode) {
-    switch (keyCode) {
-        case kVK_RightControl: // 0x3E
-        case kVK_Control:      // 0x3B
-        case kVK_RightShift:   // 0x3C
-        case kVK_Shift:        // 0x38
-        case kVK_RightOption:  // 0x3D
-        case kVK_Option:       // 0x3A
-        case kVK_RightCommand: // 0x36
-        case kVK_Command:      // 0x37
-            return YES;
-        default:
-            return NO;
-    }
-}
-
-// Returns YES if the modifier key was PRESSED (flag added), NO if released.
-static BOOL DKSTModifierKeyIsPress(unsigned short keyCode, NSUInteger flags) {
-    switch (keyCode) {
-        case kVK_RightControl: case kVK_Control:
-            return (flags & NSEventModifierFlagControl) != 0;
-        case kVK_RightShift: case kVK_Shift:
-            return (flags & NSEventModifierFlagShift) != 0;
-        case kVK_RightOption: case kVK_Option:
-            return (flags & NSEventModifierFlagOption) != 0;
-        case kVK_RightCommand: case kVK_Command:
-            return (flags & NSEventModifierFlagCommand) != 0;
-        default:
-            return NO;
-    }
-}
-
-static NSUInteger DKSTModifierMaskForKeyCode(unsigned short keyCode) {
-    switch (keyCode) {
-        case kVK_RightControl: case kVK_Control:
-            return NSEventModifierFlagControl;
-        case kVK_RightShift: case kVK_Shift:
-            return NSEventModifierFlagShift;
-        case kVK_RightOption: case kVK_Option:
-            return NSEventModifierFlagOption;
-        case kVK_RightCommand: case kVK_Command:
-            return NSEventModifierFlagCommand;
-        default:
-            return 0;
     }
 }
 

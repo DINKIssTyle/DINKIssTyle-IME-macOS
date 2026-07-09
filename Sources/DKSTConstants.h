@@ -27,6 +27,11 @@ extern NSString *const kDKSTQwertyEmulationEnableKey;
 extern NSString *const kDKSTMarkedTextAppBundleIDsKey;
 extern NSString *const kDKSTUseMarkedTextForAllAppsKey;
 extern NSString *const kDKSTUseAppleHanjaDictionaryKey;
+extern NSString *const kDKSTEnableMoaJjikiKey;
+extern NSString *const kDKSTFullCharacterDeleteKey;
+extern NSString *const kDKSTEnableHanjaKey;
+extern NSString *const kDKSTEnableCustomShiftKey;
+extern NSString *const kDKSTCustomShiftMappingsKey;
 
 // Hanja custom shortcut
 extern NSString *const kDKSTHanjaShortcutKeyCodeKey;
@@ -64,6 +69,32 @@ enum {
 
 // Key codes (ANSI keyboard)
 enum {
+  kDKSTKeyCodeA         = 0,
+  kDKSTKeyCodeS         = 1,
+  kDKSTKeyCodeD         = 2,
+  kDKSTKeyCodeF         = 3,
+  kDKSTKeyCodeH         = 4,
+  kDKSTKeyCodeG         = 5,
+  kDKSTKeyCodeZ         = 6,
+  kDKSTKeyCodeX         = 7,
+  kDKSTKeyCodeC         = 8,
+  kDKSTKeyCodeV         = 9,
+  kDKSTKeyCodeB         = 11,
+  kDKSTKeyCodeQ         = 12,
+  kDKSTKeyCodeW         = 13,
+  kDKSTKeyCodeE         = 14,
+  kDKSTKeyCodeR         = 15,
+  kDKSTKeyCodeY         = 16,
+  kDKSTKeyCodeT         = 17,
+  kDKSTKeyCodeO         = 31,
+  kDKSTKeyCodeU         = 32,
+  kDKSTKeyCodeI         = 34,
+  kDKSTKeyCodeP         = 35,
+  kDKSTKeyCodeL         = 37,
+  kDKSTKeyCodeJ         = 38,
+  kDKSTKeyCodeK         = 40,
+  kDKSTKeyCodeN         = 45,
+  kDKSTKeyCodeM         = 46,
   kDKSTKeyCodeReturn    = 36,
   kDKSTKeyCodeTab       = 48,
   kDKSTKeyCodeSpace     = 49,

@@ -115,6 +115,7 @@ clang -arch x86_64 -arch arm64 -mmacosx-version-min=10.15 \
     Sources/DKSTSettingsWindowController.m \
     Sources/DKSTSettingsViewControllers.m \
     Sources/DKSTConstants.m \
+    Sources/DKSTKeyMap.m \
     Sources/DKSTShortcutRecorder.m \
     -framework Cocoa -framework Carbon -I Sources
 
