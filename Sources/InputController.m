@@ -626,12 +626,16 @@ static IMKCandidates *DKSTSharedCandidates;
   [self reloadUserPreferences];
   [self refreshMarkedTextPolicyForClient:sender];
 
-  // Optimize XPC Timeout: Reduce synchronous wait time to prevent IME hangs.
-  // Set to an aggressive 0.03s (30ms) for near-instant responsiveness.
+  // InputMethodKit's client proxy performs synchronous XPC round trips for
+  // operations such as selectedRange and insertText:. Limit those waits so an
+  // unresponsive client cannot stall the input method indefinitely. This is an
+  // internal IMK proxy API, so keep the call capability-checked.
   SEL timeoutSel = NSSelectorFromString(@"setReplyTimeout:");
   if ([sender respondsToSelector:timeoutSel]) {
-    ((void (*)(id, SEL, double))objc_msgSend)(sender, timeoutSel, 0.03);
-    DKSTLog(@"Aggressively optimized client XPC replyTimeout to 0.03s for %@",
+    // 100 ms still bounds a hung client while leaving more headroom than the
+    // previous 30 ms for temporarily busy applications.
+    ((void (*)(id, SEL, double))objc_msgSend)(sender, timeoutSel, 0.1);
+    DKSTLog(@"Set client XPC replyTimeout to 0.1s for %@",
             [self bundleIdentifierForClient:sender]);
   }
 
@@ -806,7 +810,7 @@ static IMKCandidates *DKSTSharedCandidates;
   }
 
   if (keyCode == kDKSTKeyCodeEscape) {
-    [_candidates hide];
+    [self cancelHanjaCandidates];
     return YES;
   }
 
@@ -820,7 +824,7 @@ static IMKCandidates *DKSTSharedCandidates;
       DKSTLog(@"Committing manually tracked candidate: %@", selected);
       [self commitCandidate:selected client:sender];
     } else {
-      [_candidates hide];
+      [self cancelHanjaCandidates];
     }
     return YES;
   }
@@ -842,7 +846,7 @@ static IMKCandidates *DKSTSharedCandidates;
   }
 
   // Character key while candidates open: hide and fall through
-  [_candidates hide];
+  [self cancelHanjaCandidates];
   return NO;
 }
 

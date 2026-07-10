@@ -285,7 +285,13 @@ static BOOL DKSTIsHangulSyllable(unichar character) {
   DKSTLog(@"commitCandidate selected='%@'", selected);
 
   if (selected) {
-    NSString *hanja = [[selected componentsSeparatedByString:@" "] firstObject];
+    // The last candidate is always the original source text. Candidate display
+    // strings may contain an annotation after a space, but the original text
+    // itself can also contain spaces and must be committed without truncation.
+    NSString *sourceText = [_currentHanjaCandidates lastObject];
+    NSString *hanja = [selected isEqualToString:sourceText]
+                          ? selected
+                          : [[selected componentsSeparatedByString:@" "] firstObject];
     if (hanja && [hanja length] > 0) {
       NSRange replacementRange;
 
@@ -332,13 +338,16 @@ static BOOL DKSTIsHangulSyllable(unichar character) {
     DKSTLog(@"No candidate selected to commit");
   }
 
-  // Reset selected range
+  [_markedTextCommittedPrefix setString:@""];
+  [self cancelHanjaCandidates];
+}
+
+- (void)cancelHanjaCandidates {
   _selectedTextRange = NSMakeRange(NSNotFound, 0);
   [self clearMarkedReplacementRange];
-  [_markedTextCommittedPrefix setString:@""];
   _hanjaMarkedPrefixLength = 0;
   _hanjaReplacementUsesMarkedPrefix = NO;
-  _currentHanjaIndex = 0; // Reset index
+  _currentHanjaIndex = 0;
 
   [_candidates hide];
   if (_currentHanjaCandidates) {

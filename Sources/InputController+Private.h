@@ -51,6 +51,7 @@
                     modifiers:(NSUInteger)modifiers
                        client:(id)sender;
 - (void)commitCandidate:(id)candidate client:(id)sender;
+- (void)cancelHanjaCandidates;
 
 - (BOOL)isHangulKeyCode:(unsigned short)keyCode;
 - (void)syncInputClient:(id)sender force:(BOOL)force;
