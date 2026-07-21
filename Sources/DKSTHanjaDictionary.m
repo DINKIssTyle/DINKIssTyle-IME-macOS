@@ -95,7 +95,7 @@ static void DKSTAppleHanjaHitCallback(DKSTIDXIndexRef index,
 - (NSDictionary *)dictionaryFromBundledHanjaFileWithLogPrefix:(NSString *)prefix {
     NSMutableDictionary *dict = [NSMutableDictionary dictionary];
     NSString *path =
-        [[NSBundle mainBundle] pathForResource:@"hanja" ofType:@"txt"];
+        [[NSBundle bundleForClass:[self class]] pathForResource:@"hanja" ofType:@"txt"];
     DKSTLog(@"%@ Hanja dictionary from: %@", prefix, path);
 
     if (path) {

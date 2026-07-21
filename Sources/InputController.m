@@ -1396,7 +1396,7 @@ static IMKCandidates *DKSTSharedCandidates;
 
 // Menu handling (Modes)
 - (void)openSettingsApplication {
-  NSString *path = [[NSBundle mainBundle] pathForResource:@"DKSTSettings"
+  NSString *path = [[NSBundle bundleForClass:[self class]] pathForResource:@"DKSTSettings"
                                                    ofType:@"app"];
   if (path) {
     NSURL *url = [NSURL fileURLWithPath:path];

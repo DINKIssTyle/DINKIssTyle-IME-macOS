@@ -157,4 +157,18 @@ cp dictup.sh build/DKSTSettings.app/Contents/Resources/
 rm -rf build/DKST.app/Contents/Resources/DKSTSettings.app
 cp -r build/DKSTSettings.app build/DKST.app/Contents/Resources/
 
+# Codesign the built apps with stable designated requirements matching their bundle identifiers
+echo "Cleaning resource forks and extended attributes..."
+xattr -cr build/DKST.app
+xattr -cr build/DKSTSettings.app
+
+echo "Codesigning build/DKSTSettings.app..."
+codesign --force --sign - --requirements '=designated => identifier "com.dinkisstyle.inputmethod.DKST.settings"' build/DKSTSettings.app
+
+echo "Codesigning build/DKST.app/Contents/Resources/DKSTSettings.app..."
+codesign --force --sign - --requirements '=designated => identifier "com.dinkisstyle.inputmethod.DKST.settings"' build/DKST.app/Contents/Resources/DKSTSettings.app
+
+echo "Codesigning build/DKST.app..."
+codesign --force --sign - --requirements '=designated => identifier "com.dinkisstyle.inputmethod.DKST"' build/DKST.app
+
 # (DKSTDictEditor is now integrated into DKSTSettings)

@@ -96,6 +96,14 @@ function install_dkst() {
     # 0. 빌드 폴더 안의 모든 앱 번들 격리 해제
     clear_build_app_quarantine
 
+    # 0.5. 앱 번들 재서명 (macOS XPC Endpoint 등록 거부 오류 방지)
+    echo "변경 사항 반영을 위해 앱 번들 재서명 중..."
+    local SETTINGS_APP="${SOURCE_APP}/Contents/Resources/DKSTSettings.app"
+    if [ -d "$SETTINGS_APP" ]; then
+        codesign --force --sign - --requirements '=designated => identifier "com.dinkisstyle.inputmethod.DKST.settings"' "$SETTINGS_APP"
+    fi
+    codesign --force --sign - --requirements '=designated => identifier "com.dinkisstyle.inputmethod.DKST"' "$SOURCE_APP"
+
     # 1. 기존 hanja.txt 백업 (사용자 수정본 보존)
     HANJA_FILE="${DEST_APP}/Contents/Resources/hanja.txt"
     HANJA_BACKUP="/tmp/hanja_backup_$$.txt"
