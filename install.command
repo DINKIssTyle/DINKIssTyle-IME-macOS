@@ -13,8 +13,6 @@ SOURCE_APP="${SCRIPT_DIR}/build/DKST.app"
 DEST_DIR="/Library/Input Methods"
 DEST_APP="${DEST_DIR}/DKST.app"
 PROCESS_NAME="DKST"
-USER_DICTIONARY_DIR="${HOME}/Library/Application Support/DKST"
-USER_DICTIONARY_FILE="${USER_DICTIONARY_DIR}/hanja.txt"
 SHOW_MESSAGE=false
 
 # --- 함수: 프로세스 종료 ---
@@ -53,32 +51,6 @@ function install_dkst() {
     if ! codesign --verify --deep --strict --verbose=2 "$SOURCE_APP"; then
         echo "오류: 앱의 코드 서명이 유효하지 않아 설치를 중단합니다."
         exit 1
-    fi
-
-    # 이전 버전이 앱 번들 안에 저장한 사용자 사전을 번들 밖으로 이전합니다.
-    LEGACY_DICTIONARY_FILE="${DEST_APP}/Contents/Resources/hanja.txt"
-    if [ -f "$USER_DICTIONARY_FILE" ]; then
-        echo "기존 사용자 사전을 유지합니다: $USER_DICTIONARY_FILE"
-    elif [ -f "$LEGACY_DICTIONARY_FILE" ]; then
-        echo ""
-        echo "=========================================="
-        echo "기존 사용자 사전을 유지하시겠습니까?"
-        echo "=========================================="
-        echo "1 - 예, 기존 데이터를 유지합니다."
-        echo "2 - 아니오, 새 기본 사전을 사용합니다."
-        echo "=========================================="
-        read -p "원하는 작업의 번호를 입력하세요 [1-2]: " UPDATE_DICT_CHOICE
-
-        if [ "$UPDATE_DICT_CHOICE" = "1" ]; then
-            if ! mkdir -p "$USER_DICTIONARY_DIR" \
-                || ! cp "$LEGACY_DICTIONARY_FILE" "$USER_DICTIONARY_FILE"; then
-                echo "오류: 기존 사용자 사전을 이전하지 못했습니다. 설치를 중단합니다."
-                exit 1
-            fi
-            echo "사용자 사전을 이전했습니다: $USER_DICTIONARY_FILE"
-        else
-            echo "새 기본 사전을 사용합니다."
-        fi
     fi
 
     # 서명된 앱 번들을 수정하지 않고 그대로 설치합니다.

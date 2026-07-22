@@ -40,6 +40,7 @@ extern NSString *const kDKSTHanjaShortcutDidChangeNotification;
 
 NSArray *DKSTDefaultMarkedTextAppBundleIDs(void);
 NSString *DKSTUserDictionaryPath(void);
+BOOL DKSTEnsureUserDictionary(NSBundle *resourceBundle, NSError **error);
 
 // Shortcuts
 extern NSString *const kDKSTShortcutsKey;

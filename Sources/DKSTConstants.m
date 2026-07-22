@@ -71,8 +71,68 @@ NSString *DKSTUserDictionaryPath(void) {
     applicationSupportPath = [NSHomeDirectory()
         stringByAppendingPathComponent:@"Library/Application Support"];
   }
-  return [[applicationSupportPath stringByAppendingPathComponent:@"DKST"]
+  return [[applicationSupportPath
+      stringByAppendingPathComponent:@"DKST Korean IME"]
       stringByAppendingPathComponent:@"hanja.txt"];
+}
+
+BOOL DKSTEnsureUserDictionary(NSBundle *resourceBundle, NSError **error) {
+  NSFileManager *fileManager = [NSFileManager defaultManager];
+  NSString *destinationPath = DKSTUserDictionaryPath();
+  BOOL isDirectory = NO;
+
+  if ([fileManager fileExistsAtPath:destinationPath
+                        isDirectory:&isDirectory]) {
+    if (!isDirectory) {
+      return YES;
+    }
+
+    if (error) {
+      *error = [NSError
+          errorWithDomain:NSCocoaErrorDomain
+                     code:NSFileWriteFileExistsError
+                 userInfo:@{
+                   NSFilePathErrorKey : destinationPath,
+                   NSLocalizedDescriptionKey :
+                       @"한자 사전 파일 경로에 폴더가 존재합니다."
+                 }];
+    }
+    return NO;
+  }
+
+  NSBundle *bundle = resourceBundle ?: [NSBundle mainBundle];
+  NSString *sourcePath = [bundle pathForResource:@"hanja" ofType:@"txt"];
+  if (![sourcePath length]) {
+    if (error) {
+      *error = [NSError
+          errorWithDomain:NSCocoaErrorDomain
+                     code:NSFileNoSuchFileError
+                 userInfo:@{
+                   NSLocalizedDescriptionKey :
+                       @"앱 번들에서 기본 한자 사전을 찾지 못했습니다."
+                 }];
+    }
+    return NO;
+  }
+
+  NSString *destinationDirectory =
+      [destinationPath stringByDeletingLastPathComponent];
+  if (![fileManager createDirectoryAtPath:destinationDirectory
+              withIntermediateDirectories:YES
+                               attributes:nil
+                                    error:error]) {
+    return NO;
+  }
+
+  NSData *dictionaryData =
+      [NSData dataWithContentsOfFile:sourcePath options:0 error:error];
+  if (!dictionaryData) {
+    return NO;
+  }
+
+  return [dictionaryData writeToFile:destinationPath
+                             options:NSDataWritingAtomic
+                               error:error];
 }
 
 // Shortcuts

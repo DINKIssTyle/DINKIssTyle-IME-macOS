@@ -1,8 +1,14 @@
 #import "DKSTSettingsWindowController.h"
+#import "DKSTConstants.h"
 #import <Cocoa/Cocoa.h>
 
 int main(int argc, const char *argv[]) {
   @autoreleasepool {
+    NSError *dictionaryError = nil;
+    if (!DKSTEnsureUserDictionary([NSBundle mainBundle], &dictionaryError)) {
+      DKSTLog(@"Failed to prepare user Hanja dictionary: %@", dictionaryError);
+    }
+
     NSApplication *app = [NSApplication sharedApplication];
     [app setActivationPolicy:NSApplicationActivationPolicyRegular];
 

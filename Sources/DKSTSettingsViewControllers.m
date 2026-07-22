@@ -568,24 +568,17 @@ static NSDictionary *DKSTIMEInfoPlist() {
 }
 
 - (void)detectAndLoadFile {
-  NSString *systemPath =
-      @"/Library/Input Methods/DKST.app/Contents/Resources/hanja.txt";
   NSString *userPath = DKSTUserDictionaryPath();
   NSFileManager *fm = [NSFileManager defaultManager];
 
-  if (![fm fileExistsAtPath:userPath] && [fm fileExistsAtPath:systemPath]) {
-    NSString *userDirectory = [userPath stringByDeletingLastPathComponent];
-    [fm createDirectoryAtPath:userDirectory
-  withIntermediateDirectories:YES
-                   attributes:nil
-                        error:nil];
-    [fm copyItemAtPath:systemPath toPath:userPath error:nil];
-  }
-
   if ([fm fileExistsAtPath:userPath]) {
     [self loadFile:userPath];
-  } else if ([fm fileExistsAtPath:systemPath]) {
-    [self loadFile:systemPath];
+  } else {
+    NSString *bundledPath =
+        [[NSBundle mainBundle] pathForResource:@"hanja" ofType:@"txt"];
+    if ([bundledPath length]) {
+      [self loadFile:bundledPath];
+    }
   }
 }
 

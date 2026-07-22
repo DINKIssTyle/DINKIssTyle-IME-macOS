@@ -1,5 +1,6 @@
 #import <Cocoa/Cocoa.h>
 #import <InputMethodKit/InputMethodKit.h>
+#import "DKSTConstants.h"
 
 // connection name
 NSString *const kConnectionName = @"DKST_1_Connection"; // Match Info.plist
@@ -9,6 +10,11 @@ IMKServer *server;
 int main(int argc, char *argv[])
 {
   NSAutoreleasePool *pool = [[NSAutoreleasePool alloc] init];
+
+  NSError *dictionaryError = nil;
+  if (!DKSTEnsureUserDictionary([NSBundle mainBundle], &dictionaryError)) {
+    DKSTLog(@"Failed to prepare user Hanja dictionary: %@", dictionaryError);
+  }
 
   NSString* identifier = [[NSBundle mainBundle] bundleIdentifier];
   

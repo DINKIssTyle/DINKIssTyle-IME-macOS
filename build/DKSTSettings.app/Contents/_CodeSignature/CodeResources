@@ -30,7 +30,11 @@
 		</data>
 		<key>Resources/dictup.sh</key>
 		<data>
-		Y7MgNDQ6u0qFncGp0+6nwxjBV80=
+		x3wR62Pexl/EUFx2o/5muIAWz/o=
+		</data>
+		<key>Resources/hanja.txt</key>
+		<data>
+		dgU2VxW29rjr/kGV40Gp9iwcrzw=
 		</data>
 		<key>Resources/icon.png</key>
 		<data>
@@ -85,7 +89,14 @@
 		<dict>
 			<key>hash2</key>
 			<data>
-			KIPR4dmzvpQH/J4zz21ZQd2d9OGcirQshaMQO1vOY4w=
+			Zxk1SYEqJrZYWp0KqDf0alXzsaINpBWyKTKZexWbOu0=
+			</data>
+		</dict>
+		<key>Resources/hanja.txt</key>
+		<dict>
+			<key>hash2</key>
+			<data>
+			Ll+0W9WbMAk9GD8FNPqjXwceNOCauy6f/E/OjhdnDM8=
 			</data>
 		</dict>
 		<key>Resources/icon.png</key>

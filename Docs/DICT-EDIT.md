@@ -19,14 +19,14 @@
 <img src="Dict.png" width="600"></p>
 
 
-- Dictionary Editor는 아래 경로 중 하나의 `hanja.txt` 파일을 편집합니다.
-  - `/Library/Input Methods/DKST.app/Contents/Resources/hanja.txt`
-  - `~/Library/Input Methods/DKST.app/Contents/Resources/hanja.txt`
+- Dictionary Editor는 아래 사용자 경로의 `hanja.txt` 파일을 편집합니다.
+  - `~/Library/Application Support/DKST Korean IME/hanja.txt`
+  - 파일이 없으면 입력기 또는 환경설정이 시작될 때 앱 번들의 기본 사전을
+    자동으로 복사합니다.
 
 - **검색 기능**을 통해 이미 등록된 트리거 글자/단어 또는 값을 빠르게 찾을 수 있습니다.
 - 행 추가 및 삭제는 좌측 하단의 **+ Add**, **- Delete** 버튼을 사용합니다.
 - 편집이 완료되면 **저장** 버튼을 눌러 저장합니다.
-  - 파일 위치 특성상 **관리자 비밀번호 입력**이 필요합니다.
   - 사전 데이터 반영을 위해 **DKST 입력기를 강제 종료**합니다.
   - macOS는 사용 중인 IME가 종료되면 **1~2초 이내 자동으로 재활성화**됩니다.
 

@@ -18,11 +18,11 @@
 		</data>
 		<key>Resources/DKSTSettings.app/Contents/Info.plist</key>
 		<data>
-		JcJxcgWEAATfRV1Mbgvvm9jHnag=
+		XVHmpRjW4bjdszPpGErIq2GOjso=
 		</data>
 		<key>Resources/DKSTSettings.app/Contents/MacOS/DKSTSettings</key>
 		<data>
-		tls9lk4CX2b3GcBruEUl4KJiD60=
+		IrP5EMIJ6Egwu1izaYsU55CtCFw=
 		</data>
 		<key>Resources/DKSTSettings.app/Contents/Resources/About.pdf</key>
 		<data>
@@ -50,7 +50,11 @@
 		</data>
 		<key>Resources/DKSTSettings.app/Contents/Resources/dictup.sh</key>
 		<data>
-		Y7MgNDQ6u0qFncGp0+6nwxjBV80=
+		x3wR62Pexl/EUFx2o/5muIAWz/o=
+		</data>
+		<key>Resources/DKSTSettings.app/Contents/Resources/hanja.txt</key>
+		<data>
+		dgU2VxW29rjr/kGV40Gp9iwcrzw=
 		</data>
 		<key>Resources/DKSTSettings.app/Contents/Resources/icon.png</key>
 		<data>
@@ -58,7 +62,7 @@
 		</data>
 		<key>Resources/DKSTSettings.app/Contents/_CodeSignature/CodeResources</key>
 		<data>
-		ruazJYo9Z1Wl6Pc03SopmB4/PPM=
+		DahG+dQ0fSN/RMF32dS2MXamHO8=
 		</data>
 		<key>Resources/DKST_pref.icns</key>
 		<data>
@@ -142,14 +146,14 @@
 		<dict>
 			<key>hash2</key>
 			<data>
-			FjIcSknij6QFLpUU0T2YY8OSzWY54yFOxTwVsa9m770=
+			GIHppwXxoqp7LfY4tbMEBONutC8fNZNRv8GrHRsM/vY=
 			</data>
 		</dict>
 		<key>Resources/DKSTSettings.app/Contents/MacOS/DKSTSettings</key>
 		<dict>
 			<key>hash2</key>
 			<data>
-			sXM2rvDGZ9uUaRzPWyoiCvz2USG2Zo/kmj/W34mF1Vc=
+			A/L+nNZ19kEKKyGwjQYqjuswQi1w4eLtWomIkvmWzFk=
 			</data>
 		</dict>
 		<key>Resources/DKSTSettings.app/Contents/Resources/About.pdf</key>
@@ -198,7 +202,14 @@
 		<dict>
 			<key>hash2</key>
 			<data>
-			KIPR4dmzvpQH/J4zz21ZQd2d9OGcirQshaMQO1vOY4w=
+			Zxk1SYEqJrZYWp0KqDf0alXzsaINpBWyKTKZexWbOu0=
+			</data>
+		</dict>
+		<key>Resources/DKSTSettings.app/Contents/Resources/hanja.txt</key>
+		<dict>
+			<key>hash2</key>
+			<data>
+			Ll+0W9WbMAk9GD8FNPqjXwceNOCauy6f/E/OjhdnDM8=
 			</data>
 		</dict>
 		<key>Resources/DKSTSettings.app/Contents/Resources/icon.png</key>
@@ -212,7 +223,7 @@
 		<dict>
 			<key>hash2</key>
 			<data>
-			o4QqvkGs9tv2SYCDvh1UlmTf9HUNIkyWhuiieNN/Y4U=
+			iKn2pf+HAXtxoFu+AR9mUhTgSHfYn2x04h71mkZzx/w=
 			</data>
 		</dict>
 		<key>Resources/DKST_pref.icns</key>
