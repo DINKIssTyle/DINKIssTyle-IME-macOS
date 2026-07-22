@@ -5,7 +5,7 @@
 # macOS용 DKST 한글입력기 
 
 ### 새소식
-- **2026년 5월 13일 ver.2.7.0 베타3** 이 릴리즈 되었습니다.
+- **2026년 7월 22일 v2.8.0** 이 릴리즈 되었습니다. Apple 서명과 공증이 완료되어 .DMG .PKG 방식으로 설치할 수 있습니다.
 - **2026년 5월 12일 [사전 데이타 업데이트](Docs/DICT.md)** 가 업데이트 되었습니다.
   
 ## ✅ macOS용 DKST 한글입력기를 사용하면 좋습니다. ###
@@ -84,134 +84,12 @@ Mac의 고유한 사용 경험을 유지합니다.
 > Universal Binary (애플실리콘맥 또는 인텔맥)
 
 # 설치 또는 제거 방법 #
-**터미널**을 열고 **아래 코드**를 붙여넣어 실행하세요.
-
-**안정 된 버젼** 설치
-
-```bash
-/bin/bash -c "$(curl -fsSL https://raw.githubusercontent.com/DINKIssTyle/DINKIssTyle-IME-macOS/main/install.sh)"
-```
-
-<div><br></div>
-
-**베타 릴리즈** 설치 (*주의 불안정할 수 있습니다.)
-
-```bash
-/bin/bash -c "$(curl -fsSL https://raw.githubusercontent.com/DINKIssTyle/DINKIssTyle-IME-macOS/main/install-beta.sh)"
-```
-
-<div><br></div>
-
-```bash
-==========================================
-      DKST 한글 입력기 설치 준비         
-==========================================
-최신 정식 릴리즈 정보를 확인 중입니다...
-대상 릴리즈: v2.7.0
-Source code zip 다운로드 중...
-  % Total    % Received % Xferd  Average Speed   Time    Time     Time  Current
-                                 Dload  Upload   Total   Spent    Left  Speed
-  0     0    0     0    0     0      0      0 --:--:-- --:--:-- --:--:--     0
-100 15.8M    0 15.8M    0     0  11.1M      0 --:--:--  0:00:01 --:--:-- 20.2M
-압축 해제 중...
-
-DKST 한글 입력기 설치 도우미를 실행합니다.
-```
-
-설치할 파일을 내려받고 **다음 화면**이 표시됩니다.
-
-```bash
-==========================================
- DKST macOS용 한글입력기 Ver. 2.7.0      
-==========================================
-
-1 - 기본 아이콘으로 설치 (Install)
-2 - 아이콘 선택해서 설치 (Select Icon Install)
-
-3 - 제거 (Uninstall)
-
-4 - 설치 도우미 닫기 (Exit)
-
-==========================================
-원하는 작업의 번호를 입력하세요 [1-4]: 
-```
-**설치**를 원하시면 **1 입력 후 엔터키** 입력,  
-**제거**를 원하시면 **3 입력 후 엔터키**를 입력합니다.  
-
-✨ **아이콘**을 변경하여 설치하려면 **2 입력 후 엔터키**를 누릅니다.
-
-```bash
-==========================================
- DKST macOS용 한글입력기 Ver. 2.7.0      
- 다음 중 상태 메뉴에 표시될 아이콘을 선택하세요. 
- *선택한 아이콘은 재부팅 후 표시 됩니다.
-==========================================
-
-1 - 기본 아이콘 (Default 'Taegeuk symbol')
-2 - 아래아 '한' 아이콘 (Arae-a 'Han')
-3 - '한' (Han)
-4 - '가' (Ga)
-5 - '클래식' (Classic)
-6 - '앙' (Ang)
-7 - '앙' (Ang) 큰버젼
-8 - 뒤로 돌아가기 (Back)
-
-==========================================
-원하는 작업의 번호를 입력하세요 [1-8]: 
-```
-
-#### 1. 기본 아이콘 (Default 'Taegeuk symbol')
-<div align="center">
-<img src="Docs/menu_icons/default.png" alt="" width="350">
-</div>
-
-#### 2. 아래아 '한' 아이콘 (Arae-a 'Han')
-<div align="center">
-<img src="Docs/menu_icons/arae-a-han.png" alt="" width="350">
-</div>
-
-#### 3. '한' (Han)
-<div align="center">
-<img src="Docs/menu_icons/han.png" alt="" width="350">
-</div>
-
-#### 4. '가' (Ga)
-<div align="center">
-<img src="Docs/menu_icons/ga.png" alt="" width="350">
-</div>
-
-
-#### 5. '클래식' (Classic) *정식 탑재 미정
-<div align="center">
-<img src="Docs/menu_icons/classic.png" alt="" width="350">
-</div>
-
-#### 6. '앙' (Ang)
-<div align="center">
-<img src="Docs/menu_icons/ang.png" alt="" width="350">
-</div>
-
-#### 7. '앙' (Ang) 큰버젼
-<div align="center">
-<img src="Docs/menu_icons/ang2.png" alt="" width="350">
-<br><br></div>
-
-설치 과정의 마지막 단계에서 사전 업데이트가 필요한지 확인합니다. 이미 수정된 사전이 저장되어 있다면 `1`을 선택해야 하며, `2`를 선택하면 기본 사전으로 대체됩니다.
-
-```bash
-==========================================
-사용자 사전을 업데이트 하시겠습니까? 
-*주의! 업데이트하면, 기존 사용자가 작성한 내용은 삭제됩니다.
-==========================================
-
-1 - 아니오, 기존 데이타를 유지합니다.
-2 - 예, 새 데이타로 업데이트 합니다.
-
-==========================================
-원하는 작업의 번호를 입력하세요 [1-2]: 
-
-```
-
+### DMG에 포함된 설치 PKG로 릴리즈됩니다.
+1. 아래 링크에서 최신 릴리즈를 내려받습니다.  
+https://github.com/DINKIssTyle/DINKIssTyle-IME-macOS/releases
+1. .dmg 파일을 열고,
+1. .pkg 파일을 실행합니다.
+1. macOS를 재부팅하거나 다시 로그인해 주세요.
 
 
 > [!IMPORTANT] 
