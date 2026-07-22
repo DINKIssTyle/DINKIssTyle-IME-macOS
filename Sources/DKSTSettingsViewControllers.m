@@ -570,9 +570,21 @@ static NSDictionary *DKSTIMEInfoPlist() {
 - (void)detectAndLoadFile {
   NSString *systemPath =
       @"/Library/Input Methods/DKST.app/Contents/Resources/hanja.txt";
+  NSString *userPath = DKSTUserDictionaryPath();
   NSFileManager *fm = [NSFileManager defaultManager];
 
-  if ([fm fileExistsAtPath:systemPath]) {
+  if (![fm fileExistsAtPath:userPath] && [fm fileExistsAtPath:systemPath]) {
+    NSString *userDirectory = [userPath stringByDeletingLastPathComponent];
+    [fm createDirectoryAtPath:userDirectory
+  withIntermediateDirectories:YES
+                   attributes:nil
+                        error:nil];
+    [fm copyItemAtPath:systemPath toPath:userPath error:nil];
+  }
+
+  if ([fm fileExistsAtPath:userPath]) {
+    [self loadFile:userPath];
+  } else if ([fm fileExistsAtPath:systemPath]) {
     [self loadFile:systemPath];
   }
 }
@@ -797,7 +809,7 @@ static NSDictionary *DKSTIMEInfoPlist() {
       stringWithFormat:@"/bin/bash %@",
                        DKSTShellSingleQuotedString(scriptPath)];
   NSString *appleScriptSource = [NSString stringWithFormat:
-      @"do shell script \"%@\" with administrator privileges",
+      @"do shell script \"%@\"",
       DKSTAppleScriptDoubleQuotedString(command)];
   
   NSAppleScript *appleScript = [[NSAppleScript alloc] initWithSource:appleScriptSource];
@@ -807,8 +819,7 @@ static NSDictionary *DKSTIMEInfoPlist() {
   if (result) {
     NSString *updatedPath = currentFilePath;
     if (![updatedPath length]) {
-      updatedPath =
-          @"/Library/Input Methods/DKST.app/Contents/Resources/hanja.txt";
+      updatedPath = DKSTUserDictionaryPath();
     }
     [self loadFile:updatedPath];
     [[NSDistributedNotificationCenter defaultCenter]

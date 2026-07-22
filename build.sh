@@ -34,12 +34,14 @@ case $BUILD_CHOICE in
     1)
         echo ""
         echo "� Building DEBUG version..."
+        BUILD_MODE="debug"
         OPTIMIZATION="-O0"
         DEBUG_FLAGS="-DDEBUG"
         ;;
     2)
         echo ""
         echo "� Building RELEASE version..."
+        BUILD_MODE="release"
         OPTIMIZATION="-O2"
         DEBUG_FLAGS="-DNDEBUG"
         ;;
@@ -157,18 +159,88 @@ cp dictup.sh build/DKSTSettings.app/Contents/Resources/
 rm -rf build/DKST.app/Contents/Resources/DKSTSettings.app
 cp -r build/DKSTSettings.app build/DKST.app/Contents/Resources/
 
-# Codesign the built apps with stable designated requirements matching their bundle identifiers
+# Codesign the built apps. Release builds use Developer ID; Debug builds use
+# Apple Development. Public contributors without a matching certificate keep
+# the existing ad-hoc signing behavior.
 echo "Cleaning resource forks and extended attributes..."
 xattr -cr build/DKST.app
 xattr -cr build/DKSTSettings.app
 
-echo "Codesigning build/DKSTSettings.app..."
-codesign --force --sign - --requirements '=designated => identifier "com.dinkisstyle.inputmethod.DKST.settings"' build/DKSTSettings.app
+AVAILABLE_IDENTITIES="$(security find-identity -v -p codesigning 2>&1 || true)"
+SIGNING_IDENTITY="${DKST_CODESIGN_IDENTITY:-${CODESIGN_IDENTITY:-}}"
+SIGNING_LABEL=""
 
-echo "Codesigning build/DKST.app/Contents/Resources/DKSTSettings.app..."
-codesign --force --sign - --requirements '=designated => identifier "com.dinkisstyle.inputmethod.DKST.settings"' build/DKST.app/Contents/Resources/DKSTSettings.app
+if [ -z "$SIGNING_IDENTITY" ]; then
+    if [ "$BUILD_MODE" = "release" ]; then
+        IDENTITY_KINDS="Developer ID Application:"
+    else
+        IDENTITY_KINDS="Apple Development:|Mac Developer:"
+    fi
 
-echo "Codesigning build/DKST.app..."
-codesign --force --sign - --requirements '=designated => identifier "com.dinkisstyle.inputmethod.DKST"' build/DKST.app
+    OLD_IFS="$IFS"
+    IFS='|'
+    for IDENTITY_KIND in $IDENTITY_KINDS; do
+        SIGNING_IDENTITY="$(
+            printf '%s\n' "$AVAILABLE_IDENTITIES" |
+                awk -v kind="$IDENTITY_KIND" \
+                    'index($0, "\"" kind) { print $2; exit }'
+        )"
+        if [ -n "$SIGNING_IDENTITY" ]; then
+            break
+        fi
+    done
+    IFS="$OLD_IFS"
+fi
+
+if [ -n "$SIGNING_IDENTITY" ]; then
+    SIGNING_LABEL="$(
+        printf '%s\n' "$AVAILABLE_IDENTITIES" |
+            awk -v identity="$SIGNING_IDENTITY" '
+                $2 == identity {
+                    line = $0
+                    sub(/^[[:space:]]*[0-9]+\)[[:space:]]+[[:xdigit:]]+[[:space:]]+/, "", line)
+                    print line
+                    exit
+                }
+            '
+    )"
+    if [ -z "$SIGNING_LABEL" ]; then
+        SIGNING_LABEL="$SIGNING_IDENTITY"
+    fi
+
+    if [ "$BUILD_MODE" = "release" ]; then
+        case "$SIGNING_LABEL $SIGNING_IDENTITY" in
+            *"Developer ID Application:"*) ;;
+            *)
+                echo "Warning: Release distribution requires a Developer ID Application certificate."
+                ;;
+        esac
+    fi
+
+    echo "Codesigning with Apple identity: $SIGNING_LABEL"
+    CODESIGN_ARGS=(--force --sign "$SIGNING_IDENTITY" --options runtime)
+    case "$SIGNING_LABEL $SIGNING_IDENTITY" in
+        *"Developer ID Application:"*)
+            CODESIGN_ARGS+=(--timestamp)
+            ;;
+    esac
+
+    codesign "${CODESIGN_ARGS[@]}" build/DKSTSettings.app
+    codesign "${CODESIGN_ARGS[@]}" build/DKST.app/Contents/Resources/DKSTSettings.app
+    codesign "${CODESIGN_ARGS[@]}" build/DKST.app
+else
+    if [ "$BUILD_MODE" = "release" ]; then
+        echo "Warning: No Developer ID Application identity found; this build is not ready for distribution."
+    else
+        echo "No Apple development signing identity found; using ad-hoc signatures."
+    fi
+    codesign --force --sign - --requirements '=designated => identifier "com.dinkisstyle.inputmethod.DKST.settings"' build/DKSTSettings.app
+    codesign --force --sign - --requirements '=designated => identifier "com.dinkisstyle.inputmethod.DKST.settings"' build/DKST.app/Contents/Resources/DKSTSettings.app
+    codesign --force --sign - --requirements '=designated => identifier "com.dinkisstyle.inputmethod.DKST"' build/DKST.app
+fi
+
+echo "Verifying code signatures..."
+codesign --verify --strict --verbose=2 build/DKSTSettings.app
+codesign --verify --deep --strict --verbose=2 build/DKST.app
 
 # (DKSTDictEditor is now integrated into DKSTSettings)

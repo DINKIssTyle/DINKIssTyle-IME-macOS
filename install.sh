@@ -152,6 +152,19 @@ if [ -z "$INSTALL_COMMAND" ]; then
     exit 1
 fi
 
+RELEASE_ROOT="$(dirname "$INSTALL_COMMAND")"
+RELEASE_APP="${RELEASE_ROOT}/build/DKST.app"
+if [ ! -d "$RELEASE_APP" ]; then
+    echo "오류: 압축 파일 안에서 서명된 DKST.app을 찾지 못했습니다."
+    exit 1
+fi
+
+echo "다운로드한 앱의 코드 서명을 확인하는 중..."
+if ! /usr/bin/codesign --verify --deep --strict --verbose=2 "$RELEASE_APP"; then
+    echo "오류: 다운로드한 앱의 코드 서명이 유효하지 않습니다."
+    exit 1
+fi
+
 chmod +x "$INSTALL_COMMAND"
 
 echo ""

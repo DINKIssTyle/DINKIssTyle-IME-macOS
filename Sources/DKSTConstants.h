@@ -39,6 +39,7 @@ extern NSString *const kDKSTHanjaShortcutModifiersKey;
 extern NSString *const kDKSTHanjaShortcutDidChangeNotification;
 
 NSArray *DKSTDefaultMarkedTextAppBundleIDs(void);
+NSString *DKSTUserDictionaryPath(void);
 
 // Shortcuts
 extern NSString *const kDKSTShortcutsKey;

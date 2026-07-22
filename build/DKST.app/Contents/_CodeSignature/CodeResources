@@ -18,11 +18,11 @@
 		</data>
 		<key>Resources/DKSTSettings.app/Contents/Info.plist</key>
 		<data>
-		GUqNOuppJWTqXIC+UNTb/fwTjkU=
+		JcJxcgWEAATfRV1Mbgvvm9jHnag=
 		</data>
 		<key>Resources/DKSTSettings.app/Contents/MacOS/DKSTSettings</key>
 		<data>
-		RnI9TDS57a57CwwqdpOyR+1pNf8=
+		tls9lk4CX2b3GcBruEUl4KJiD60=
 		</data>
 		<key>Resources/DKSTSettings.app/Contents/Resources/About.pdf</key>
 		<data>
@@ -50,7 +50,7 @@
 		</data>
 		<key>Resources/DKSTSettings.app/Contents/Resources/dictup.sh</key>
 		<data>
-		q6H0rLebMfKqgtrxPDJVTPCy29k=
+		Y7MgNDQ6u0qFncGp0+6nwxjBV80=
 		</data>
 		<key>Resources/DKSTSettings.app/Contents/Resources/icon.png</key>
 		<data>
@@ -58,7 +58,7 @@
 		</data>
 		<key>Resources/DKSTSettings.app/Contents/_CodeSignature/CodeResources</key>
 		<data>
-		iYLqQbrnfcRj8K/KPmwhChDzi/c=
+		ruazJYo9Z1Wl6Pc03SopmB4/PPM=
 		</data>
 		<key>Resources/DKST_pref.icns</key>
 		<data>
@@ -142,14 +142,14 @@
 		<dict>
 			<key>hash2</key>
 			<data>
-			A0vkz86EM0a9AZU8+SG4cxLGUr9y7Ge9pwAHp51bM7o=
+			FjIcSknij6QFLpUU0T2YY8OSzWY54yFOxTwVsa9m770=
 			</data>
 		</dict>
 		<key>Resources/DKSTSettings.app/Contents/MacOS/DKSTSettings</key>
 		<dict>
 			<key>hash2</key>
 			<data>
-			h4epvF6Wtj+G6fmd37SImahMiugyx5lIvyqBLphVP+g=
+			sXM2rvDGZ9uUaRzPWyoiCvz2USG2Zo/kmj/W34mF1Vc=
 			</data>
 		</dict>
 		<key>Resources/DKSTSettings.app/Contents/Resources/About.pdf</key>
@@ -198,7 +198,7 @@
 		<dict>
 			<key>hash2</key>
 			<data>
-			y4PeEkJJfkZSBJtvakBHw7KlhWoQeYNgJSFzYuPhfzI=
+			KIPR4dmzvpQH/J4zz21ZQd2d9OGcirQshaMQO1vOY4w=
 			</data>
 		</dict>
 		<key>Resources/DKSTSettings.app/Contents/Resources/icon.png</key>
@@ -212,7 +212,7 @@
 		<dict>
 			<key>hash2</key>
 			<data>
-			h5GbcOHhIJat6MI7wMfks8ZBH8c/+Slgb5UKwgtUzxM=
+			o4QqvkGs9tv2SYCDvh1UlmTf9HUNIkyWhuiieNN/Y4U=
 			</data>
 		</dict>
 		<key>Resources/DKST_pref.icns</key>

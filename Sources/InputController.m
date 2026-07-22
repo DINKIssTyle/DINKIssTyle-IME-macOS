@@ -679,55 +679,19 @@ static IMKCandidates *DKSTSharedCandidates;
     if ([sender respondsToSelector:@selector(selectedRange)]) {
       NSRange selectedRange = [sender selectedRange];
       if (selectedRange.location != NSNotFound) {
-        if (_lastClientSelectedRange.location != NSNotFound &&
-            !NSEqualRanges(selectedRange, _lastClientSelectedRange)) {
-
-          if ([self hasPendingComposition]) {
-            BOOL isAutocompleteSuggestion = NO;
-
-            // 1. Check if the selection change matches client's inline autocomplete suggestion
-            @try {
-              if ([sender respondsToSelector:@selector(markedRange)]) {
-                NSRange markedRange = [sender markedRange];
-                if (markedRange.location != NSNotFound && markedRange.length > 0) {
-                  // If the selection range starts exactly at the end of the marked range,
-                  // and length > 0, this represents an inline autocomplete suggestion.
-                  if (selectedRange.location == markedRange.location + markedRange.length &&
-                      selectedRange.length > 0) {
-                    isAutocompleteSuggestion = YES;
-                    DKSTLog(@"selectionChanged: Detected inline autocomplete by markedRange (marked=%@, selection=%@)",
-                            NSStringFromRange(markedRange), NSStringFromRange(selectedRange));
-                  }
-                }
-              }
-            } @catch (NSException *ex) {
-              DKSTLog(@"selectionChanged: Exception checking markedRange: %@", ex);
-            }
-
-            // 2. Fallback: check if the selection location remains the same but length increases from 0
-            if (!isAutocompleteSuggestion) {
-              if (selectedRange.location == _lastClientSelectedRange.location &&
-                  _lastClientSelectedRange.length == 0 &&
-                  selectedRange.length > 0) {
-                isAutocompleteSuggestion = YES;
-                DKSTLog(@"selectionChanged: Detected inline autocomplete by selection location comparison (selection=%@, last=%@)",
-                        NSStringFromRange(selectedRange), NSStringFromRange(_lastClientSelectedRange));
-              }
-            }
-
-            if (isAutocompleteSuggestion) {
-              // Save the autocomplete selection to track the current cursor state, but do not commit composition.
-              _lastClientSelectedRange = selectedRange;
-              DKSTLog(@"selectionChanged: Autocomplete suggestion detected; bypassing premature commit");
-            } else {
-              DKSTLog(@"Selection changed to %@ (was %@) by user; committing composition",
-                      NSStringFromRange(selectedRange),
-                      NSStringFromRange(_lastClientSelectedRange));
-              [self commitComposition:sender];
-            }
-          } else {
-            _lastClientSelectedRange = selectedRange;
-          }
+        // insertText: and setMarkedText: can deliver this private callback
+        // asynchronously. Calendar's autofill popup makes that particularly
+        // visible: the notification for the previous syllable can arrive after
+        // the next syllable's first consonant has already been inserted. Never
+        // mutate composition state from this ambiguous callback. The next real
+        // key event validates the live selection in prepareForInputClient:; a
+        // genuine caret move is handled there without dropping a newer engine
+        // buffer because of a stale notification.
+        if (![self hasPendingComposition]) {
+          _lastClientSelectedRange = selectedRange;
+        } else {
+          DKSTLog(@"Deferring selection change %@ while composition is pending",
+                  NSStringFromRange(selectedRange));
         }
       }
     }
@@ -1396,18 +1360,46 @@ static IMKCandidates *DKSTSharedCandidates;
 
 // Menu handling (Modes)
 - (void)openSettingsApplication {
-  NSString *path = [[NSBundle bundleForClass:[self class]] pathForResource:@"DKSTSettings"
-                                                   ofType:@"app"];
+  NSBundle *inputMethodBundle = [NSBundle bundleForClass:[self class]];
+  NSString *path =
+      [inputMethodBundle pathForResource:@"DKSTSettings" ofType:@"app"];
+
+  // bundleForClass:가 예기치 않게 다른 번들을 반환하는 환경에서도 설치된
+  // 입력기 번들의 Resources 디렉터리를 직접 확인합니다.
+  if (!path) {
+    NSString *fallbackPath =
+        [[[NSBundle mainBundle] resourcePath]
+            stringByAppendingPathComponent:@"DKSTSettings.app"];
+    if ([[NSFileManager defaultManager] fileExistsAtPath:fallbackPath]) {
+      path = fallbackPath;
+    }
+  }
+
   if (path) {
     NSURL *url = [NSURL fileURLWithPath:path];
+    NSWorkspaceOpenConfiguration *configuration =
+        [NSWorkspaceOpenConfiguration configuration];
+    configuration.activates = YES;
+    configuration.addsToRecentItems = NO;
+
     [[NSWorkspace sharedWorkspace]
         openApplicationAtURL:url
-               configuration:[NSWorkspaceOpenConfiguration configuration]
-           completionHandler:^(NSRunningApplication *unusedApp,
+               configuration:configuration
+           completionHandler:^(NSRunningApplication *runningApp,
                                NSError *error) {
-             (void)unusedApp;
              if (error) {
                DKSTLog(@"Failed to launch Settings app: %@", error);
+               return;
+             }
+
+             // 이미 실행 중이거나 뒤에 가려진 경우에도 설정 창을 앞으로
+             // 가져옵니다. applicationShouldHandleReopen:도 창을 다시 엽니다.
+             if (runningApp) {
+               BOOL activated = [runningApp
+                   activateWithOptions:NSApplicationActivateAllWindows];
+               if (!activated) {
+                 DKSTLog(@"Settings app launched but could not be activated");
+               }
              }
            }];
   } else {

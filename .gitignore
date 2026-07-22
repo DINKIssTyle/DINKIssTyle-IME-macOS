@@ -4,3 +4,6 @@ build/IMETester.app
 Tests/
 DINKIssTyle-IME-macOS.code-workspace
 Sources/archive
+build-pkg.sh
+build-imetester.sh
+Packaging/

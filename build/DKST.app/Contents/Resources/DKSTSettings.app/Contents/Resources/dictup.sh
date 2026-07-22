@@ -2,7 +2,7 @@
 # dictup.sh - DKST Hanja Dictionary Updater (Improved)
 
 REMOTE_URL="https://raw.githubusercontent.com/DINKIssTyle/DINKIssTyle-IME-macOS/main/Resources/hanja.txt"
-LOCAL_PATH="/Library/Input Methods/DKST.app/Contents/Resources/hanja.txt"
+LOCAL_PATH="${DKST_DICTIONARY_PATH:-${HOME}/Library/Application Support/DKST/hanja.txt}"
 
 TEMP_DIR=$(mktemp -d)
 NEW_SYS="$TEMP_DIR/new_sys.txt"

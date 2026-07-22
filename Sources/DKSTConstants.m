@@ -63,6 +63,18 @@ NSArray *DKSTDefaultMarkedTextAppBundleIDs(void) {
                        @"com.dinkisstyle.readerserver", nil];
 }
 
+NSString *DKSTUserDictionaryPath(void) {
+  NSArray *applicationSupportPaths = NSSearchPathForDirectoriesInDomains(
+      NSApplicationSupportDirectory, NSUserDomainMask, YES);
+  NSString *applicationSupportPath = [applicationSupportPaths firstObject];
+  if (![applicationSupportPath length]) {
+    applicationSupportPath = [NSHomeDirectory()
+        stringByAppendingPathComponent:@"Library/Application Support"];
+  }
+  return [[applicationSupportPath stringByAppendingPathComponent:@"DKST"]
+      stringByAppendingPathComponent:@"hanja.txt"];
+}
+
 // Shortcuts
 NSString *const kDKSTShortcutsKey = @"DKSTShortcuts";
 NSString *const kShortcutUserDefinedKey = @"ShortcutUserDefined";

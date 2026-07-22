@@ -1,4 +1,5 @@
 #!/bin/bash
+set -euo pipefail
 
 # --- 설정 및 경로 ---
 SCRIPT_DIR="$( cd "$( dirname "${BASH_SOURCE[0]}" )" && pwd )"
@@ -8,11 +9,13 @@ if [ -f "${SCRIPT_DIR}/build.config" ]; then
     source "${SCRIPT_DIR}/build.config"
 fi
 
-BUILD_DIR="${SCRIPT_DIR}/build"
 SOURCE_APP="${SCRIPT_DIR}/build/DKST.app"
 DEST_DIR="/Library/Input Methods"
 DEST_APP="${DEST_DIR}/DKST.app"
 PROCESS_NAME="DKST"
+USER_DICTIONARY_DIR="${HOME}/Library/Application Support/DKST"
+USER_DICTIONARY_FILE="${USER_DICTIONARY_DIR}/hanja.txt"
+SHOW_MESSAGE=false
 
 # --- 함수: 프로세스 종료 ---
 function kill_dkst_process() {
@@ -26,16 +29,6 @@ function kill_dkst_process() {
     sudo pkill -9 -x "$PROCESS_NAME" 2>/dev/null || true
 }
 
-# --- 함수: 빌드된 모든 앱 번들의 격리 속성 제거 ---
-function clear_build_app_quarantine() {
-    echo "빌드 폴더의 앱 번들 확장 속성(quarantine) 제거 중..."
-
-    while IFS= read -r -d '' APP_BUNDLE; do
-        echo " - ${APP_BUNDLE}"
-        xattr -cr "$APP_BUNDLE"
-    done < <(find "$BUILD_DIR" -type d -name "*.app" -print0)
-}
-
 # --- 함수: 설치 대상 앱 존재 확인 ---
 function ensure_source_app_exists() {
     if [ ! -d "$SOURCE_APP" ]; then
@@ -44,44 +37,6 @@ function ensure_source_app_exists() {
         echo "먼저 프로젝트를 빌드했는지 확인해주세요."
         exit 1
     fi
-}
-
-# --- 함수: plist 값 제거(없어도 계속 진행) ---
-function plist_delete_if_exists() {
-    /usr/libexec/PlistBuddy -c "Delete $1" "$2" >/dev/null 2>&1 || true
-}
-
-# --- 함수: plist 문자열 값 교체 ---
-function plist_replace_string() {
-    plist_delete_if_exists "$1" "$3"
-    /usr/libexec/PlistBuddy -c "Add $1 string $2" "$3"
-}
-
-# --- 함수: PDF 기반 상태 메뉴 아이콘 적용 ---
-function configure_pdf_icon() {
-    local SOURCE_PDF="$1"
-    local ICON_NAME="$2"
-    local RESOURCE_DIR="${SOURCE_APP}/Contents/Resources"
-    local INFO_PLIST="${SOURCE_APP}/Contents/Info.plist"
-    local INPUT_MODE_PATH=":ComponentInputModeDict:tsInputModeListKey:com.dinkisstyle.inputmethod.DKST.hangul"
-
-    ensure_source_app_exists
-
-    if [ ! -f "$SOURCE_PDF" ]; then
-        echo "오류: ${ICON_NAME} 파일을 찾을 수 없습니다."
-        echo "경로 확인: $SOURCE_PDF"
-        exit 1
-    fi
-
-    echo "${ICON_NAME}을 Hangul.pdf로 적용 중..."
-    cp "$SOURCE_PDF" "${RESOURCE_DIR}/Hangul.pdf"
-
-    plist_delete_if_exists ":TISIconIsTemplate" "$INFO_PLIST"
-    plist_delete_if_exists "${INPUT_MODE_PATH}:TISIconLabels" "$INFO_PLIST"
-    plist_replace_string "${INPUT_MODE_PATH}:tsInputModeAlternateMenuIconFileKey" "Hangul.pdf" "$INFO_PLIST"
-    plist_replace_string "${INPUT_MODE_PATH}:tsInputModeMenuIconFileKey" "Hangul.pdf" "$INFO_PLIST"
-    plist_replace_string "${INPUT_MODE_PATH}:tsInputModePaletteIconFileKey" "Hangul.pdf" "$INFO_PLIST"
-    plist_replace_string ":tsInputMethodIconFileKey" "Hangul.pdf" "$INFO_PLIST"
 }
 
 # --- 함수: 설치 실행 ---
@@ -93,141 +48,65 @@ function install_dkst() {
 
     echo "관리자 권한이 필요합니다. 비밀번호를 입력해주세요."
 
-    # 0. 빌드 폴더 안의 모든 앱 번들 격리 해제
-    clear_build_app_quarantine
-
-    # 0.5. 앱 번들 재서명 (macOS XPC Endpoint 등록 거부 오류 방지)
-    echo "변경 사항 반영을 위해 앱 번들 재서명 중..."
-    local SETTINGS_APP="${SOURCE_APP}/Contents/Resources/DKSTSettings.app"
-    if [ -d "$SETTINGS_APP" ]; then
-        codesign --force --sign - --requirements '=designated => identifier "com.dinkisstyle.inputmethod.DKST.settings"' "$SETTINGS_APP"
-    fi
-    codesign --force --sign - --requirements '=designated => identifier "com.dinkisstyle.inputmethod.DKST"' "$SOURCE_APP"
-
-    # 1. 기존 hanja.txt 백업 (사용자 수정본 보존)
-    HANJA_FILE="${DEST_APP}/Contents/Resources/hanja.txt"
-    HANJA_BACKUP="/tmp/hanja_backup_$$.txt"
-    if [ -f "$HANJA_FILE" ]; then
-        echo "기존 hanja.txt 파일을 백업 중..."
-        sudo cp "$HANJA_FILE" "$HANJA_BACKUP"
-        HANJA_PRESERVED=true
-    else
-        HANJA_PRESERVED=false
+    # 배포자가 만든 서명을 검사하되 절대로 교체하지 않습니다.
+    echo "배포 앱의 코드 서명을 확인하는 중..."
+    if ! codesign --verify --deep --strict --verbose=2 "$SOURCE_APP"; then
+        echo "오류: 앱의 코드 서명이 유효하지 않아 설치를 중단합니다."
+        exit 1
     fi
 
-    # 2. 기존 파일 정리 및 새 파일 복사
+    # 이전 버전이 앱 번들 안에 저장한 사용자 사전을 번들 밖으로 이전합니다.
+    LEGACY_DICTIONARY_FILE="${DEST_APP}/Contents/Resources/hanja.txt"
+    if [ -f "$USER_DICTIONARY_FILE" ]; then
+        echo "기존 사용자 사전을 유지합니다: $USER_DICTIONARY_FILE"
+    elif [ -f "$LEGACY_DICTIONARY_FILE" ]; then
+        echo ""
+        echo "=========================================="
+        echo "기존 사용자 사전을 유지하시겠습니까?"
+        echo "=========================================="
+        echo "1 - 예, 기존 데이터를 유지합니다."
+        echo "2 - 아니오, 새 기본 사전을 사용합니다."
+        echo "=========================================="
+        read -p "원하는 작업의 번호를 입력하세요 [1-2]: " UPDATE_DICT_CHOICE
+
+        if [ "$UPDATE_DICT_CHOICE" = "1" ]; then
+            if ! mkdir -p "$USER_DICTIONARY_DIR" \
+                || ! cp "$LEGACY_DICTIONARY_FILE" "$USER_DICTIONARY_FILE"; then
+                echo "오류: 기존 사용자 사전을 이전하지 못했습니다. 설치를 중단합니다."
+                exit 1
+            fi
+            echo "사용자 사전을 이전했습니다: $USER_DICTIONARY_FILE"
+        else
+            echo "새 기본 사전을 사용합니다."
+        fi
+    fi
+
+    # 서명된 앱 번들을 수정하지 않고 그대로 설치합니다.
     echo "기존 앱 파일 제거 및 새 파일 복사 중..."
+    sudo mkdir -p "$DEST_DIR"
     sudo rm -rf "$DEST_APP"
     sudo cp -R "$SOURCE_APP" "$DEST_DIR/"
 
-    # 3. 설치된 앱 번들 격리 해제 (사전 복원 전 수행)
-    echo "설치된 앱 번들 확장 속성(quarantine) 제거 중..."
-    sudo xattr -cr "$DEST_APP"
-
-    # --- 사용자 사전 업데이트 확인 ---
-    if [ "$HANJA_PRESERVED" = true ]; then
-        echo ""
-        echo ""
-        echo "=========================================="
-        echo "사용자 사전을 업데이트 하시겠습니까? "
-        echo "*주의! 업데이트하면, 기존 사용자가 작성한 내용은 삭제됩니다."
-        echo "=========================================="
-        echo ""
-        echo "1 - 아니오, 기존 데이타를 유지합니다."
-        echo "2 - 예, 새 데이타로 업데이트 합니다."
-        echo ""
-        echo "=========================================="
-        read -p "원하는 작업의 번호를 입력하세요 [1-2]: " UPDATE_DICT_CHOICE
-        
-        if [ "$UPDATE_DICT_CHOICE" = "1" ]; then
-            echo "기존 사용자 사전을 복원 중..."
-            sudo cp "$HANJA_BACKUP" "$HANJA_FILE"
-        else
-            echo "새 사용자 사전을 적용합니다."
-        fi
-        sudo rm -f "$HANJA_BACKUP"
-    else
-        echo "기존 사전이 없어 새 사전을 설치합니다."
+    echo "설치된 앱의 코드 서명을 확인하는 중..."
+    if ! codesign --verify --deep --strict --verbose=2 "$DEST_APP"; then
+        echo "오류: 설치 과정에서 앱의 코드 서명이 손상되었습니다."
+        exit 1
     fi
 
-    # 4. [순서 변경됨] 설치 완료 후 프로세스 종료
+    # 설치 완료 후 프로세스 종료
     kill_dkst_process
 
     echo "[설치 완료]"
     SHOW_MESSAGE=true
 }
 
-# --- 함수: 아이콘 선택 메뉴 ---
+# --- 함수: 서명 보존 안내 ---
 function choose_icon_and_install() {
-    clear
     echo "=========================================="
-    echo " DKST macOS용 한글입력기 Ver. ${DKST_VERSION_DISPLAY}      "
-    echo " 다음 중 상태 메뉴에 표시될 아이콘을 선택하세요. "
-    echo " *선택한 아이콘은 재부팅 후 표시 됩니다."
+    echo "서명된 앱은 설치 과정에서 아이콘을 변경할 수 없습니다."
+    echo "아이콘 파일을 바꾸면 Apple 코드 서명이 무효화됩니다."
+    echo "기본 아이콘 설치를 이용해 주세요."
     echo "=========================================="
-    echo ""
-    echo "1 - 기본 아이콘 (Default 'Taegeuk symbol')"
-    echo "2 - 아래아 '한' 아이콘 (Arae-a 'Han')"
-    echo "3 - '한' (Han)"
-    echo "4 - '가' (Ga)"
-    echo "5 - '클래식' (Classic)"
-    echo "6 - '앙' (Ang)"
-    echo "7 - '앙' (Ang) 큰버젼"
-    echo "8 - 뒤로 돌아가기 (Back)"
-    echo ""
-    echo "=========================================="
-    read -p "원하는 작업의 번호를 입력하세요 [1-8]: " ICON_CHOICE
-
-    case $ICON_CHOICE in
-        1)
-            configure_pdf_icon "${SCRIPT_DIR}/Resources/Hangul.pdf" "기본 아이콘"
-            install_dkst
-            ;;
-
-        2)
-            if [ -f "${SCRIPT_DIR}/Resources/ICON-Arae-A-Han.pdf" ]; then
-                configure_pdf_icon "${SCRIPT_DIR}/Resources/ICON-Arae-A-Han.pdf" "아래아 '한' 아이콘"
-            else
-                configure_pdf_icon "${SOURCE_APP}/Contents/Resources/Hangul2.pdf" "아래아 '한' 아이콘"
-            fi
-            install_dkst
-            ;;
-
-        3)
-            configure_pdf_icon "${SCRIPT_DIR}/Resources/ICON-Han.pdf" "'한' 아이콘"
-            install_dkst
-            ;;
-
-        4)
-            configure_pdf_icon "${SCRIPT_DIR}/Resources/ICON-Ga.pdf" "'가' 아이콘"
-            install_dkst
-            ;;
-
-        5)
-            configure_pdf_icon "${SCRIPT_DIR}/Resources/ICON-Classic.pdf" "'클래식' 아이콘"
-            install_dkst
-            ;;
-
-        6)
-            configure_pdf_icon "${SCRIPT_DIR}/Resources/ICON-ANG.pdf" "'앙' 아이콘"
-            install_dkst
-            ;;
-
-        7)
-            configure_pdf_icon "${SCRIPT_DIR}/Resources/ICON-ANG-Large.pdf" "'앙' 큰버젼 아이콘"
-            install_dkst
-            ;;
-
-        8)
-            echo "이전 메뉴로 돌아갑니다."
-            exec "${SCRIPT_DIR}/install.command"
-            ;;
-
-        *)
-            echo "잘못된 입력입니다. 스크립트를 종료합니다."
-            exit 1
-            ;;
-    esac
 }
 
 # --- 화면 출력 및 메뉴 ---
@@ -270,7 +149,6 @@ read -p "원하는 작업의 번호를 입력하세요 [1-4]: " CHOICE
 # --- 로직 처리 ---
 case $CHOICE in
     1)
-        configure_pdf_icon "${SCRIPT_DIR}/Resources/Hangul.pdf" "기본 아이콘"
         install_dkst
         ;;
 

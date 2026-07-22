@@ -166,4 +166,12 @@
   return YES;
 }
 
+- (BOOL)applicationShouldHandleReopen:(NSApplication *)application
+                    hasVisibleWindows:(BOOL)hasVisibleWindows {
+  (void)application;
+  (void)hasVisibleWindows;
+  [self showWindow:nil];
+  return YES;
+}
+
 @end
