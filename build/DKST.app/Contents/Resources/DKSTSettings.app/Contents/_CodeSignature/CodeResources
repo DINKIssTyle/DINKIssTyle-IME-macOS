@@ -28,6 +28,10 @@
 		<data>
 		JBXe08FN56W6j2++W/0bZhhHvlo=
 		</data>
+		<key>Resources/Not_installed.icns</key>
+		<data>
+		b/82U8Rl0ZVjb15Yvs8j0m5DFMM=
+		</data>
 		<key>Resources/dictup.sh</key>
 		<data>
 		x3wR62Pexl/EUFx2o/5muIAWz/o=
@@ -83,6 +87,13 @@
 			<key>hash2</key>
 			<data>
 			JAKQDHmFEaXVUDY6YovpO9E027qgIfiI9J2tRLIhpWU=
+			</data>
+		</dict>
+		<key>Resources/Not_installed.icns</key>
+		<dict>
+			<key>hash2</key>
+			<data>
+			X/7c+Z+aptFQvX7bUvjnrsFlLA7rsNaZljQMRSmT7/s=
 			</data>
 		</dict>
 		<key>Resources/dictup.sh</key>

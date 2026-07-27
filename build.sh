@@ -151,6 +151,7 @@ set_plist_string build/DKSTSettings.app/Contents/Info.plist CFBundleVersion "$DK
 
 # Copy Icon
 cp Resources/DKST_pref.icns build/DKSTSettings.app/Contents/Resources/
+cp Resources/Not_installed.icns build/DKSTSettings.app/Contents/Resources/
 cp Resources/SettingsIcons/*.pdf build/DKSTSettings.app/Contents/Resources/
 cp Resources/SettingsIcons/icon.png build/DKSTSettings.app/Contents/Resources/
 cp Resources/hanja.txt build/DKSTSettings.app/Contents/Resources/

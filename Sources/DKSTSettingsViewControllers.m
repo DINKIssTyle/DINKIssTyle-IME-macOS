@@ -2,6 +2,41 @@
 #import "DKSTConstants.h"
 #import "DKSTShortcutRecorder.h"
 
+@protocol DKSTApplicationDropTarget <NSObject>
+- (BOOL)canAcceptApplicationDrag:(id<NSDraggingInfo>)draggingInfo;
+- (BOOL)acceptApplicationDrag:(id<NSDraggingInfo>)draggingInfo;
+@end
+
+@interface DKSTCompatibilityViewController () <DKSTApplicationDropTarget,
+                                                NSWindowDelegate>
+@end
+
+@interface DKSTApplicationDropTableView : NSTableView
+@property(nonatomic, assign) id<DKSTApplicationDropTarget> applicationDropTarget;
+@end
+
+@implementation DKSTApplicationDropTableView
+
+- (NSDragOperation)draggingEntered:(id<NSDraggingInfo>)sender {
+  return [_applicationDropTarget canAcceptApplicationDrag:sender]
+             ? NSDragOperationCopy
+             : NSDragOperationNone;
+}
+
+- (NSDragOperation)draggingUpdated:(id<NSDraggingInfo>)sender {
+  return [self draggingEntered:sender];
+}
+
+- (BOOL)prepareForDragOperation:(id<NSDraggingInfo>)sender {
+  return [_applicationDropTarget canAcceptApplicationDrag:sender];
+}
+
+- (BOOL)performDragOperation:(id<NSDraggingInfo>)sender {
+  return [_applicationDropTarget acceptApplicationDrag:sender];
+}
+
+@end
+
 // Helper to get shared defaults
 static NSUserDefaults *sharedDefaults() {
   static NSUserDefaults *suiteDefaults = nil;
@@ -901,6 +936,9 @@ static NSDictionary *DKSTIMEInfoPlist() {
 @implementation DKSTCompatibilityViewController {
   NSTableView *tableView;
   NSMutableArray *bundleIDs;
+  NSTableView *runningAppsTableView;
+  NSMutableArray *runningApps;
+  NSPanel *runningAppsPanel;
 }
 
 - (void)loadView {
@@ -922,19 +960,32 @@ static NSDictionary *DKSTIMEInfoPlist() {
   scrollView.hasVerticalScroller = YES;
   scrollView.borderType = NSBezelBorder;
 
-  tableView = [[NSTableView alloc] initWithFrame:scrollView.bounds];
+  tableView =
+      [[DKSTApplicationDropTableView alloc] initWithFrame:scrollView.bounds];
+  ((DKSTApplicationDropTableView *)tableView).applicationDropTarget = self;
+  [tableView registerForDraggedTypes:@[ NSPasteboardTypeFileURL ]];
   NSTableColumn *col = [[NSTableColumn alloc] initWithIdentifier:@"BundleID"];
-  col.title = @"Bundle ID";
+  col.title = @"앱 / Bundle ID";
   col.width = 420;
   [tableView addTableColumn:col];
 
   tableView.dataSource = self;
   tableView.delegate = self;
+  tableView.rowHeight = 34;
   tableView.usesAlternatingRowBackgroundColors = YES;
   scrollView.documentView = tableView;
   [stackView addView:scrollView inGravity:NSStackViewGravityTop];
 
   NSStackView *btnRow = [NSStackView stackViewWithViews:@[
+    ({
+      NSButton *btn =
+          [[NSButton alloc] initWithFrame:NSMakeRect(0, 0, 100, 26)];
+      btn.title = @"실행 중인 앱";
+      btn.bezelStyle = NSBezelStyleRounded;
+      btn.target = self;
+      btn.action = @selector(showRunningApps:);
+      btn;
+    }),
     ({
       NSButton *btn = [[NSButton alloc] initWithFrame:NSMakeRect(0, 0, 70, 26)];
       btn.title = @"+ 추가";
@@ -955,6 +1006,12 @@ static NSDictionary *DKSTIMEInfoPlist() {
   btnRow.spacing = 10;
   [stackView addView:btnRow inGravity:NSStackViewGravityTop];
 
+  NSTextField *dropHint = [NSTextField
+      labelWithString:@"팁: Finder에서 앱 번들을 목록으로 드래그해도 추가할 수 있습니다."];
+  dropHint.textColor = [NSColor secondaryLabelColor];
+  dropHint.font = [NSFont systemFontOfSize:[NSFont smallSystemFontSize]];
+  [stackView addView:dropHint inGravity:NSStackViewGravityTop];
+
   self.preferredContentSize = NSMakeSize(550, 480);
 }
 
@@ -973,17 +1030,107 @@ static NSDictionary *DKSTIMEInfoPlist() {
   [sharedDefaults() synchronize];
 }
 
-- (NSInteger)numberOfRowsInTableView:(NSTableView *)tableView {
+- (NSInteger)numberOfRowsInTableView:(NSTableView *)aTableView {
+  if (aTableView == runningAppsTableView) {
+    return runningApps.count;
+  }
   return bundleIDs.count;
 }
-- (id)tableView:(NSTableView *)tableView
+
+- (id)tableView:(NSTableView *)aTableView
     objectValueForTableColumn:(NSTableColumn *)tableColumn
                           row:(NSInteger)row {
+  if (aTableView == runningAppsTableView) {
+    if (row < 0 || row >= runningApps.count) {
+      return @"";
+    }
+    NSRunningApplication *app = runningApps[row];
+    return [NSString stringWithFormat:@"%@ — %@", app.localizedName ?: @"",
+                                      app.bundleIdentifier ?: @""];
+  }
   if (row < 0 || row >= bundleIDs.count) {
     return @"";
   }
   return bundleIDs[row];
 }
+
+- (NSTableCellView *)tableView:(NSTableView *)aTableView
+             viewForTableColumn:(NSTableColumn *)tableColumn
+                            row:(NSInteger)row {
+  NSString *identifier = aTableView == runningAppsTableView
+                             ? @"RunningApplicationCell"
+                             : @"CompatibilityApplicationCell";
+  NSTableCellView *cell =
+      [aTableView makeViewWithIdentifier:identifier owner:self];
+  if (!cell) {
+    cell = [[[NSTableCellView alloc]
+        initWithFrame:NSMakeRect(0, 0, tableColumn.width, 34)] autorelease];
+    cell.identifier = identifier;
+
+    NSImageView *imageView = [[[NSImageView alloc]
+        initWithFrame:NSMakeRect(4, 3, 28, 28)] autorelease];
+    imageView.imageScaling = NSImageScaleProportionallyUpOrDown;
+    imageView.autoresizingMask = NSViewMaxXMargin;
+    cell.imageView = imageView;
+    [cell addSubview:imageView];
+
+    NSTextField *textField = [[[NSTextField alloc]
+        initWithFrame:NSMakeRect(40, 7, tableColumn.width - 44, 20)]
+        autorelease];
+    textField.bezeled = NO;
+    textField.drawsBackground = NO;
+    textField.editable = NO;
+    textField.selectable = NO;
+    textField.lineBreakMode = NSLineBreakByTruncatingMiddle;
+    textField.autoresizingMask = NSViewWidthSizable;
+    cell.textField = textField;
+    [cell addSubview:textField];
+  }
+
+  NSString *bundleID = nil;
+  NSString *displayName = nil;
+  NSImage *icon = nil;
+  BOOL applicationIsNotInstalled = NO;
+  if (aTableView == runningAppsTableView) {
+    if (row >= 0 && row < runningApps.count) {
+      NSRunningApplication *app = runningApps[row];
+      bundleID = app.bundleIdentifier;
+      displayName = app.localizedName;
+      icon = app.icon;
+    }
+  } else if (row >= 0 && row < bundleIDs.count) {
+    bundleID = bundleIDs[row];
+    NSURL *applicationURL =
+        [[NSWorkspace sharedWorkspace]
+            URLForApplicationWithBundleIdentifier:bundleID];
+    if (applicationURL) {
+      NSBundle *applicationBundle = [NSBundle bundleWithURL:applicationURL];
+      NSDictionary *localizedInfo = applicationBundle.localizedInfoDictionary;
+      NSDictionary *info = applicationBundle.infoDictionary;
+      displayName = localizedInfo[@"CFBundleDisplayName"] ?:
+                        localizedInfo[@"CFBundleName"] ?:
+                        info[@"CFBundleDisplayName"] ?: info[@"CFBundleName"] ?:
+                        applicationURL.URLByDeletingPathExtension.lastPathComponent;
+      icon =
+          [[NSWorkspace sharedWorkspace] iconForFile:applicationURL.path];
+    } else {
+      applicationIsNotInstalled = YES;
+    }
+  }
+
+  cell.textField.stringValue =
+      displayName.length > 0
+          ? [NSString stringWithFormat:@"%@ — %@", displayName, bundleID ?: @""]
+          : bundleID ?: @"";
+  cell.textField.toolTip = bundleID;
+  if (!icon && applicationIsNotInstalled) {
+    icon = [NSImage imageNamed:@"Not_installed"];
+  }
+  cell.imageView.image =
+      icon ?: [NSImage imageNamed:NSImageNameApplicationIcon];
+  return cell;
+}
+
 - (void)tableView:(NSTableView *)tableView
     setObjectValue:(id)object
     forTableColumn:(NSTableColumn *)tableColumn
@@ -1002,19 +1149,182 @@ static NSDictionary *DKSTIMEInfoPlist() {
   [self saveData];
 }
 
+- (BOOL)addBundleIdentifier:(NSString *)bundleID {
+  NSString *trimmed = [bundleID
+      stringByTrimmingCharactersInSet:
+          [NSCharacterSet whitespaceAndNewlineCharacterSet]];
+  if (![trimmed length]) {
+    return NO;
+  }
+  if (!bundleIDs) {
+    bundleIDs = [[NSMutableArray alloc] init];
+  }
+  if ([bundleIDs containsObject:trimmed]) {
+    return NO;
+  }
+  [bundleIDs addObject:trimmed];
+  [tableView reloadData];
+  [self saveData];
+  return YES;
+}
+
 - (void)addApp:(id)sender {
   NSOpenPanel *p = [NSOpenPanel openPanel];
   p.allowedFileTypes = @[ @"app" ];
+  p.allowsMultipleSelection = YES;
   if ([p runModal] == NSModalResponseOK) {
-    NSString *bid = [[NSBundle bundleWithURL:p.URL] bundleIdentifier];
-    if (!bundleIDs) {
-      bundleIDs = [[NSMutableArray alloc] init];
+    for (NSURL *url in p.URLs) {
+      [self addBundleIdentifier:[[NSBundle bundleWithURL:url] bundleIdentifier]];
     }
-    if (bid && ![bundleIDs containsObject:bid]) {
-      [bundleIDs addObject:bid];
-      [tableView reloadData];
-      [self saveData];
+  }
+}
+
+- (NSArray *)applicationBundleIdentifiersFromDraggingInfo:
+    (id<NSDraggingInfo>)draggingInfo {
+  NSPasteboard *pasteboard = draggingInfo.draggingPasteboard;
+  NSArray *fileURLs = [pasteboard
+      readObjectsForClasses:@[ [NSURL class] ]
+                    options:@{NSPasteboardURLReadingFileURLsOnlyKey : @YES}];
+  NSMutableArray *result = [NSMutableArray array];
+  for (NSURL *fileURL in fileURLs) {
+    if (![fileURL isFileURL] ||
+        [[fileURL pathExtension] caseInsensitiveCompare:@"app"] !=
+            NSOrderedSame) {
+      continue;
     }
+    NSString *bundleID = [[NSBundle bundleWithURL:fileURL] bundleIdentifier];
+    if ([bundleID length] > 0 && ![result containsObject:bundleID]) {
+      [result addObject:bundleID];
+    }
+  }
+  return result;
+}
+
+- (BOOL)canAcceptApplicationDrag:(id<NSDraggingInfo>)draggingInfo {
+  return [[self applicationBundleIdentifiersFromDraggingInfo:draggingInfo]
+             count] > 0;
+}
+
+- (BOOL)acceptApplicationDrag:(id<NSDraggingInfo>)draggingInfo {
+  BOOL foundApplication = NO;
+  for (NSString *bundleID in
+       [self applicationBundleIdentifiersFromDraggingInfo:draggingInfo]) {
+    foundApplication = YES;
+    [self addBundleIdentifier:bundleID];
+  }
+  return foundApplication;
+}
+
+- (void)showRunningApps:(id)sender {
+  [runningApps release];
+  runningApps = [[NSMutableArray alloc] init];
+
+  NSMutableSet *seenBundleIDs = [NSMutableSet set];
+  for (NSRunningApplication *app in
+       [NSWorkspace sharedWorkspace].runningApplications) {
+    NSString *bundleID = app.bundleIdentifier;
+    if (app.activationPolicy == NSApplicationActivationPolicyProhibited ||
+        ![bundleID length] || [seenBundleIDs containsObject:bundleID]) {
+      continue;
+    }
+    [seenBundleIDs addObject:bundleID];
+    [runningApps addObject:app];
+  }
+  [runningApps sortUsingComparator:^NSComparisonResult(
+                   NSRunningApplication *left, NSRunningApplication *right) {
+    return [(left.localizedName ?: left.bundleIdentifier)
+        localizedStandardCompare:(right.localizedName ?: right.bundleIdentifier)];
+  }];
+
+  NSRect panelRect = NSMakeRect(0, 0, 500, 390);
+  runningAppsPanel = [[NSPanel alloc]
+      initWithContentRect:panelRect
+                styleMask:NSWindowStyleMaskTitled | NSWindowStyleMaskClosable |
+                          NSWindowStyleMaskResizable
+                  backing:NSBackingStoreBuffered
+                    defer:NO];
+  runningAppsPanel.title = @"실행 중인 앱";
+  runningAppsPanel.minSize = NSMakeSize(420, 300);
+  runningAppsPanel.delegate = self;
+
+  NSView *contentView = runningAppsPanel.contentView;
+  NSTextField *instruction =
+      [NSTextField labelWithString:@"추가할 앱을 더블클릭하세요."];
+  instruction.frame = NSMakeRect(20, 354, 460, 20);
+  instruction.autoresizingMask = NSViewWidthSizable | NSViewMinYMargin;
+  [contentView addSubview:instruction];
+
+  NSScrollView *scrollView =
+      [[[NSScrollView alloc] initWithFrame:NSMakeRect(20, 58, 460, 286)]
+          autorelease];
+  scrollView.hasVerticalScroller = YES;
+  scrollView.borderType = NSBezelBorder;
+  scrollView.autoresizingMask = NSViewWidthSizable | NSViewHeightSizable;
+
+  runningAppsTableView =
+      [[[NSTableView alloc] initWithFrame:scrollView.bounds] autorelease];
+  NSTableColumn *column =
+      [[[NSTableColumn alloc] initWithIdentifier:@"RunningApplication"]
+          autorelease];
+  column.title = @"앱 / Bundle ID";
+  column.width = 440;
+  [runningAppsTableView addTableColumn:column];
+  runningAppsTableView.dataSource = self;
+  runningAppsTableView.delegate = self;
+  runningAppsTableView.rowHeight = 34;
+  runningAppsTableView.usesAlternatingRowBackgroundColors = YES;
+  runningAppsTableView.target = self;
+  runningAppsTableView.doubleAction = @selector(addSelectedRunningApp:);
+  scrollView.documentView = runningAppsTableView;
+  [contentView addSubview:scrollView];
+
+  NSButton *addButton =
+      [[[NSButton alloc] initWithFrame:NSMakeRect(330, 18, 72, 28)]
+          autorelease];
+  addButton.title = @"추가";
+  addButton.bezelStyle = NSBezelStyleRounded;
+  addButton.target = self;
+  addButton.action = @selector(addSelectedRunningApp:);
+  addButton.autoresizingMask = NSViewMinXMargin | NSViewMaxYMargin;
+  [contentView addSubview:addButton];
+
+  NSButton *cancelButton =
+      [[[NSButton alloc] initWithFrame:NSMakeRect(408, 18, 72, 28)]
+          autorelease];
+  cancelButton.title = @"취소";
+  cancelButton.bezelStyle = NSBezelStyleRounded;
+  cancelButton.target = self;
+  cancelButton.action = @selector(closeRunningAppsPanel:);
+  cancelButton.autoresizingMask = NSViewMinXMargin | NSViewMaxYMargin;
+  [contentView addSubview:cancelButton];
+
+  [runningAppsPanel center];
+  [NSApp runModalForWindow:runningAppsPanel];
+  [runningAppsPanel orderOut:nil];
+  [runningAppsPanel release];
+  runningAppsPanel = nil;
+  runningAppsTableView = nil;
+}
+
+- (void)addSelectedRunningApp:(id)sender {
+  NSInteger row = runningAppsTableView.selectedRow;
+  if (row < 0 || row >= runningApps.count) {
+    NSBeep();
+    return;
+  }
+  NSRunningApplication *app = runningApps[row];
+  [self addBundleIdentifier:app.bundleIdentifier];
+  [NSApp stopModalWithCode:NSModalResponseOK];
+}
+
+- (void)closeRunningAppsPanel:(id)sender {
+  [NSApp abortModal];
+}
+
+- (void)windowWillClose:(NSNotification *)notification {
+  if (notification.object == runningAppsPanel &&
+      NSApp.modalWindow == runningAppsPanel) {
+    [NSApp abortModal];
   }
 }
 
@@ -1028,6 +1338,12 @@ static NSDictionary *DKSTIMEInfoPlist() {
 }
 
 - (void)dealloc {
+  if (runningAppsPanel) {
+    [NSApp abortModal];
+    [runningAppsPanel orderOut:nil];
+    [runningAppsPanel release];
+  }
+  [runningApps release];
   [bundleIDs release];
   [super dealloc];
 }

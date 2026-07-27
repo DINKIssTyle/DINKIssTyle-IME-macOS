@@ -18,11 +18,11 @@
 		</data>
 		<key>Resources/DKSTSettings.app/Contents/Info.plist</key>
 		<data>
-		XVHmpRjW4bjdszPpGErIq2GOjso=
+		ud1Gwmrq9nYfxZIhxEcRxYCuBCE=
 		</data>
 		<key>Resources/DKSTSettings.app/Contents/MacOS/DKSTSettings</key>
 		<data>
-		IrP5EMIJ6Egwu1izaYsU55CtCFw=
+		3XsnzfjmJ+LrVZ1vPuIlXo3KcmM=
 		</data>
 		<key>Resources/DKSTSettings.app/Contents/Resources/About.pdf</key>
 		<data>
@@ -48,6 +48,10 @@
 		<data>
 		JBXe08FN56W6j2++W/0bZhhHvlo=
 		</data>
+		<key>Resources/DKSTSettings.app/Contents/Resources/Not_installed.icns</key>
+		<data>
+		b/82U8Rl0ZVjb15Yvs8j0m5DFMM=
+		</data>
 		<key>Resources/DKSTSettings.app/Contents/Resources/dictup.sh</key>
 		<data>
 		x3wR62Pexl/EUFx2o/5muIAWz/o=
@@ -62,7 +66,7 @@
 		</data>
 		<key>Resources/DKSTSettings.app/Contents/_CodeSignature/CodeResources</key>
 		<data>
-		DahG+dQ0fSN/RMF32dS2MXamHO8=
+		1NUDcKMIvD/IuEuZedwm4bMzJ14=
 		</data>
 		<key>Resources/DKST_pref.icns</key>
 		<data>
@@ -95,6 +99,10 @@
 		<key>Resources/ICON-Han.pdf</key>
 		<data>
 		7FNyWwtQ8lZqzdhXezYQX1tGaFA=
+		</data>
+		<key>Resources/Not_Installed.icns</key>
+		<data>
+		b/82U8Rl0ZVjb15Yvs8j0m5DFMM=
 		</data>
 		<key>Resources/en.lproj/InfoPlist.strings</key>
 		<dict>
@@ -146,14 +154,14 @@
 		<dict>
 			<key>hash2</key>
 			<data>
-			GIHppwXxoqp7LfY4tbMEBONutC8fNZNRv8GrHRsM/vY=
+			8KzV/81yTi7cXQfs7jf8r3vXoyKM5tmOMuQ8hx6G2UA=
 			</data>
 		</dict>
 		<key>Resources/DKSTSettings.app/Contents/MacOS/DKSTSettings</key>
 		<dict>
 			<key>hash2</key>
 			<data>
-			A/L+nNZ19kEKKyGwjQYqjuswQi1w4eLtWomIkvmWzFk=
+			EkPfzvHuNBDuiz0M467RcCcVHsxOpQsMwK72q5TpKvw=
 			</data>
 		</dict>
 		<key>Resources/DKSTSettings.app/Contents/Resources/About.pdf</key>
@@ -198,6 +206,13 @@
 			JAKQDHmFEaXVUDY6YovpO9E027qgIfiI9J2tRLIhpWU=
 			</data>
 		</dict>
+		<key>Resources/DKSTSettings.app/Contents/Resources/Not_installed.icns</key>
+		<dict>
+			<key>hash2</key>
+			<data>
+			X/7c+Z+aptFQvX7bUvjnrsFlLA7rsNaZljQMRSmT7/s=
+			</data>
+		</dict>
 		<key>Resources/DKSTSettings.app/Contents/Resources/dictup.sh</key>
 		<dict>
 			<key>hash2</key>
@@ -223,7 +238,7 @@
 		<dict>
 			<key>hash2</key>
 			<data>
-			iKn2pf+HAXtxoFu+AR9mUhTgSHfYn2x04h71mkZzx/w=
+			G6zIxDfmHHKPp/Tsog9HFSQjZhGMdo0y79nxC/eFGVw=
 			</data>
 		</dict>
 		<key>Resources/DKST_pref.icns</key>
@@ -280,6 +295,13 @@
 			<key>hash2</key>
 			<data>
 			48+CQsS5RiAcd06Kl1QKJh66CXBj7GqY3pA7HWJl828=
+			</data>
+		</dict>
+		<key>Resources/Not_Installed.icns</key>
+		<dict>
+			<key>hash2</key>
+			<data>
+			X/7c+Z+aptFQvX7bUvjnrsFlLA7rsNaZljQMRSmT7/s=
 			</data>
 		</dict>
 		<key>Resources/en.lproj/InfoPlist.strings</key>
