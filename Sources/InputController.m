@@ -29,6 +29,19 @@ static NSInteger DKSTCandidateIndexForNumberKeyCode(unsigned short keyCode) {
   }
 }
 
+static BOOL DKSTRangeIsValid(NSRange range) {
+  return range.location != NSNotFound &&
+         NSMaxRange(range) >= range.location;
+}
+
+static BOOL DKSTRangesOverlapOrTouch(NSRange first, NSRange second) {
+  if (!DKSTRangeIsValid(first) || !DKSTRangeIsValid(second)) {
+    return NO;
+  }
+  return first.location <= NSMaxRange(second) &&
+         second.location <= NSMaxRange(first);
+}
+
 @implementation InputController
 
 static IMKCandidates *DKSTSharedCandidates;
@@ -225,15 +238,12 @@ static IMKCandidates *DKSTSharedCandidates;
       }
     }
 
-    if ([sender respondsToSelector:@selector(attributedSubstringFromRange:)]) {
-      NSAttributedString *textInRange =
-          [sender attributedSubstringFromRange:range];
-      if (![[textInRange string] isEqualToString:_directInputComposedText]) {
-        DKSTLog(@"Direct input range %@ contains '%@', expected '%@'",
-                NSStringFromRange(range), [textInRange string],
-                _directInputComposedText);
-        return NO;
-      }
+    BOOL didRead = NO;
+    if (![self directInputRange:range
+                  containsText:_directInputComposedText
+                        client:sender
+                       didRead:&didRead]) {
+      return NO;
     }
   } @catch (NSException *exception) {
     DKSTLog(@"Stale direct input range %@: %@", NSStringFromRange(range),
@@ -244,54 +254,139 @@ static IMKCandidates *DKSTSharedCandidates;
   return YES;
 }
 
-- (NSRange)directInputReplacementRange:(id)sender {
-  if (_directInputComposedLength == 0 || !sender) {
-    return _directInputComposedRange;
+- (BOOL)directInputRange:(NSRange)range
+            containsText:(NSString *)expectedText
+                  client:(id)sender
+                 didRead:(BOOL *)didRead {
+  if (didRead) {
+    *didRead = NO;
   }
-
-  if ([self shouldTrustDirectCompositionRangeForClient:sender] &&
-      [self directInputRangeIsCurrent:_directInputComposedRange
-                               client:sender]) {
-    return _directInputComposedRange;
+  if (!sender || !expectedText || !DKSTRangeIsValid(range) ||
+      range.length != [expectedText length]) {
+    return NO;
   }
 
   @try {
-    NSRange selectedRange = [sender selectedRange];
-    if (selectedRange.location != NSNotFound &&
-        selectedRange.location >= _directInputComposedLength) {
-      NSRange selectedBacktrackRange =
-          NSMakeRange(selectedRange.location - _directInputComposedLength,
-                      _directInputComposedLength);
-      // When selectedRange.length > 0, it may be an autocomplete suggestion
-      // (e.g. Excel). Allow the backtrack if the text in the range matches
-      // our composed text, using allowSelection:YES to skip the selection
-      // length guard inside directInputRangeIsCurrent.
-      BOOL hasSelection = selectedRange.length > 0;
-      if ([self directInputRangeIsCurrent:selectedBacktrackRange
-                                   client:sender
-                           allowSelection:hasSelection]) {
-        if (hasSelection) {
-          // Matches Apple's native IME behavior: NSUnionRange(inlineRange, selectedRange).
-          // Expand the replacement range to cover both the composed text and
-          // the autocomplete selection so the suggestion is properly replaced.
-          return NSUnionRange(selectedBacktrackRange, selectedRange);
+    if ([sender respondsToSelector:@selector(attributedSubstringFromRange:)]) {
+      NSAttributedString *textInRange =
+          [sender attributedSubstringFromRange:range];
+      if (textInRange) {
+        if (didRead) {
+          *didRead = YES;
         }
-        return selectedBacktrackRange;
+        BOOL matches = [[textInRange string] isEqualToString:expectedText];
+        if (!matches) {
+          DKSTLog(@"Direct input range %@ contains '%@', expected '%@'",
+                  NSStringFromRange(range), [textInRange string], expectedText);
+        }
+        return matches;
+      }
+    }
+
+    // IMKTextDocumentTextInputAdaptor exposes a plain-string fallback used by
+    // the native Korean input method when attributedSubstringFromRange: cannot
+    // provide a value.
+    id textSource = sender;
+    SEL stringFromRangeSelector =
+        NSSelectorFromString(@"stringFromRange:actualRange:");
+    if (![textSource respondsToSelector:stringFromRangeSelector]) {
+      SEL textDocumentSelector = NSSelectorFromString(@"textDocument");
+      if ([self respondsToSelector:textDocumentSelector]) {
+        textSource =
+            ((id (*)(id, SEL))objc_msgSend)(self, textDocumentSelector);
+      }
+    }
+    if ([textSource respondsToSelector:stringFromRangeSelector]) {
+      NSRange actualRange = range;
+      NSString *textInRange =
+          ((id (*)(id, SEL, NSRange, NSRange *))objc_msgSend)(
+              textSource, stringFromRangeSelector, range, &actualRange);
+      if (textInRange) {
+        if (didRead) {
+          *didRead = YES;
+        }
+        BOOL matches = NSEqualRanges(actualRange, range) &&
+                       [textInRange isEqualToString:expectedText];
+        if (!matches) {
+          DKSTLog(@"Direct input range %@ returned %@ and '%@', expected '%@'",
+                  NSStringFromRange(range), NSStringFromRange(actualRange),
+                  textInRange, expectedText);
+        }
+        return matches;
       }
     }
   } @catch (NSException *exception) {
-    DKSTLog(@"Exception in directInputReplacementRange: %@", exception);
+    DKSTLog(@"Exception reading direct input range %@: %@",
+            NSStringFromRange(range), exception);
   }
 
-  if ([self directInputRangeIsCurrent:_directInputComposedRange
-                               client:sender]) {
+  // A client without a readable document range cannot prove that insertion
+  // failed. Keep direct input and use subsequent range observations instead.
+  return YES;
+}
+
+- (NSRange)directInputReplacementRange:(id)sender {
+  if (!sender) {
     return _directInputComposedRange;
+  }
+
+  NSRange selectedRange = NSMakeRange(NSNotFound, 0);
+  @try {
+    if ([sender respondsToSelector:@selector(selectedRange)]) {
+      selectedRange = [sender selectedRange];
+    }
+  } @catch (NSException *exception) {
+    DKSTLog(@"Exception reading direct input selection: %@", exception);
+  }
+
+  // The first character replaces a live selection explicitly. Relying on
+  // NSNotFound here loses the insertion location needed to track inlineRange.
+  if (_directInputComposedLength == 0) {
+    if (selectedRange.location != NSNotFound && selectedRange.length > 0) {
+      return selectedRange;
+    }
+    return NSMakeRange(NSNotFound, 0);
+  }
+
+  BOOL trackedRangeIsUsable =
+      DKSTRangeIsValid(_directInputComposedRange) &&
+      _directInputComposedRange.length == _directInputComposedLength;
+
+  // Completion UIs may select a suffix immediately after inlineRange or a
+  // candidate that includes inlineRange itself. Use the union before checking
+  // the old text: the completion is allowed to have rewritten that text.
+  if (trackedRangeIsUsable && selectedRange.length > 0 &&
+      DKSTRangesOverlapOrTouch(_directInputComposedRange, selectedRange)) {
+    return NSUnionRange(_directInputComposedRange, selectedRange);
+  }
+
+  if (trackedRangeIsUsable &&
+      [self directInputRangeIsCurrent:_directInputComposedRange
+                               client:sender
+                       allowSelection:YES]) {
+    return _directInputComposedRange;
+  }
+
+  // Recover only when inlineRange was lost. This is secondary to the tracked
+  // range so a completion selected from the composition start is not missed.
+  if (!trackedRangeIsUsable && selectedRange.location != NSNotFound &&
+      selectedRange.location >= _directInputComposedLength) {
+    NSRange backtrackRange =
+        NSMakeRange(selectedRange.location - _directInputComposedLength,
+                    _directInputComposedLength);
+    if ([self directInputRangeIsCurrent:backtrackRange
+                                 client:sender
+                         allowSelection:selectedRange.length > 0]) {
+      if (selectedRange.length > 0 &&
+          DKSTRangesOverlapOrTouch(backtrackRange, selectedRange)) {
+        return NSUnionRange(backtrackRange, selectedRange);
+      }
+      return backtrackRange;
+    }
   }
 
   DKSTLog(@"Dropping stale direct input range %@",
           NSStringFromRange(_directInputComposedRange));
-  [self clearDirectCompositionStatePreservingMarkedRange:NO];
-  [_compositionState resetTransientRanges];
   return NSMakeRange(NSNotFound, 0);
 }
 
@@ -444,52 +539,42 @@ static IMKCandidates *DKSTSharedCandidates;
       NSRange selectedRange = [sender selectedRange];
       if (selectedRange.location != NSNotFound &&
           !NSEqualRanges(selectedRange, _lastClientSelectedRange)) {
-        if (_directInputComposedLength > 0 &&
-            selectedRange.location >= _directInputComposedLength &&
-            [_directInputComposedText length] == _directInputComposedLength) {
-          NSRange backtrackRange = NSMakeRange(selectedRange.location - _directInputComposedLength,
-                                               _directInputComposedLength);
-          // If the composed text is still intact at its original position,
-          // the caret has simply moved elsewhere (e.g. a mouse click the
-          // client never reported via selectionChanged). Adopting an
-          // identical-looking character next to the new caret would turn
-          // the next backspace into jamo deletion of unrelated text, so
-          // finish the old composition and start clean at the new caret.
-          if (!NSEqualRanges(backtrackRange, _directInputComposedRange) &&
-              _directInputComposedRange.location != NSNotFound &&
-              [self directInputRangeIsCurrent:_directInputComposedRange
-                                       client:sender
-                               allowSelection:YES]) {
-            DKSTLog(@"Caret moved away from intact composition at %@; "
-                    @"committing instead of adopting %@",
-                    NSStringFromRange(_directInputComposedRange),
-                    NSStringFromRange(backtrackRange));
-            [self commitComposition:sender];
-            return;
-          }
-
-          // Inline autocomplete (e.g. Safari address bar) selects its
-          // suggestion right after the composed text without notifying
-          // selectionChanged. Allow the selection here so the content check
-          // can still validate the composed text; the replacement range for
-          // the next insert is handled by directInputReplacementRange.
-          if ([self directInputRangeIsCurrent:backtrackRange
-                                       client:sender
-                               allowSelection:selectedRange.length > 0]) {
-            _directInputComposedRange = backtrackRange;
-            _lastClientSelectedRange = selectedRange;
-            DKSTLog(@"Self-healed direct composition range in prepareForInputClient to %@",
-                    NSStringFromRange(backtrackRange));
-            return;
-          }
+        BOOL selectionContinuesInlineCompletion =
+            _directInputComposedLength > 0 &&
+            selectedRange.length > 0 &&
+            DKSTRangeIsValid(_directInputComposedRange) &&
+            DKSTRangesOverlapOrTouch(_directInputComposedRange, selectedRange);
+        if (selectionContinuesInlineCompletion) {
+          _lastClientSelectedRange = selectedRange;
+          DKSTLog(@"Keeping direct composition for inline selection %@",
+                  NSStringFromRange(selectedRange));
+          return;
         }
 
-        DKSTLog(@"Selection changed during composition; next key starts a new "
-                @"direct composition");
+        BOOL caretFollowsInlineRange =
+            _directInputComposedLength > 0 &&
+            selectedRange.length == 0 &&
+            DKSTRangeIsValid(_directInputComposedRange) &&
+            selectedRange.location == NSMaxRange(_directInputComposedRange);
+        if (caretFollowsInlineRange) {
+          _lastClientSelectedRange = selectedRange;
+          return;
+        }
+
+        if (_directInputComposedLength > 0 &&
+            [self directInputRangeIsCurrent:_directInputComposedRange
+                                     client:sender
+                             allowSelection:YES]) {
+          DKSTLog(@"Selection moved away from direct composition %@; "
+                  @"finishing it before the next key",
+                  NSStringFromRange(_directInputComposedRange));
+          [self commitComposition:sender];
+          return;
+        }
+
+        DKSTLog(@"Direct composition contents changed outside inline range; "
+                @"resetting without clearing marked text");
         [self resetCompositionState];
-        [sender setMarkedText:@""
-               selectionRange:NSMakeRange(0, 0)
-             replacementRange:NSMakeRange(NSNotFound, NSNotFound)];
       }
     } @catch (NSException *exception) {
       DKSTLog(@"Exception checking selected range on client prepare: %@",
@@ -945,6 +1030,48 @@ static IMKCandidates *DKSTSharedCandidates;
 // MARK: - Input Method Kit Methods (handleEvent)
 
 - (BOOL)handleEvent:(NSEvent *)event client:(id)sender {
+  id textDocument = nil;
+  BOOL beganEdit = NO;
+  SEL textDocumentSelector = NSSelectorFromString(@"textDocument");
+  SEL beginEditSelector = NSSelectorFromString(@"beginEdit");
+  SEL endEditSelector = NSSelectorFromString(@"endEdit");
+  SEL invalidateCacheSelector = NSSelectorFromString(@"invalidateCache");
+
+  @try {
+    if ([self respondsToSelector:textDocumentSelector]) {
+      textDocument =
+          ((id (*)(id, SEL))objc_msgSend)(self, textDocumentSelector);
+    }
+    if (textDocument && [textDocument respondsToSelector:beginEditSelector] &&
+        [textDocument respondsToSelector:endEditSelector]) {
+      ((void (*)(id, SEL))objc_msgSend)(textDocument, beginEditSelector);
+      beganEdit = YES;
+    }
+  } @catch (NSException *exception) {
+    DKSTLog(@"Exception beginning text document edit: %@", exception);
+    textDocument = nil;
+    beganEdit = NO;
+  }
+
+  @try {
+    return [self handleEventInEditTransaction:event client:sender];
+  } @finally {
+    @try {
+      if (beganEdit) {
+        ((void (*)(id, SEL))objc_msgSend)(textDocument, endEditSelector);
+      }
+      if (textDocument &&
+          [textDocument respondsToSelector:invalidateCacheSelector]) {
+        ((void (*)(id, SEL))objc_msgSend)(textDocument,
+                                         invalidateCacheSelector);
+      }
+    } @catch (NSException *exception) {
+      DKSTLog(@"Exception ending text document edit: %@", exception);
+    }
+  }
+}
+
+- (BOOL)handleEventInEditTransaction:(NSEvent *)event client:(id)sender {
   unsigned short keyCode = [event keyCode];
 
   // Handle modifier-only Hanja shortcut (e.g., Option + Control)
@@ -994,6 +1121,7 @@ static IMKCandidates *DKSTSharedCandidates;
   _hanjaModifierPending = NO;
 
   [self prepareForInputClient:sender];
+  [self refreshMarkedTextPolicyForNewComposition:sender];
 
   // 1. Candidate window navigation
   BOOL candidatesVisible = [_candidates isVisible];
@@ -1182,6 +1310,7 @@ static IMKCandidates *DKSTSharedCandidates;
   NSString *composed = [engine composedString];
   NSUInteger commitLength = [commit length];
   NSUInteger composedLength = [composed length];
+  BOOL hadDirectComposition = _directInputComposedLength > 0;
   NSMutableString *replacement = [NSMutableString string];
 
   if (commitLength > 0) {
@@ -1196,7 +1325,7 @@ static IMKCandidates *DKSTSharedCandidates;
   if (replacementStart == NSNotFound) {
     @try {
       NSRange selectedRange = [sender selectedRange];
-      if (selectedRange.location != NSNotFound && selectedRange.length == 0) {
+      if (selectedRange.location != NSNotFound) {
         replacementStart = selectedRange.location;
       }
     } @catch (NSException *exception) {
@@ -1204,13 +1333,49 @@ static IMKCandidates *DKSTSharedCandidates;
     }
   }
 
+  if (hadDirectComposition && replacementRange.location == NSNotFound) {
+    [self forceMarkedTextForClient:sender
+                            reason:@"tracked direct composition disappeared"];
+    return NO;
+  }
+
   if ([replacement length] > 0 || replacementRange.location != NSNotFound) {
-    [sender insertText:replacement replacementRange:replacementRange];
+    @try {
+      [sender insertText:replacement replacementRange:replacementRange];
+    } @catch (NSException *exception) {
+      DKSTLog(@"Direct insert failed: %@", exception);
+      if (replacementRange.location != NSNotFound) {
+        [self setMarkedReplacementRange:replacementRange];
+      }
+      [self forceMarkedTextForClient:sender reason:@"direct insert exception"];
+      return NO;
+    }
   }
 
   NSUInteger expectedLocation = NSNotFound;
   if (replacementStart != NSNotFound) {
     expectedLocation = replacementStart + commitLength + composedLength;
+  }
+
+  NSRange insertedComposedRange = NSMakeRange(NSNotFound, 0);
+  if (replacementStart != NSNotFound && composedLength > 0) {
+    insertedComposedRange =
+        NSMakeRange(replacementStart + commitLength, composedLength);
+    BOOL didReadInsertedText = NO;
+    BOOL insertedTextMatches =
+        [self directInputRange:insertedComposedRange
+                 containsText:composed
+                       client:sender
+                      didRead:&didReadInsertedText];
+    if (didReadInsertedText && !insertedTextMatches) {
+      [self setMarkedReplacementRange:
+                (replacementRange.location != NSNotFound
+                     ? replacementRange
+                     : insertedComposedRange)];
+      [self forceMarkedTextForClient:sender
+                              reason:@"direct insert text mismatch"];
+      return NO;
+    }
   }
 
   if (expectedLocation != NSNotFound && composedLength > 0 && _directInputComposedLength > 0 &&
@@ -1227,19 +1392,21 @@ static IMKCandidates *DKSTSharedCandidates;
 
       if (selectedRange.location == NSNotFound ||
           (selectedRange.location != expectedLocation && !isLag)) {
-        [self forceMarkedTextForClient:sender
-                                reason:@"direct insert cursor mismatch"];
-        DKSTLog(@"Direct insert mismatch: expected %lu, got %lu (lag allowed: %d)",
+        // Autofill clients can still report the selection from before
+        // insertText: here. Do not turn that asynchronous observation into a
+        // marked-text policy change. The next key validates both the live
+        // selection and the actual text in directInputReplacementRange:.
+        DKSTLog(@"Deferred direct insert validation: expected %lu, got %lu "
+                @"(lag allowed: %d)",
                 (unsigned long)expectedLocation,
                 (unsigned long)selectedRange.location,
                 isLag);
-        return NO;
       }
     } @catch (NSException *exception) {
-      DKSTLog(@"Exception checking direct insert result: %@", exception);
-      [self forceMarkedTextForClient:sender
-                              reason:@"direct insert selectedRange exception"];
-      return NO;
+      // A failed observation does not mean the insert itself failed. Keep the
+      // direct state and validate it from the next real key event.
+      DKSTLog(@"Deferred direct insert validation after exception: %@",
+              exception);
     }
   }
 
@@ -1267,7 +1434,8 @@ static IMKCandidates *DKSTSharedCandidates;
       _useMarkedTextForClient = YES;
 
       // Migrate direct composition state to marked text
-      if (_directInputComposedRange.location != NSNotFound) {
+      if (_markedReplacementRange.location == NSNotFound &&
+          _directInputComposedRange.location != NSNotFound) {
         [self setMarkedReplacementRange:_directInputComposedRange];
       }
       [self clearDirectCompositionStatePreservingMarkedRange:YES];
@@ -1299,9 +1467,6 @@ static IMKCandidates *DKSTSharedCandidates;
     [engine reset];
     [self clearDirectCompositionStatePreservingMarkedRange:NO];
     [_markedTextCommittedPrefix setString:@""];
-    [sender setMarkedText:@""
-           selectionRange:NSMakeRange(0, 0)
-         replacementRange:NSMakeRange(NSNotFound, NSNotFound)];
     [self rememberSelectedRangeForClient:sender];
     return;
   }

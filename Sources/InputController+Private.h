@@ -16,8 +16,13 @@
 - (BOOL)runningApplicationUsesChromiumTextStack:(NSString *)bundleID;
 - (BOOL)shouldUseMarkedTextForClient:(id)sender;
 - (void)refreshMarkedTextPolicyForClient:(id)sender;
+- (void)refreshMarkedTextPolicyForNewComposition:(id)sender;
 
 - (BOOL)directInputRangeIsCurrent:(NSRange)range client:(id)sender;
+- (BOOL)directInputRange:(NSRange)range
+            containsText:(NSString *)expectedText
+                  client:(id)sender
+                 didRead:(BOOL *)didRead;
 - (NSRange)directInputReplacementRange:(id)sender;
 - (NSRange)compositionReplacementRange:(id)sender;
 - (void)setMarkedReplacementRange:(NSRange)range;
@@ -65,6 +70,7 @@
 - (BOOL)handleCustomShift:(unsigned short)keyCode
                 modifiers:(NSUInteger)modifiers
                    client:(id)sender;
+- (BOOL)handleEventInEditTransaction:(NSEvent *)event client:(id)sender;
 - (BOOL)processHangulInput:(NSEvent *)event
                    keyCode:(unsigned short)keyCode
                     client:(id)sender

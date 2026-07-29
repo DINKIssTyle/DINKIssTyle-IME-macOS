@@ -35,10 +35,12 @@
 
 - (void)forceMarkedTextForClient:(id)sender reason:(NSString *)reason {
   NSString *bundleID = [self bundleIdentifierForClient:sender];
-  if ([bundleID length] > 0) {
-    [_forcedMarkedTextBundleIDs addObject:bundleID];
-  }
+  // A direct insert can appear inconsistent while the client is asynchronously
+  // updating an autofill selection. Fall back only for the current composition;
+  // making this Bundle ID sticky causes every later composition in Calendar or
+  // Siri to start as marked text after one transient mismatch.
   _useMarkedTextForClient = YES;
+  _compositionState.shouldForceMarkedText = YES;
   DKSTLog(@"Forcing marked text for %@: %@", bundleID ?: @"unknown client",
           reason);
 }
@@ -316,6 +318,17 @@
 
 - (void)refreshMarkedTextPolicyForClient:(id)sender {
   _useMarkedTextForClient = [self shouldUseMarkedTextForClient:sender];
+}
+
+- (void)refreshMarkedTextPolicyForNewComposition:(id)sender {
+  if (!_useMarkedTextForClient || [self hasPendingComposition]) {
+    return;
+  }
+
+  // Re-evaluate after a transient direct-insert fallback. Explicit marked-text
+  // policies remain marked; ordinary direct clients return to direct input.
+  [self refreshMarkedTextPolicyForClient:sender];
+  _compositionState.shouldForceMarkedText = NO;
 }
 
 @end
