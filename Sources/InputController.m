@@ -3,6 +3,7 @@
 #import "DKSTHanjaDictionary.h"
 #import "DKSTKeyMap.h"
 #import <objc/message.h>
+#import <os/log.h>
 
 static NSInteger DKSTCandidateIndexForNumberKeyCode(unsigned short keyCode) {
   switch (keyCode) {
@@ -561,10 +562,62 @@ static IMKCandidates *DKSTSharedCandidates;
           return;
         }
 
+        // If an asynchronous client reports a caret that no longer matches the
+        // tracked inlineRange, derive the live range from that caret before
+        // treating it as a user move. Messages can shift its text-document
+        // coordinates after Shift+Return. Trust the rebased range only when
+        // the document actually contains the active composition there.
+        if (_directInputComposedLength > 0 &&
+            selectedRange.length == 0 &&
+            selectedRange.location >= _directInputComposedLength) {
+          NSRange backtrackRange =
+              NSMakeRange(selectedRange.location - _directInputComposedLength,
+                          _directInputComposedLength);
+          BOOL canRebaseDirectRange =
+              !NSEqualRanges(backtrackRange, _directInputComposedRange) &&
+              [self directInputRangeIsCurrent:backtrackRange
+                                       client:sender
+                               allowSelection:YES];
+          if (canRebaseDirectRange) {
+            NSRange previousInlineRange = _directInputComposedRange;
+            _directInputComposedRange = backtrackRange;
+            _lastClientSelectedRange = selectedRange;
+#ifdef DEBUG
+            os_log(
+                OS_LOG_DEFAULT,
+                "DKST: rebased direct-input range "
+                "selected={%{public}lu,%{public}lu} "
+                "old={%{public}lu,%{public}lu} "
+                "new={%{public}lu,%{public}lu}",
+                (unsigned long)selectedRange.location,
+                (unsigned long)selectedRange.length,
+                (unsigned long)previousInlineRange.location,
+                (unsigned long)previousInlineRange.length,
+                (unsigned long)backtrackRange.location,
+                (unsigned long)backtrackRange.length);
+#endif
+            return;
+          }
+        }
+
         if (_directInputComposedLength > 0 &&
             [self directInputRangeIsCurrent:_directInputComposedRange
                                      client:sender
                              allowSelection:YES]) {
+#ifdef DEBUG
+          os_log(
+              OS_LOG_DEFAULT,
+              "DKST: direct-input selection moved "
+              "selected={%{public}lu,%{public}lu} "
+              "last={%{public}lu,%{public}lu} "
+              "inline={%{public}lu,%{public}lu}",
+              (unsigned long)selectedRange.location,
+              (unsigned long)selectedRange.length,
+              (unsigned long)_lastClientSelectedRange.location,
+              (unsigned long)_lastClientSelectedRange.length,
+              (unsigned long)_directInputComposedRange.location,
+              (unsigned long)_directInputComposedRange.length);
+#endif
           DKSTLog(@"Selection moved away from direct composition %@; "
                   @"finishing it before the next key",
                   NSStringFromRange(_directInputComposedRange));
@@ -1053,22 +1106,43 @@ static IMKCandidates *DKSTSharedCandidates;
     beganEdit = NO;
   }
 
+  BOOL handled = NO;
   @try {
-    return [self handleEventInEditTransaction:event client:sender];
+    handled = [self handleEventInEditTransaction:event client:sender];
   } @finally {
     @try {
       if (beganEdit) {
         ((void (*)(id, SEL))objc_msgSend)(textDocument, endEditSelector);
       }
-      if (textDocument &&
-          [textDocument respondsToSelector:invalidateCacheSelector]) {
-        ((void (*)(id, SEL))objc_msgSend)(textDocument,
-                                         invalidateCacheSelector);
-      }
     } @catch (NSException *exception) {
       DKSTLog(@"Exception ending text document edit: %@", exception);
     }
   }
+
+  // Match KIM's ordering for pass-through Return: finish the edit transaction
+  // before reading the final selection and clearing composition state. The
+  // client applies the line break after this method returns, so remembering a
+  // selection from inside the cached edit can leave the next inlineRange on
+  // the preceding line.
+  if (!handled && [event type] == NSEventTypeKeyDown &&
+      [event keyCode] == kDKSTKeyCodeReturn) {
+    [self commitComposition:sender];
+  }
+
+  // The native controller invalidates its text-document cache only for an
+  // event it passes back to the client. Handled Hangul updates stay inside one
+  // coherent edit snapshot.
+  if (!handled && textDocument &&
+      [textDocument respondsToSelector:invalidateCacheSelector]) {
+    @try {
+      ((void (*)(id, SEL))objc_msgSend)(textDocument,
+                                       invalidateCacheSelector);
+    } @catch (NSException *exception) {
+      DKSTLog(@"Exception invalidating text document cache: %@", exception);
+    }
+  }
+
+  return handled;
 }
 
 - (BOOL)handleEventInEditTransaction:(NSEvent *)event client:(id)sender {
@@ -1158,6 +1232,37 @@ static IMKCandidates *DKSTSharedCandidates;
 
   // 5. Backspace
   if (keyCode == kDKSTKeyCodeBackspace) {
+    // Direct composition has already written its visible text into the
+    // document. If the client now exposes a real selection, Backspace belongs
+    // to the client and must delete that selection atomically. Editing the
+    // Hangul engine first would resurrect the last buffered Jamo after the
+    // selected sentence disappears (notably in Excel and Messages).
+    if (!_useMarkedTextForClient && _directInputComposedLength > 0 &&
+        [sender respondsToSelector:@selector(selectedRange)]) {
+      @try {
+        NSRange selectedRange = [sender selectedRange];
+        if (selectedRange.location != NSNotFound &&
+            selectedRange.length > 0) {
+#ifdef DEBUG
+          os_log(
+              OS_LOG_DEFAULT,
+              "DKST: passing selected-text Backspace to client "
+              "selected={%{public}lu,%{public}lu} "
+              "inline={%{public}lu,%{public}lu}",
+              (unsigned long)selectedRange.location,
+              (unsigned long)selectedRange.length,
+              (unsigned long)_directInputComposedRange.location,
+              (unsigned long)_directInputComposedRange.length);
+#endif
+          [self resetCompositionState];
+          return NO;
+        }
+      } @catch (NSException *exception) {
+        DKSTLog(@"Exception checking selection before Backspace: %@",
+                exception);
+      }
+    }
+
     if ([engine backspace]) {
       if (!_useMarkedTextForClient) {
         NSString *composedAfterBackspace = [engine composedString];
@@ -1173,9 +1278,9 @@ static IMKCandidates *DKSTSharedCandidates;
     return NO;
   }
 
-  // 6. Enter — commit and pass through
+  // 6. Enter — pass through. handleEvent: commits after endEdit so the
+  // selection snapshot cannot remain anchored to the preceding line.
   if (keyCode == kDKSTKeyCodeReturn && !candidatesVisible) {
-    [self commitComposition:sender];
     return NO;
   }
 
@@ -1357,21 +1462,31 @@ static IMKCandidates *DKSTSharedCandidates;
     expectedLocation = replacementStart + commitLength + composedLength;
   }
 
-  NSRange insertedComposedRange = NSMakeRange(NSNotFound, 0);
-  if (replacementStart != NSNotFound && composedLength > 0) {
-    insertedComposedRange =
-        NSMakeRange(replacementStart + commitLength, composedLength);
+  // KIM's insertNewText: does not read the document back on the first direct
+  // insertion. Some clients, including Messages after Shift+Return, expose the
+  // new selection immediately but publish attributed document contents one
+  // event later. Treating that first snapshot as authoritative switches the
+  // composition to marked text and splits the following Hangul syllables.
+  //
+  // Validate once on the next update, using the complete buffer exactly as
+  // updateContentsWithoutInline does, then stop checking while the buffer keeps
+  // changing successfully.
+  if (hadDirectComposition &&
+      _compositionState.shouldCheckInsertionError &&
+      replacementStart != NSNotFound && [replacement length] > 0) {
+    NSRange insertedBufferRange =
+        NSMakeRange(replacementStart, [replacement length]);
     BOOL didReadInsertedText = NO;
     BOOL insertedTextMatches =
-        [self directInputRange:insertedComposedRange
-                 containsText:composed
+        [self directInputRange:insertedBufferRange
+                 containsText:replacement
                        client:sender
                       didRead:&didReadInsertedText];
     if (didReadInsertedText && !insertedTextMatches) {
       [self setMarkedReplacementRange:
                 (replacementRange.location != NSNotFound
                      ? replacementRange
-                     : insertedComposedRange)];
+                     : insertedBufferRange)];
       [self forceMarkedTextForClient:sender
                               reason:@"direct insert text mismatch"];
       return NO;
@@ -1411,6 +1526,11 @@ static IMKCandidates *DKSTSharedCandidates;
   }
 
   [_compositionState updateBufferContents:replacement];
+  NSString *previousBuffer = [_compositionState previousBufferContents];
+  if (previousBuffer &&
+      ![replacement isEqualToString:previousBuffer]) {
+    _compositionState.shouldCheckInsertionError = NO;
+  }
   [_compositionState noteInsertedTextWithReplacementRange:replacementRange
                                         insertionLocation:replacementStart
                                           committedLength:commitLength

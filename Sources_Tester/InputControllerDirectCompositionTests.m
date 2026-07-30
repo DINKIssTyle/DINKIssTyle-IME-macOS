@@ -16,6 +16,9 @@
 - (void)selectSuggestion:(NSString *)suggestion;
 - (void)replaceTextWithSuggestion:(NSString *)suggestion;
 - (void)setText:(NSString *)text selectedRange:(NSRange)selectedRange;
+- (void)setSelectedRange:(NSRange)selectedRange;
+- (void)deleteSelection;
+- (void)insertLineBreak;
 - (void)corruptNextInsert;
 - (void)reportSelectedRange:(NSRange)range afterNextInsert:(BOOL)enabled;
 - (void)clearSelectedRangeOverride;
@@ -106,6 +109,24 @@
   _selectedRange = selectedRange;
 }
 
+- (void)setSelectedRange:(NSRange)selectedRange {
+  _selectedRange = selectedRange;
+}
+
+- (void)deleteSelection {
+  if (_selectedRange.location == NSNotFound || _selectedRange.length == 0) {
+    return;
+  }
+  NSUInteger location = _selectedRange.location;
+  [_text deleteCharactersInRange:_selectedRange];
+  _selectedRange = NSMakeRange(location, 0);
+}
+
+- (void)insertLineBreak {
+  [_text replaceCharactersInRange:_selectedRange withString:@"\n"];
+  _selectedRange = NSMakeRange(_selectedRange.location + 1, 0);
+}
+
 - (void)corruptNextInsert {
   _corruptNextInsert = YES;
 }
@@ -130,6 +151,9 @@
 - (BOOL)tryKeyCodeForTest:(unsigned short)keyCode client:(id)client;
 - (void)finishForTest:(id)client;
 - (BOOL)usesMarkedFallbackForTest;
+- (void)setDirectRangeForTest:(NSRange)range;
+- (void)setLastSelectedRangeForTest:(NSRange)range;
+- (BOOL)handleBackspaceForTest:(id)client;
 @end
 
 @implementation DKSTDirectControllerProbe
@@ -167,6 +191,29 @@
 
 - (BOOL)usesMarkedFallbackForTest {
   return _useMarkedTextForClient;
+}
+
+- (void)setDirectRangeForTest:(NSRange)range {
+  _directInputComposedRange = range;
+}
+
+- (void)setLastSelectedRangeForTest:(NSRange)range {
+  _lastClientSelectedRange = range;
+}
+
+- (BOOL)handleBackspaceForTest:(id)client {
+  NSEvent *event =
+      [NSEvent keyEventWithType:NSEventTypeKeyDown
+                       location:NSZeroPoint
+                  modifierFlags:0
+                      timestamp:0
+                   windowNumber:0
+                        context:nil
+                     characters:@"\b"
+    charactersIgnoringModifiers:@"\b"
+                      isARepeat:NO
+                        keyCode:kDKSTKeyCodeBackspace];
+  return [self handleEventInEditTransaction:event client:client];
 }
 
 @end
@@ -352,14 +399,105 @@ int main(void) {
       [[DKSTDirectControllerProbe alloc] init];
   DKSTDirectClient *failureClient = [[DKSTDirectClient alloc]
       initWithBundleIdentifier:@"com.example.BrokenDirectInsert"];
+  [failureController processKeyCodeForTest:kDKSTKeyCodeE
+                                     client:failureClient];
   [failureClient corruptNextInsert];
-  DKSTAssert(![failureController tryKeyCodeForTest:kDKSTKeyCodeE
+  DKSTAssert(![failureController tryKeyCodeForTest:kDKSTKeyCodeK
                                             client:failureClient],
-             @"verified document mismatch was accepted as direct input");
+             @"delayed document mismatch was accepted as direct input");
   DKSTAssert([failureController usesMarkedFallbackForTest],
              @"verified document mismatch did not request marked fallback");
   [failureClient release];
   [failureController release];
+
+  DKSTDirectControllerProbe *multilineController =
+      [[DKSTDirectControllerProbe alloc] init];
+  DKSTDirectClient *multilineClient = [[DKSTDirectClient alloc]
+      initWithBundleIdentifier:@"com.apple.MobileSMS"];
+  for (NSUInteger line = 0; line < 5; line++) {
+    [multilineController processKeyCodeForTest:kDKSTKeyCodeA
+                                        client:multilineClient];
+    [multilineController processKeyCodeForTest:kDKSTKeyCodeK
+                                        client:multilineClient];
+    [multilineController finishForTest:multilineClient];
+    if (line < 4) {
+      [multilineClient insertLineBreak];
+    }
+  }
+  DKSTAssert([[multilineClient text]
+                 isEqualToString:@"마\n마\n마\n마\n마"],
+             @"direct composition split into Jamo after repeated line breaks");
+  DKSTAssert([multilineClient markedCallCount] == 0,
+             @"multiline direct input unexpectedly used marked text");
+  [multilineClient release];
+  [multilineController release];
+
+  // Messages can publish an inlineRange one position ahead of the live text
+  // after Shift+Return. Rebase from the current caret only when the actual
+  // consonant exists in the backtracked range.
+  DKSTDirectControllerProbe *laggedSelectionController =
+      [[DKSTDirectControllerProbe alloc] init];
+  DKSTDirectClient *laggedSelectionClient = [[DKSTDirectClient alloc]
+      initWithBundleIdentifier:@"com.apple.MobileSMS"];
+  [laggedSelectionClient setText:@"\n" selectedRange:NSMakeRange(1, 0)];
+  [laggedSelectionController processKeyCodeForTest:kDKSTKeyCodeA
+                                             client:laggedSelectionClient];
+  [laggedSelectionController setDirectRangeForTest:NSMakeRange(2, 1)];
+  [laggedSelectionController setLastSelectedRangeForTest:NSMakeRange(1, 0)];
+  [laggedSelectionController processKeyCodeForTest:kDKSTKeyCodeK
+                                             client:laggedSelectionClient];
+  DKSTAssert([[laggedSelectionClient text] isEqualToString:@"\n마"],
+             @"stale line-start inline range duplicated the first consonant");
+  DKSTAssert([laggedSelectionClient markedCallCount] == 0,
+             @"line-start range rebasing used marked composition");
+  [laggedSelectionClient release];
+  [laggedSelectionController release];
+
+  // A genuine move outside inlineRange must still finish the old composition
+  // and begin the next one at the user's new caret.
+  DKSTDirectControllerProbe *movedCaretController =
+      [[DKSTDirectControllerProbe alloc] init];
+  DKSTDirectClient *movedCaretClient = [[DKSTDirectClient alloc]
+      initWithBundleIdentifier:@"com.example.RealCaretMove"];
+  [movedCaretClient setText:@"앞 " selectedRange:NSMakeRange(2, 0)];
+  [movedCaretController processKeyCodeForTest:kDKSTKeyCodeA
+                                        client:movedCaretClient];
+  [movedCaretClient setSelectedRange:NSMakeRange(0, 0)];
+  [movedCaretController processKeyCodeForTest:kDKSTKeyCodeK
+                                        client:movedCaretClient];
+  DKSTAssert([[movedCaretClient text] isEqualToString:@"ㅏ앞 ㅁ"],
+             @"a real caret move was mistaken for asynchronous selection lag");
+  [movedCaretClient release];
+  [movedCaretController release];
+
+  // Selecting direct-input text and pressing Backspace belongs to the client.
+  // The buffered final syllable must be discarded rather than decomposed and
+  // inserted back into the newly emptied selection.
+  DKSTDirectControllerProbe *selectedDeleteController =
+      [[DKSTDirectControllerProbe alloc] init];
+  DKSTDirectClient *selectedDeleteClient = [[DKSTDirectClient alloc]
+      initWithBundleIdentifier:@"com.microsoft.Excel"];
+  [selectedDeleteController processKeyCodeForTest:kDKSTKeyCodeA
+                                            client:selectedDeleteClient];
+  [selectedDeleteController processKeyCodeForTest:kDKSTKeyCodeK
+                                            client:selectedDeleteClient];
+  [selectedDeleteClient setSelectedRange:NSMakeRange(
+                                              0,
+                                              [[selectedDeleteClient text]
+                                                  length])];
+  DKSTAssert(![selectedDeleteController
+                 handleBackspaceForTest:selectedDeleteClient],
+             @"selected-text Backspace was consumed by the Hangul engine");
+  [selectedDeleteClient deleteSelection];
+  DKSTAssert([[selectedDeleteClient text] length] == 0,
+             @"selected sentence was not deleted cleanly");
+  DKSTAssert(![selectedDeleteController
+                 handleBackspaceForTest:selectedDeleteClient],
+             @"discarded Hangul buffer handled a later Backspace");
+  DKSTAssert([[selectedDeleteClient text] length] == 0,
+             @"a buffered Jamo reappeared after selected-text deletion");
+  [selectedDeleteClient release];
+  [selectedDeleteController release];
 
   [pool drain];
   return 0;

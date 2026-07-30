@@ -57,6 +57,8 @@
 			<string>com.dinkisstyle.inputmethod.DKST.hangul</string>
 		</array>
 	</dict>
+	<key>DKSTBuildMode</key>
+	<string>debug</string>
 	<key>DKSTVersionDisplay</key>
 	<string>2.8.2</string>
 	<key>InputMethodConnectionName</key>

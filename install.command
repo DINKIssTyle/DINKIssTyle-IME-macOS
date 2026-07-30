@@ -14,6 +14,7 @@ DEST_DIR="/Library/Input Methods"
 DEST_APP="${DEST_DIR}/DKST.app"
 PROCESS_NAME="DKST"
 SHOW_MESSAGE=false
+BUILD_MODE="release"
 
 # --- 함수: 프로세스 종료 ---
 function kill_dkst_process() {
@@ -35,6 +36,25 @@ function ensure_source_app_exists() {
         echo "먼저 프로젝트를 빌드했는지 확인해주세요."
         exit 1
     fi
+
+    BUILD_MODE="$(
+        /usr/bin/plutil -extract DKSTBuildMode raw -o - \
+            "$SOURCE_APP/Contents/Info.plist" 2>/dev/null || echo "release"
+    )"
+}
+
+# --- 함수: 빌드 종류에 맞는 서명 확인 ---
+function verify_app_signature() {
+    local app_path="$1"
+    local stage="$2"
+    local build_label="배포"
+
+    if [ "$BUILD_MODE" = "debug" ]; then
+        build_label="Debug"
+    fi
+
+    echo "${stage} ${build_label} 앱의 코드 서명을 확인하는 중..."
+    codesign --verify --deep --strict --verbose=2 "$app_path"
 }
 
 # --- 함수: 설치 실행 ---
@@ -46,10 +66,13 @@ function install_dkst() {
 
     echo "관리자 권한이 필요합니다. 비밀번호를 입력해주세요."
 
-    # 배포자가 만든 서명을 검사하되 절대로 교체하지 않습니다.
-    echo "배포 앱의 코드 서명을 확인하는 중..."
-    if ! codesign --verify --deep --strict --verbose=2 "$SOURCE_APP"; then
+    # Release의 인증서 서명과 Debug의 ad-hoc 서명 모두 무결성을
+    # 검사하되 설치 과정에서 서명을 교체하지 않습니다.
+    if ! verify_app_signature "$SOURCE_APP" "원본"; then
         echo "오류: 앱의 코드 서명이 유효하지 않아 설치를 중단합니다."
+        if [ "$BUILD_MODE" = "debug" ]; then
+            echo "Debug 앱을 ./build.sh로 다시 빌드한 뒤 설치해주세요."
+        fi
         exit 1
     fi
 
@@ -59,8 +82,7 @@ function install_dkst() {
     sudo rm -rf "$DEST_APP"
     sudo cp -R "$SOURCE_APP" "$DEST_DIR/"
 
-    echo "설치된 앱의 코드 서명을 확인하는 중..."
-    if ! codesign --verify --deep --strict --verbose=2 "$DEST_APP"; then
+    if ! verify_app_signature "$DEST_APP" "설치된"; then
         echo "오류: 설치 과정에서 앱의 코드 서명이 손상되었습니다."
         exit 1
     fi
