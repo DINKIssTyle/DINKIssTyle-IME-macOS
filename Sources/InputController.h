@@ -31,6 +31,10 @@
   BOOL _hanjaReplacementUsesMarkedPrefix;
   DKSTCompositionState *_compositionState;
   NSMutableDictionary *_chromiumDetectionCache;
+  NSString *_pendingHanjaCandidate;
+  id _pendingHanjaClient;
+  BOOL _keyboardHanjaCommitPending;
+  BOOL _suppressNextHanjaCandidateCallback;
   // Custom Hanja shortcut — MUST remain at the end of the ivar list
   // to avoid InputMethodKit memory layout conflicts.
   unsigned short _hanjaShortcutKeyCode;

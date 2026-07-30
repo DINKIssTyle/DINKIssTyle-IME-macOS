@@ -56,6 +56,10 @@
                     modifiers:(NSUInteger)modifiers
                        client:(id)sender;
 - (void)commitCandidate:(id)candidate client:(id)sender;
+- (void)scheduleKeyboardCandidateCommit:(NSString *)candidate
+                                 client:(id)sender;
+- (void)commitPendingKeyboardCandidate;
+- (void)cancelPendingKeyboardCandidateCommit;
 - (void)cancelHanjaCandidates;
 
 - (BOOL)isHangulKeyCode:(unsigned short)keyCode;

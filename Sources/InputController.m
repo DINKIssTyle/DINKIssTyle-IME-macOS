@@ -155,6 +155,8 @@ static IMKCandidates *DKSTSharedCandidates;
 - (void)dealloc {
   DKSTLog(@"InputController dealloc called");
 
+  [self cancelPendingKeyboardCandidateCommit];
+
   // Remove observers FIRST to prevent race conditions where a notification
   // fires during dealloc.
   [[NSNotificationCenter defaultCenter] removeObserver:self];
@@ -784,6 +786,9 @@ static IMKCandidates *DKSTSharedCandidates;
 - (void)deactivateServer:(id)sender {
   DKSTLog(@"deactivateServer called");
 
+  [self cancelPendingKeyboardCandidateCommit];
+  _suppressNextHanjaCandidateCallback = NO;
+
   // NOTE: Do NOT manipulate _candidates here!
   // InputMethodKit manages candidates internally and accessing it during
   // deactivation can cause crashes if InputMethodKit has already released
@@ -923,8 +928,8 @@ static IMKCandidates *DKSTSharedCandidates;
         _currentHanjaIndex < [_currentHanjaCandidates count]) {
       NSString *selected =
           [_currentHanjaCandidates objectAtIndex:_currentHanjaIndex];
-      DKSTLog(@"Committing manually tracked candidate: %@", selected);
-      [self commitCandidate:selected client:sender];
+      DKSTLog(@"Scheduling manually tracked candidate: %@", selected);
+      [self scheduleKeyboardCandidateCommit:selected client:sender];
     } else {
       [self cancelHanjaCandidates];
     }
@@ -941,7 +946,7 @@ static IMKCandidates *DKSTSharedCandidates;
         _currentHanjaIndex = targetIndex;
         NSString *selected =
             [_currentHanjaCandidates objectAtIndex:_currentHanjaIndex];
-        [self commitCandidate:selected client:sender];
+        [self scheduleKeyboardCandidateCommit:selected client:sender];
       }
     }
     return YES;

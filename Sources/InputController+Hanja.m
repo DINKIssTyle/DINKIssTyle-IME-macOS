@@ -215,6 +215,9 @@ static BOOL DKSTIsHangulSyllable(unichar character) {
     return NO;
   }
 
+  [self cancelPendingKeyboardCandidateCommit];
+  _suppressNextHanjaCandidateCallback = NO;
+
   NSArray *candidates =
       [[DKSTHanjaDictionary sharedDictionary] hanjaForHangul:text];
 
@@ -264,6 +267,61 @@ static BOOL DKSTIsHangulSyllable(unichar character) {
   return [self showHanjaCandidatesForText:conversionText
                          replacementRange:conversionRange
                                    client:sender];
+}
+
+- (void)scheduleKeyboardCandidateCommit:(NSString *)candidate
+                                 client:(id)sender {
+  if (![candidate length] || !sender) {
+    [self cancelHanjaCandidates];
+    return;
+  }
+
+  [self cancelPendingKeyboardCandidateCommit];
+  _pendingHanjaCandidate = [candidate copy];
+  _pendingHanjaClient = [sender retain];
+  _keyboardHanjaCommitPending = YES;
+  _suppressNextHanjaCandidateCallback = YES;
+
+  // IMKCandidatesSendServerKeyEventFirst delivers Return and selection-number
+  // keys while InputMethodKit is still processing the candidate panel event.
+  // Chromium clients can discard an insert made during that interval when the
+  // panel subsequently clears its marked state. Close the panel first, then
+  // commit on the next run-loop turn, matching the working mouse-click order.
+  [self performSelector:@selector(commitPendingKeyboardCandidate)
+             withObject:nil
+             afterDelay:0
+                inModes:@[ NSRunLoopCommonModes ]];
+  [_candidates hide];
+}
+
+- (void)commitPendingKeyboardCandidate {
+  if (!_keyboardHanjaCommitPending) {
+    return;
+  }
+
+  NSString *candidate = [_pendingHanjaCandidate retain];
+  id client = [_pendingHanjaClient retain];
+  [self cancelPendingKeyboardCandidateCommit];
+
+  if (candidate && client) {
+    DKSTLog(@"Committing keyboard candidate after candidate panel closed");
+    [self commitCandidate:candidate client:client];
+  }
+
+  [client release];
+  [candidate release];
+}
+
+- (void)cancelPendingKeyboardCandidateCommit {
+  [NSObject
+      cancelPreviousPerformRequestsWithTarget:self
+                                     selector:@selector(commitPendingKeyboardCandidate)
+                                       object:nil];
+  _keyboardHanjaCommitPending = NO;
+  [_pendingHanjaCandidate release];
+  _pendingHanjaCandidate = nil;
+  [_pendingHanjaClient release];
+  _pendingHanjaClient = nil;
 }
 
 - (void)commitCandidate:(id)candidate client:(id)sender {
@@ -343,6 +401,7 @@ static BOOL DKSTIsHangulSyllable(unichar character) {
 }
 
 - (void)cancelHanjaCandidates {
+  [self cancelPendingKeyboardCandidateCommit];
   _selectedTextRange = NSMakeRange(NSNotFound, 0);
   [self clearMarkedReplacementRange];
   _hanjaMarkedPrefixLength = 0;
@@ -358,6 +417,18 @@ static BOOL DKSTIsHangulSyllable(unichar character) {
 
 // Candidate Selection Handler
 - (void)candidateSelected:(NSAttributedString *)candidateString {
+  if (_keyboardHanjaCommitPending) {
+    // InputMethodKit completed the keyboard selection before the deferred
+    // fallback. Its native callback is now safe and should win.
+    [self cancelPendingKeyboardCandidateCommit];
+    _suppressNextHanjaCandidateCallback = NO;
+  } else if (_suppressNextHanjaCandidateCallback) {
+    // The deferred fallback already committed. Ignore the panel's late callback
+    // for the same key event so Chromium does not receive a second insertion.
+    _suppressNextHanjaCandidateCallback = NO;
+    DKSTLog(@"Ignoring duplicate candidate callback after keyboard commit");
+    return;
+  }
   [self commitCandidate:candidateString client:[self client]];
 }
 
