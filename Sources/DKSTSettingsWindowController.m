@@ -132,8 +132,8 @@
   // Fallback if height is not set
   if (targetHeight == 0)
     targetHeight = selectedVC.view.fittingSize.height;
-  if (targetHeight < 300)
-    targetHeight = 300;
+  if (targetHeight < 240)
+    targetHeight = 240;
 
   NSRect frame = [self.window
       frameRectForContentRect:NSMakeRect(0, 0, fixedWidth, targetHeight)];

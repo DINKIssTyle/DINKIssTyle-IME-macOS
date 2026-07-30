@@ -8,11 +8,12 @@
 @end
 
 @interface DKSTCompatibilityViewController () <DKSTApplicationDropTarget,
-                                                NSWindowDelegate>
+                                               NSWindowDelegate>
 @end
 
 @interface DKSTApplicationDropTableView : NSTableView
-@property(nonatomic, assign) id<DKSTApplicationDropTarget> applicationDropTarget;
+@property(nonatomic, assign) id<DKSTApplicationDropTarget>
+    applicationDropTarget;
 @end
 
 @implementation DKSTApplicationDropTableView
@@ -42,21 +43,20 @@ static NSUserDefaults *sharedDefaults() {
   static NSUserDefaults *suiteDefaults = nil;
   static dispatch_once_t onceToken;
   dispatch_once(&onceToken, ^{
-    suiteDefaults = [[NSUserDefaults alloc]
-        initWithSuiteName:kDKSTBundleID];
+    suiteDefaults = [[NSUserDefaults alloc] initWithSuiteName:kDKSTBundleID];
   });
   return suiteDefaults;
 }
 
 static NSString *DKSTShellSingleQuotedString(NSString *value) {
-  NSString *escaped =
-      [value stringByReplacingOccurrencesOfString:@"'" withString:@"'\\''"];
+  NSString *escaped = [value stringByReplacingOccurrencesOfString:@"'"
+                                                       withString:@"'\\''"];
   return [NSString stringWithFormat:@"'%@'", escaped];
 }
 
 static NSString *DKSTAppleScriptDoubleQuotedString(NSString *value) {
-  NSString *escaped =
-      [value stringByReplacingOccurrencesOfString:@"\\" withString:@"\\\\"];
+  NSString *escaped = [value stringByReplacingOccurrencesOfString:@"\\"
+                                                       withString:@"\\\\"];
   escaped = [escaped stringByReplacingOccurrencesOfString:@"\""
                                                withString:@"\\\""];
   return escaped;
@@ -72,10 +72,10 @@ static NSString *DKSTNormalizedDictionaryValues(NSString *values) {
     return @"";
   }
 
-  NSString *normalized =
-      [values stringByReplacingOccurrencesOfString:@", " withString:@","];
-  normalized =
-      [normalized stringByReplacingOccurrencesOfString:@" ," withString:@","];
+  NSString *normalized = [values stringByReplacingOccurrencesOfString:@", "
+                                                           withString:@","];
+  normalized = [normalized stringByReplacingOccurrencesOfString:@" ,"
+                                                     withString:@","];
 
   NSArray *parts = [normalized componentsSeparatedByString:@","];
   NSMutableArray *unique = [NSMutableArray array];
@@ -105,8 +105,7 @@ static NSMutableArray *DKSTCopyMarkedTextBundleIDsForSettings(void) {
     if (![object isKindOfClass:[NSString class]]) {
       continue;
     }
-    NSString *bundleID =
-        [object stringByTrimmingCharactersInSet:whitespace];
+    NSString *bundleID = [object stringByTrimmingCharactersInSet:whitespace];
     if ([bundleID length] > 0 && ![result containsObject:bundleID]) {
       [result addObject:bundleID];
     }
@@ -120,20 +119,24 @@ static NSArray *DKSTIMEInfoPlistCandidatePaths() {
   NSString *settingsBundlePath = [mainBundle bundlePath];
 
   if ([settingsBundlePath length] > 0) {
-    NSString *resourcesPath = [settingsBundlePath stringByDeletingLastPathComponent];
+    NSString *resourcesPath =
+        [settingsBundlePath stringByDeletingLastPathComponent];
     NSString *contentsPath = [resourcesPath stringByDeletingLastPathComponent];
     NSString *imeBundlePath = [contentsPath stringByDeletingLastPathComponent];
 
-    if ([[settingsBundlePath lastPathComponent] isEqualToString:@"DKSTSettings.app"] &&
+    if ([[settingsBundlePath lastPathComponent]
+            isEqualToString:@"DKSTSettings.app"] &&
         [[resourcesPath lastPathComponent] isEqualToString:@"Resources"] &&
         [[contentsPath lastPathComponent] isEqualToString:@"Contents"] &&
         [[imeBundlePath pathExtension] isEqualToString:@"app"]) {
-      [paths addObject:[imeBundlePath
-                           stringByAppendingPathComponent:@"Contents/Info.plist"]];
+      [paths
+          addObject:[imeBundlePath
+                        stringByAppendingPathComponent:@"Contents/Info.plist"]];
     }
 
-    NSString *siblingIMEPath = [[settingsBundlePath stringByDeletingLastPathComponent]
-        stringByAppendingPathComponent:@"DKST.app/Contents/Info.plist"];
+    NSString *siblingIMEPath =
+        [[settingsBundlePath stringByDeletingLastPathComponent]
+            stringByAppendingPathComponent:@"DKST.app/Contents/Info.plist"];
     [paths addObject:siblingIMEPath];
   }
 
@@ -168,7 +171,6 @@ static NSDictionary *DKSTIMEInfoPlist() {
   NSButton *hanjaConversionCheckbox;
   NSButton *appleHanjaDictionaryCheckbox;
   NSButton *customShiftCheckbox;
-  NSButton *useMarkedTextForAllAppsCheckbox;
   DKSTShortcutRecorder *hanjaShortcutRecorder;
 }
 
@@ -242,27 +244,12 @@ static NSDictionary *DKSTIMEInfoPlist() {
   [stackView addView:appleHanjaDictionaryCheckbox
            inGravity:NSStackViewGravityTop];
 
-  [stackView setCustomSpacing:25
-                    afterView:appleHanjaDictionaryCheckbox]; // Section gap
-
-  // --- 섹션 3: 호환성 ---
-  NSTextField *compatHeader = [NSTextField labelWithString:@"호환성"];
-  compatHeader.font = [NSFont boldSystemFontOfSize:13];
-  [stackView addView:compatHeader inGravity:NSStackViewGravityTop];
-
-  useMarkedTextForAllAppsCheckbox = [NSButton
-      checkboxWithTitle:@"모든 앱에서 밑줄 조합 방식(Marked Text) 사용"
-                 target:self
-                 action:@selector(toggleUseMarkedTextForAllApps:)];
-  [stackView addView:useMarkedTextForAllAppsCheckbox
-           inGravity:NSStackViewGravityTop];
-
   // Flex spacer
   NSView *spacer = [[NSView alloc] init];
   [stackView addView:spacer inGravity:NSStackViewGravityTop];
   [stackView setCustomSpacing:0 afterView:spacer];
 
-  self.preferredContentSize = NSMakeSize(550, 320);
+  self.preferredContentSize = NSMakeSize(550, 245);
 }
 
 - (void)viewWillAppear {
@@ -289,11 +276,6 @@ static NSDictionary *DKSTIMEInfoPlist() {
   customShiftCheckbox.state = [defaults boolForKey:kDKSTEnableCustomShiftKey]
                                   ? NSControlStateValueOn
                                   : NSControlStateValueOff;
-  useMarkedTextForAllAppsCheckbox.state =
-      [defaults boolForKey:kDKSTUseMarkedTextForAllAppsKey]
-          ? NSControlStateValueOn
-          : NSControlStateValueOff;
-
   [self loadHanjaShortcut];
 }
 
@@ -346,13 +328,6 @@ static NSDictionary *DKSTIMEInfoPlist() {
 - (IBAction)toggleCustomShift:(id)sender {
   [sharedDefaults() setBool:(customShiftCheckbox.state == NSControlStateValueOn)
                      forKey:kDKSTEnableCustomShiftKey];
-  [sharedDefaults() synchronize];
-}
-
-- (IBAction)toggleUseMarkedTextForAllApps:(id)sender {
-  [sharedDefaults()
-      setBool:(useMarkedTextForAllAppsCheckbox.state == NSControlStateValueOn)
-       forKey:kDKSTUseMarkedTextForAllAppsKey];
   [sharedDefaults() synchronize];
 }
 
@@ -459,7 +434,7 @@ static NSDictionary *DKSTIMEInfoPlist() {
     [mappingDict release];
     mappingDict = nil;
   }
-  
+
   if (saved) {
     mappingDict = [saved mutableCopy]; // Retain count 1
   } else {
@@ -490,8 +465,7 @@ static NSDictionary *DKSTIMEInfoPlist() {
   if ([tableColumn.identifier isEqualToString:@"Output"]) {
     NSString *key = mappingKeys[row];
     [mappingDict setObject:(NSString *)object forKey:key];
-    [sharedDefaults() setObject:mappingDict
-                         forKey:kDKSTCustomShiftMappingsKey];
+    [sharedDefaults() setObject:mappingDict forKey:kDKSTCustomShiftMappingsKey];
     [sharedDefaults() synchronize];
   }
 }
@@ -521,7 +495,8 @@ static NSDictionary *DKSTIMEInfoPlist() {
     searchField =
         [[NSSearchField alloc] initWithFrame:NSMakeRect(0, 0, 240, 22)],
     ({
-      NSButton *btn = [[NSButton alloc] initWithFrame:NSMakeRect(0, 0, 100, 26)];
+      NSButton *btn =
+          [[NSButton alloc] initWithFrame:NSMakeRect(0, 0, 100, 26)];
       btn.title = @"온라인 업데이트";
       btn.bezelStyle = NSBezelStyleRounded;
       btn.target = self;
@@ -609,8 +584,8 @@ static NSDictionary *DKSTIMEInfoPlist() {
   if ([fm fileExistsAtPath:userPath]) {
     [self loadFile:userPath];
   } else {
-    NSString *bundledPath =
-        [[NSBundle mainBundle] pathForResource:@"hanja" ofType:@"txt"];
+    NSString *bundledPath = [[NSBundle mainBundle] pathForResource:@"hanja"
+                                                            ofType:@"txt"];
     if ([bundledPath length]) {
       [self loadFile:bundledPath];
     }
@@ -626,7 +601,7 @@ static NSDictionary *DKSTIMEInfoPlist() {
     [filteredEntries release];
     filteredEntries = nil;
   }
-  
+
   currentFilePath = [path retain]; // Ensure path is kept
   allEntries = [[NSMutableArray alloc] init];
   NSString *content = [NSString stringWithContentsOfFile:path
@@ -651,8 +626,9 @@ static NSDictionary *DKSTIMEInfoPlist() {
       [allEntries
           addObject:[NSMutableDictionary
                         dictionaryWithObjectsAndKeys:@"###DKST", @"trigger",
-                                                     @"사용자 데이터", @"values",
-                                                     @YES, @"separator", nil]];
+                                                     @"사용자 데이터",
+                                                     @"values", @YES,
+                                                     @"separator", nil]];
     }
   }
   filteredEntries = [allEntries mutableCopy];
@@ -662,12 +638,12 @@ static NSDictionary *DKSTIMEInfoPlist() {
 - (void)controlTextDidChange:(NSNotification *)obj {
   if (obj.object == searchField) {
     NSString *filter = searchField.stringValue;
-    
+
     if (filteredEntries) {
       [filteredEntries release];
       filteredEntries = nil;
     }
-    
+
     if (filter.length == 0) {
       filteredEntries = [allEntries mutableCopy];
     } else {
@@ -676,12 +652,15 @@ static NSDictionary *DKSTIMEInfoPlist() {
         NSString *trigger = e[@"trigger"];
         NSString *values = e[@"values"];
         BOOL match = NO;
-        if (trigger && [trigger localizedCaseInsensitiveContainsString:filter]) {
+        if (trigger &&
+            [trigger localizedCaseInsensitiveContainsString:filter]) {
           match = YES;
-        } else if (values && [values localizedCaseInsensitiveContainsString:filter]) {
+        } else if (values &&
+                   [values localizedCaseInsensitiveContainsString:filter]) {
           match = YES;
         }
-        if (match) [filteredEntries addObject:e];
+        if (match)
+          [filteredEntries addObject:e];
       }
     }
     [tableView reloadData];
@@ -794,10 +773,11 @@ static NSDictionary *DKSTIMEInfoPlist() {
   NSMutableDictionary *newE = [NSMutableDictionary
       dictionaryWithObjectsAndKeys:@"", @"trigger", @"", @"values", nil];
   [allEntries addObject:newE];
-  
-  if (filteredEntries) [filteredEntries release];
+
+  if (filteredEntries)
+    [filteredEntries release];
   filteredEntries = [allEntries mutableCopy];
-  
+
   [tableView reloadData];
   [tableView selectRowIndexes:[NSIndexSet
                                   indexSetWithIndex:filteredEntries.count - 1]
@@ -819,31 +799,34 @@ static NSDictionary *DKSTIMEInfoPlist() {
 
 - (void)updateDictionary:(id)sender {
   // Use the script to update
-  NSString *scriptPath = [[NSBundle mainBundle] pathForResource:@"dictup" ofType:@"sh"];
+  NSString *scriptPath = [[NSBundle mainBundle] pathForResource:@"dictup"
+                                                         ofType:@"sh"];
   // Fallback for development environment
   if (!scriptPath) {
-    scriptPath = [[[[[NSBundle mainBundle] bundlePath] 
-                   stringByDeletingLastPathComponent] 
-                  stringByDeletingLastPathComponent] 
-                 stringByAppendingPathComponent:@"dictup.sh"];
+    scriptPath = [[[[[NSBundle mainBundle] bundlePath]
+        stringByDeletingLastPathComponent] stringByDeletingLastPathComponent]
+        stringByAppendingPathComponent:@"dictup.sh"];
   }
 
   if (![[NSFileManager defaultManager] fileExistsAtPath:scriptPath]) {
     // Try one more common dev path
-    scriptPath = @"/Users/dinki/Documents/GitHub/DINKIssTyle-IME-macOS/dictup.sh";
+    scriptPath =
+        @"/Users/dinki/Documents/GitHub/DINKIssTyle-IME-macOS/dictup.sh";
   }
 
-  NSString *command = [NSString
-      stringWithFormat:@"/bin/bash %@",
-                       DKSTShellSingleQuotedString(scriptPath)];
-  NSString *appleScriptSource = [NSString stringWithFormat:
-      @"do shell script \"%@\"",
-      DKSTAppleScriptDoubleQuotedString(command)];
-  
-  NSAppleScript *appleScript = [[NSAppleScript alloc] initWithSource:appleScriptSource];
+  NSString *command =
+      [NSString stringWithFormat:@"/bin/bash %@",
+                                 DKSTShellSingleQuotedString(scriptPath)];
+  NSString *appleScriptSource =
+      [NSString stringWithFormat:@"do shell script \"%@\"",
+                                 DKSTAppleScriptDoubleQuotedString(command)];
+
+  NSAppleScript *appleScript =
+      [[NSAppleScript alloc] initWithSource:appleScriptSource];
   NSDictionary *errorInfo = nil;
-  NSAppleEventDescriptor *result = [appleScript executeAndReturnError:&errorInfo];
-  
+  NSAppleEventDescriptor *result =
+      [appleScript executeAndReturnError:&errorInfo];
+
   if (result) {
     NSString *updatedPath = currentFilePath;
     if (![updatedPath length]) {
@@ -861,8 +844,10 @@ static NSDictionary *DKSTIMEInfoPlist() {
   } else {
     DKSTLog(@"Update failed: %@", errorInfo);
     NSAlert *a = [[NSAlert alloc] init];
-    a.messageText = [NSString stringWithFormat:@"업데이트 중 오류가 발생했습니다: %@", 
-                     errorInfo[NSAppleScriptErrorMessage] ?: @"알 수 없는 오류"];
+    a.messageText =
+        [NSString stringWithFormat:@"업데이트 중 오류가 발생했습니다: %@",
+                                   errorInfo[NSAppleScriptErrorMessage]
+                                       ?: @"알 수 없는 오류"];
     [a runModal];
   }
 }
@@ -876,8 +861,8 @@ static NSDictionary *DKSTIMEInfoPlist() {
     NSString *cleanValues = DKSTNormalizedDictionaryValues(values);
 
     // Also clean trigger
-    NSString *cleanTrigger =
-        [trigger stringByReplacingOccurrencesOfString:@":" withString:@""];
+    NSString *cleanTrigger = [trigger stringByReplacingOccurrencesOfString:@":"
+                                                                withString:@""];
 
     if (DKSTDictionaryEntryIsSeparator(e)) {
       [outS appendFormat:@"\n###DKST\n"];
@@ -934,6 +919,8 @@ static NSDictionary *DKSTIMEInfoPlist() {
 #pragma mark - Tab 4: Compatibility Settings
 
 @implementation DKSTCompatibilityViewController {
+  NSButton *compatibilityExtensionsCheckbox;
+  NSButton *useMarkedTextForAllAppsCheckbox;
   NSTableView *tableView;
   NSMutableArray *bundleIDs;
   NSTableView *runningAppsTableView;
@@ -950,8 +937,24 @@ static NSDictionary *DKSTIMEInfoPlist() {
   stackView.edgeInsets = NSEdgeInsetsMake(30, 30, 30, 30);
   self.view = stackView;
 
+  compatibilityExtensionsCheckbox =
+      [NSButton checkboxWithTitle:@"실험적인 호환성 확장 사용"
+                           target:self
+                           action:@selector(toggleCompatibilityExtensions:)];
+  compatibilityExtensionsCheckbox.enabled = NO;
+  compatibilityExtensionsCheckbox.state = NSControlStateValueOff;
+  [stackView addView:compatibilityExtensionsCheckbox
+           inGravity:NSStackViewGravityTop];
+
+  useMarkedTextForAllAppsCheckbox = [NSButton
+      checkboxWithTitle:@"모든 앱에서 밑줄 조합 방식(Marked Text) 사용"
+                 target:self
+                 action:@selector(toggleUseMarkedTextForAllApps:)];
+  [stackView addView:useMarkedTextForAllAppsCheckbox
+           inGravity:NSStackViewGravityTop];
+
   NSTextField *desc =
-      [NSTextField labelWithString:@"이 곳에 등록한 앱은 밑줄 조합 방식을 "
+      [NSTextField labelWithString:@"아래에 등록한 앱은 밑줄 조합 방식을 "
                                    @"강제하여 한글 입력 호환성을 개선합니다."];
   [stackView addView:desc inGravity:NSStackViewGravityTop];
 
@@ -1007,19 +1010,44 @@ static NSDictionary *DKSTIMEInfoPlist() {
   [stackView addView:btnRow inGravity:NSStackViewGravityTop];
 
   NSTextField *dropHint = [NSTextField
-      labelWithString:@"팁: Finder에서 앱 번들을 목록으로 드래그해도 추가할 수 있습니다."];
+      labelWithString:
+          @"팁: Finder에서 앱 번들을 목록으로 드래그해도 추가할 수 있습니다."];
   dropHint.textColor = [NSColor secondaryLabelColor];
   dropHint.font = [NSFont systemFontOfSize:[NSFont smallSystemFontSize]];
   [stackView addView:dropHint inGravity:NSStackViewGravityTop];
 
-  self.preferredContentSize = NSMakeSize(550, 480);
+  self.preferredContentSize = NSMakeSize(550, 550);
 }
 
 - (void)viewWillAppear {
   [super viewWillAppear];
+  compatibilityExtensionsCheckbox.state = NSControlStateValueOff;
+  [sharedDefaults() setBool:NO
+                     forKey:kDKSTEnableCompatibilityExtensionsKey];
+  [sharedDefaults() synchronize];
+  useMarkedTextForAllAppsCheckbox.state =
+      [sharedDefaults() boolForKey:kDKSTUseMarkedTextForAllAppsKey]
+          ? NSControlStateValueOn
+          : NSControlStateValueOff;
   [bundleIDs release];
   bundleIDs = DKSTCopyMarkedTextBundleIDsForSettings();
   [tableView reloadData];
+}
+
+- (IBAction)toggleCompatibilityExtensions:(id)sender {
+  (void)sender;
+  [sharedDefaults()
+      setBool:(compatibilityExtensionsCheckbox.state == NSControlStateValueOn)
+       forKey:kDKSTEnableCompatibilityExtensionsKey];
+  [sharedDefaults() synchronize];
+}
+
+- (IBAction)toggleUseMarkedTextForAllApps:(id)sender {
+  (void)sender;
+  [sharedDefaults()
+      setBool:(useMarkedTextForAllAppsCheckbox.state == NSControlStateValueOn)
+       forKey:kDKSTUseMarkedTextForAllAppsKey];
+  [sharedDefaults() synchronize];
 }
 
 - (void)saveData {
@@ -1055,13 +1083,13 @@ static NSDictionary *DKSTIMEInfoPlist() {
 }
 
 - (NSTableCellView *)tableView:(NSTableView *)aTableView
-             viewForTableColumn:(NSTableColumn *)tableColumn
-                            row:(NSInteger)row {
+            viewForTableColumn:(NSTableColumn *)tableColumn
+                           row:(NSInteger)row {
   NSString *identifier = aTableView == runningAppsTableView
                              ? @"RunningApplicationCell"
                              : @"CompatibilityApplicationCell";
-  NSTableCellView *cell =
-      [aTableView makeViewWithIdentifier:identifier owner:self];
+  NSTableCellView *cell = [aTableView makeViewWithIdentifier:identifier
+                                                       owner:self];
   if (!cell) {
     cell = [[[NSTableCellView alloc]
         initWithFrame:NSMakeRect(0, 0, tableColumn.width, 34)] autorelease];
@@ -1100,9 +1128,8 @@ static NSDictionary *DKSTIMEInfoPlist() {
     }
   } else if (row >= 0 && row < bundleIDs.count) {
     bundleID = bundleIDs[row];
-    NSURL *applicationURL =
-        [[NSWorkspace sharedWorkspace]
-            URLForApplicationWithBundleIdentifier:bundleID];
+    NSURL *applicationURL = [[NSWorkspace sharedWorkspace]
+        URLForApplicationWithBundleIdentifier:bundleID];
     if (applicationURL) {
       NSBundle *applicationBundle = [NSBundle bundleWithURL:applicationURL];
       NSDictionary *localizedInfo = applicationBundle.localizedInfoDictionary;
@@ -1111,8 +1138,7 @@ static NSDictionary *DKSTIMEInfoPlist() {
                         localizedInfo[@"CFBundleName"] ?:
                         info[@"CFBundleDisplayName"] ?: info[@"CFBundleName"] ?:
                         applicationURL.URLByDeletingPathExtension.lastPathComponent;
-      icon =
-          [[NSWorkspace sharedWorkspace] iconForFile:applicationURL.path];
+      icon = [[NSWorkspace sharedWorkspace] iconForFile:applicationURL.path];
     } else {
       applicationIsNotInstalled = YES;
     }
@@ -1140,8 +1166,8 @@ static NSDictionary *DKSTIMEInfoPlist() {
     return;
   }
   NSString *bundleID = [(NSString *)object
-      stringByTrimmingCharactersInSet:
-          [NSCharacterSet whitespaceAndNewlineCharacterSet]];
+      stringByTrimmingCharactersInSet:[NSCharacterSet
+                                          whitespaceAndNewlineCharacterSet]];
   if (![bundleID length]) {
     return;
   }
@@ -1151,8 +1177,8 @@ static NSDictionary *DKSTIMEInfoPlist() {
 
 - (BOOL)addBundleIdentifier:(NSString *)bundleID {
   NSString *trimmed = [bundleID
-      stringByTrimmingCharactersInSet:
-          [NSCharacterSet whitespaceAndNewlineCharacterSet]];
+      stringByTrimmingCharactersInSet:[NSCharacterSet
+                                          whitespaceAndNewlineCharacterSet]];
   if (![trimmed length]) {
     return NO;
   }
@@ -1174,7 +1200,8 @@ static NSDictionary *DKSTIMEInfoPlist() {
   p.allowsMultipleSelection = YES;
   if ([p runModal] == NSModalResponseOK) {
     for (NSURL *url in p.URLs) {
-      [self addBundleIdentifier:[[NSBundle bundleWithURL:url] bundleIdentifier]];
+      [self
+          addBundleIdentifier:[[NSBundle bundleWithURL:url] bundleIdentifier]];
     }
   }
 }
@@ -1220,8 +1247,8 @@ static NSDictionary *DKSTIMEInfoPlist() {
   runningApps = [[NSMutableArray alloc] init];
 
   NSMutableSet *seenBundleIDs = [NSMutableSet set];
-  for (NSRunningApplication *app in
-       [NSWorkspace sharedWorkspace].runningApplications) {
+  for (NSRunningApplication *app in [NSWorkspace sharedWorkspace]
+           .runningApplications) {
     NSString *bundleID = app.bundleIdentifier;
     if (app.activationPolicy == NSApplicationActivationPolicyProhibited ||
         ![bundleID length] || [seenBundleIDs containsObject:bundleID]) {
@@ -1233,7 +1260,8 @@ static NSDictionary *DKSTIMEInfoPlist() {
   [runningApps sortUsingComparator:^NSComparisonResult(
                    NSRunningApplication *left, NSRunningApplication *right) {
     return [(left.localizedName ?: left.bundleIdentifier)
-        localizedStandardCompare:(right.localizedName ?: right.bundleIdentifier)];
+        localizedStandardCompare:(right.localizedName
+                                      ?: right.bundleIdentifier)];
   }];
 
   NSRect panelRect = NSMakeRect(0, 0, 500, 390);
@@ -1254,18 +1282,16 @@ static NSDictionary *DKSTIMEInfoPlist() {
   instruction.autoresizingMask = NSViewWidthSizable | NSViewMinYMargin;
   [contentView addSubview:instruction];
 
-  NSScrollView *scrollView =
-      [[[NSScrollView alloc] initWithFrame:NSMakeRect(20, 58, 460, 286)]
-          autorelease];
+  NSScrollView *scrollView = [[[NSScrollView alloc]
+      initWithFrame:NSMakeRect(20, 58, 460, 286)] autorelease];
   scrollView.hasVerticalScroller = YES;
   scrollView.borderType = NSBezelBorder;
   scrollView.autoresizingMask = NSViewWidthSizable | NSViewHeightSizable;
 
   runningAppsTableView =
       [[[NSTableView alloc] initWithFrame:scrollView.bounds] autorelease];
-  NSTableColumn *column =
-      [[[NSTableColumn alloc] initWithIdentifier:@"RunningApplication"]
-          autorelease];
+  NSTableColumn *column = [[[NSTableColumn alloc]
+      initWithIdentifier:@"RunningApplication"] autorelease];
   column.title = @"앱 / Bundle ID";
   column.width = 440;
   [runningAppsTableView addTableColumn:column];
@@ -1278,9 +1304,8 @@ static NSDictionary *DKSTIMEInfoPlist() {
   scrollView.documentView = runningAppsTableView;
   [contentView addSubview:scrollView];
 
-  NSButton *addButton =
-      [[[NSButton alloc] initWithFrame:NSMakeRect(330, 18, 72, 28)]
-          autorelease];
+  NSButton *addButton = [[[NSButton alloc]
+      initWithFrame:NSMakeRect(330, 18, 72, 28)] autorelease];
   addButton.title = @"추가";
   addButton.bezelStyle = NSBezelStyleRounded;
   addButton.target = self;
@@ -1288,9 +1313,8 @@ static NSDictionary *DKSTIMEInfoPlist() {
   addButton.autoresizingMask = NSViewMinXMargin | NSViewMaxYMargin;
   [contentView addSubview:addButton];
 
-  NSButton *cancelButton =
-      [[[NSButton alloc] initWithFrame:NSMakeRect(408, 18, 72, 28)]
-          autorelease];
+  NSButton *cancelButton = [[[NSButton alloc]
+      initWithFrame:NSMakeRect(408, 18, 72, 28)] autorelease];
   cancelButton.title = @"취소";
   cancelButton.bezelStyle = NSBezelStyleRounded;
   cancelButton.target = self;
@@ -1457,9 +1481,7 @@ static NSDictionary *DKSTIMEInfoPlist() {
 
 - (void)openSupport:(id)sender {
   [[NSWorkspace sharedWorkspace]
-      openURL:[NSURL
-                  URLWithString:
-                      @"https://github.com/sponsors/DINKIssTyle"]];
+      openURL:[NSURL URLWithString:@"https://github.com/sponsors/DINKIssTyle"]];
 }
 
 @end

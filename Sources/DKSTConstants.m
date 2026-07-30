@@ -32,6 +32,8 @@ NSString *const kDKSTQwertyEmulationEnableKey = @"DKSTQwertyEmulationEnable";
 NSString *const kDKSTMarkedTextAppBundleIDsKey = @"DKSTMarkedTextAppBundleIDs";
 NSString *const kDKSTUseMarkedTextForAllAppsKey =
     @"DKSTUseMarkedTextForAllApps";
+NSString *const kDKSTEnableCompatibilityExtensionsKey =
+    @"DKSTEnableCompatibilityExtensions";
 NSString *const kDKSTUseAppleHanjaDictionaryKey =
     @"DKSTUseAppleHanjaDictionary";
 NSString *const kDKSTEnableMoaJjikiKey = @"EnableMoaJjiki";
