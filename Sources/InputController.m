@@ -406,9 +406,15 @@ static IMKCandidates *DKSTSharedCandidates;
     return markedReplacementRange;
   }
 
-  NSString *composed = [engine composedString];
-  if ([composed length] > 0) {
-    return NSMakeRange(0, [composed length]);
+  @try {
+    if ([sender respondsToSelector:@selector(markedRange)]) {
+      NSRange markedRange = [sender markedRange];
+      if (DKSTRangeIsValid(markedRange) && markedRange.length > 0) {
+        return markedRange;
+      }
+    }
+  } @catch (NSException *exception) {
+    DKSTLog(@"Exception reading composition range: %@", exception);
   }
   return NSMakeRange(NSNotFound, 0);
 }
@@ -1416,7 +1422,7 @@ static IMKCandidates *DKSTSharedCandidates;
 }
 
 - (BOOL)updateDirectComposition:(id)sender {
-  NSString *commit = [engine commitString];
+  NSString *commit = [engine pendingCommitString];
   NSString *composed = [engine composedString];
   NSUInteger commitLength = [commit length];
   NSUInteger composedLength = [composed length];
@@ -1488,10 +1494,9 @@ static IMKCandidates *DKSTSharedCandidates;
                        client:sender
                       didRead:&didReadInsertedText];
     if (didReadInsertedText && !insertedTextMatches) {
-      [self setMarkedReplacementRange:
-                (replacementRange.location != NSNotFound
-                     ? replacementRange
-                     : insertedBufferRange)];
+      // The insert already changed the document length. Replace the whole
+      // inserted buffer when repairing it, including any committed syllable.
+      [self setMarkedReplacementRange:insertedBufferRange];
       [self forceMarkedTextForClient:sender
                               reason:@"direct insert text mismatch"];
       return NO;
@@ -1544,6 +1549,7 @@ static IMKCandidates *DKSTSharedCandidates;
   [_directInputComposedText release];
   _directInputComposedText = [composed copy];
   _directInputComposedRange = [_compositionState inlineRange];
+  (void)[engine commitString];
   [self clearMarkedReplacementRange];
   [self rememberSelectedRangeForClient:sender];
 
@@ -1565,7 +1571,13 @@ static IMKCandidates *DKSTSharedCandidates;
       }
       [self clearDirectCompositionStatePreservingMarkedRange:YES];
 
-      // Re-update using marked text mode immediately
+      // A failed direct insert has not consumed the pending commit. Deliver
+      // it over the failed replacement before marking the remaining syllable.
+      NSString *commit = [engine pendingCommitString];
+      if ([commit length] > 0) {
+        [self commitMarkedText:commit client:sender];
+        (void)[engine commitString];
+      }
       [self updateComposition:sender];
     }
     return;

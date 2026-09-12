@@ -245,6 +245,12 @@
     return YES;
   }
 
+  // Explicit user exceptions take precedence over automatic client policy.
+  NSString *bundleID = [self bundleIdentifierForClient:sender];
+  if ([self bundleIdentifierMatchesMarkedTextConfiguration:bundleID]) {
+    return YES;
+  }
+
   // 1. Apple Private API: Query showsComposingTextAsMarkedText
   // This is the most reliable way to detect if a client needs marked text.
   // KIM_Extension uses textDocument proxy for this query.
@@ -276,8 +282,6 @@
     return showsMarked;
   }
 
-  NSString *bundleID = [self bundleIdentifierForClient:sender];
-
   if (![bundleID length]) {
     return YES;
   }
@@ -288,10 +292,6 @@
 
   if ([self bundleIdentifierUsesWebKitTextStack:bundleID]) {
     return NO;
-  }
-
-  if ([self bundleIdentifierMatchesMarkedTextConfiguration:bundleID]) {
-    return YES;
   }
 
   if ([self bundleIdentifierUsesChromiumMarkedTextPolicy:bundleID] ||

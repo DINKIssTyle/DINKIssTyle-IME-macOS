@@ -81,6 +81,23 @@
 
 @end
 
+@interface DKSTPolicyClientWithoutRuntime : DKSTPolicyClient
+@end
+@implementation DKSTPolicyClientWithoutRuntime
+- (BOOL)respondsToSelector:(SEL)selector {
+  if (selector == @selector(showsComposingTextAsMarkedText)) return NO;
+  return [super respondsToSelector:selector];
+}
+@end
+
+@interface DKSTPolicyDocumentController : DKSTPolicyControllerProbe
+@end
+@implementation DKSTPolicyDocumentController
+- (id)textDocument {
+  return [[[DKSTPolicyClient alloc] initWithBundleID:@"com.example.Document" showsMarked:NO] autorelease];
+}
+@end
+
 static void DKSTAssert(BOOL condition, NSString *message) {
   if (!condition) {
     NSLog(@"FAIL: %@", message);
@@ -130,6 +147,20 @@ int main(void) {
   DKSTAssert(![controller useMarkedTextForTestClient:futureCompletionClient],
              @"a future completion client required a hard-coded policy");
 
+  [controller setValue:[NSSet setWithObjects:@"com.apple.Safari", @"com.apple.iCal", @"com.example.*", nil]
+                forKey:@"markedTextBundleIDSet"];
+  DKSTPolicyClient *safari = [[[DKSTPolicyClient alloc] initWithBundleID:@"com.apple.Safari" showsMarked:NO] autorelease];
+  DKSTAssert([controller useMarkedTextForTestClient:safari], @"Safari exception lost to runtime policy");
+  DKSTAssert([controller useMarkedTextForTestClient:calendar], @"explicit Calendar exception lost to runtime policy");
+  DKSTAssert([controller useMarkedTextForTestClient:futureCompletionClient], @"wildcard exception lost to runtime policy");
+  DKSTAssert(![controller useMarkedTextForTestClient:word], @"exception changed unrelated app policy");
+  DKSTPolicyClient *webkit = [[[DKSTPolicyClientWithoutRuntime alloc] initWithBundleID:@"com.apple.Safari" showsMarked:NO] autorelease];
+  DKSTAssert([controller useMarkedTextForTestClient:webkit], @"Safari exception lost to built-in WebKit policy");
+  DKSTPolicyDocumentController *documentController = [[DKSTPolicyDocumentController alloc] init];
+  [documentController setValue:[NSSet setWithObject:@"com.apple.iCal"] forKey:@"markedTextBundleIDSet"];
+  DKSTAssert([documentController useMarkedTextForTestClient:calendar], @"exception lost to textDocument policy");
+  DKSTAssert(![documentController useMarkedTextForTestClient:word], @"unconfigured textDocument client lost direct input");
+  [documentController release];
   [controller release];
   [pool drain];
   return 0;

@@ -6,6 +6,8 @@
 @property (nonatomic, readonly) NSString *composedString;
 // 조합이 완료되어 확정된 글자 (Commit String)
 @property (nonatomic, readonly) NSString *commitString;
+// Read the pending commit without consuming it; drain only after delivery.
+@property (nonatomic, readonly) NSString *pendingCommitString;
 
 - (void)reset;
 // 백스페이스 처리. 처리했으면 YES (조합 상태 변경), 아니면 NO (지울 글자 없음).

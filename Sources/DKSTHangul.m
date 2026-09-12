@@ -53,6 +53,10 @@
     return res;
 }
 
+- (NSString *)pendingCommitString {
+    return [NSString stringWithString:_completed];
+}
+
 // Check types
 - (BOOL)isCho:(unichar)c { return c >= 0x1100 && c <= 0x1112; }
 - (BOOL)isJung:(unichar)c { return c >= 0x1161 && c <= 0x1175; }

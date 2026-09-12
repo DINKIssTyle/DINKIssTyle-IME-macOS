@@ -110,14 +110,21 @@ static BOOL DKSTIsHangulSyllable(unichar character) {
     return nil;
   }
 
-  if (outRange) {
-    NSRange compositionRange = [self compositionReplacementRange:sender];
-    *outRange = NSMakeRange(compositionRange.location, [candidateText length]);
-  }
-  _hanjaMarkedPrefixLength =
+  NSUInteger prefixLength =
       [candidateText length] > [composed length]
           ? [candidateText length] - [composed length]
           : 0;
+  NSRange compositionRange = [self compositionReplacementRange:sender];
+  if (compositionRange.location == NSNotFound ||
+      compositionRange.location < prefixLength ||
+      compositionRange.length != [composed length]) {
+    return nil;
+  }
+  if (outRange) {
+    *outRange = NSMakeRange(compositionRange.location - prefixLength,
+                           [candidateText length]);
+  }
+  _hanjaMarkedPrefixLength = prefixLength;
   _hanjaReplacementUsesMarkedPrefix = (_hanjaMarkedPrefixLength > 0);
   return candidateText;
 }
