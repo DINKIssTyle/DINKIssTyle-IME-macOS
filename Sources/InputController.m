@@ -4,6 +4,8 @@
 #import "DKSTKeyMap.h"
 #import <objc/message.h>
 #import <os/log.h>
+#import <stdlib.h>
+#import <string.h>
 
 static NSInteger DKSTCandidateIndexForNumberKeyCode(unsigned short keyCode) {
   switch (keyCode) {
@@ -43,6 +45,40 @@ static BOOL DKSTRangesOverlapOrTouch(NSRange first, NSRange second) {
          second.location <= NSMaxRange(first);
 }
 
+// Opt-in diagnostics also work in an optimized Release build. Do not read
+// defaults or query an IMK client for every trace entry.
+static BOOL DKSTInputTracingEnabled(void) {
+  static BOOL enabled;
+  static dispatch_once_t onceToken;
+  dispatch_once(&onceToken, ^{
+    const char *environment = getenv("DKST_TRACE_INPUT");
+    enabled = (environment && strcmp(environment, "1") == 0) ||
+        [[NSUserDefaults standardUserDefaults] boolForKey:@"DKSTTraceInput"];
+  });
+  return enabled;
+}
+
+static void DKSTTraceInput(NSString *phase, id controller, NSUInteger sequence,
+                           id client, NSEvent *event, BOOL handled,
+                           NSTimeInterval started) {
+  if (!DKSTInputTracingEnabled()) return;
+  static os_log_t log;
+  static dispatch_once_t onceToken;
+  dispatch_once(&onceToken, ^{
+    log = os_log_create("com.dinkisstyle.inputmethod.DKST", "InputSync");
+  });
+  double elapsed = started > 0
+      ? ([NSProcessInfo processInfo].systemUptime - started) * 1000 : 0;
+  double eventAge = event && [event timestamp] > 0
+      ? ([NSProcessInfo processInfo].systemUptime - [event timestamp]) * 1000 : 0;
+  os_log(log, "phase=%{public}@ controller=%{public}p activation=%{public}lu client=%{public}p "
+              "type=%{public}lu key=%{public}u flags=%{public}lu "
+              "handled=%{public}d elapsed_ms=%{public}.3f event_age_ms=%{public}.3f",
+         phase, controller, (unsigned long)sequence, client,
+         (unsigned long)[event type], (unsigned int)[event keyCode],
+         (unsigned long)[event modifierFlags], handled, elapsed, eventAge);
+}
+
 @implementation InputController
 
 static IMKCandidates *DKSTSharedCandidates;
@@ -71,13 +107,6 @@ static IMKCandidates *DKSTSharedCandidates;
     // but this caused crashes because InputMethodKit internally accesses
     // _candidates (e.g., calling isVisible) during deactivation.
     // Always create candidates to satisfy InputMethodKit's expectations.
-    NSString *clientBundleID = [inputClient bundleIdentifier];
-    BOOL isPreferencesApp = [clientBundleID
-        isEqualToString:@"com.dinkisstyle.inputmethod.DKST.preferences"];
-    if (isPreferencesApp) {
-      DKSTLog(@"Initialized for Preferences App");
-    }
-
     // Always keep IMKCandidates available for all clients.
     // Reuse one process-wide instance instead of allocating and releasing
     // one per controller, which causes heavy XPC connection churn with
@@ -119,13 +148,10 @@ static IMKCandidates *DKSTSharedCandidates;
            selector:@selector(preferencesDidChange:)
                name:NSUserDefaultsDidChangeNotification
              object:nil];
-
-    // Listen for dictionary changes from DKSTDictEditor (distributed
-    // notification crosses process boundaries without killing the IME).
     [[NSDistributedNotificationCenter defaultCenter]
         addObserver:self
-           selector:@selector(dictionaryDidChange:)
-               name:kDKSTDictionaryDidChangeNotification
+           selector:@selector(preferencesDidChange:)
+               name:kDKSTUserDefaultsDidChangeNotification
              object:nil];
 
     // Listen for Hanja shortcut changes from Preferences app
@@ -170,6 +196,7 @@ static IMKCandidates *DKSTSharedCandidates;
     [_currentHanjaCandidates release];
     _currentHanjaCandidates = nil;
   }
+  [_currentHanjaInsertionTexts release];
   if (engine) {
     [engine release];
     engine = nil;
@@ -428,21 +455,41 @@ static IMKCandidates *DKSTSharedCandidates;
     return;
   }
 
-  NSTimeInterval now = [NSDate timeIntervalSinceReferenceDate];
+  NSTimeInterval now = [NSProcessInfo processInfo].systemUptime;
   if (!force && _lastClientSyncTime > 0 && now - _lastClientSyncTime < 0.5) {
     return;
   }
 
   if ([self shouldAvoidEagerSyncForClient:sender]) {
     _lastClientSyncTime = now;
+    _clientSyncRetryPending = NO;
     return;
   }
 
+  NSTimeInterval started = DKSTInputTracingEnabled()
+      ? [NSProcessInfo processInfo].systemUptime : 0;
+  DKSTTraceInput(@"keyboard-sync-begin", self, _activationSequence, sender, nil, NO, 0);
   @try {
     [sender overrideKeyboardWithKeyboardNamed:kUSKeylayout];
     _lastClientSyncTime = now;
+    _clientSyncRetryPending = NO;
+    DKSTTraceInput(@"keyboard-sync-end", self, _activationSequence, sender, nil, YES, started);
   } @catch (NSException *exception) {
+    _clientSyncRetryPending = YES;
+    DKSTTraceInput(@"keyboard-sync-failed", self, _activationSequence,
+                   sender, nil, NO, started);
     DKSTLog(@"Exception in syncInputClient: %@", exception);
+  }
+}
+
+- (void)configureReplyTimeoutForClient:(id)sender {
+  SEL selector = NSSelectorFromString(@"setReplyTimeout:");
+  @try {
+    if ([sender respondsToSelector:selector]) {
+      ((void (*)(id, SEL, double))objc_msgSend)(sender, selector, 0.1);
+    }
+  } @catch (NSException *exception) {
+    DKSTLog(@"Could not configure client reply timeout: %@", exception);
   }
 }
 
@@ -508,6 +555,10 @@ static IMKCandidates *DKSTSharedCandidates;
   }
 
   BOOL clientChanged = (_lastInputClient && _lastInputClient != sender);
+  BOOL newClient = (_lastInputClient != sender);
+  if (newClient) {
+    [self configureReplyTimeoutForClient:sender];
+  }
   if (clientChanged) {
     DKSTLog(@"Input client changed; clearing pending composition");
     [_lastInputClientBundleID release];
@@ -534,7 +585,15 @@ static IMKCandidates *DKSTSharedCandidates;
   }
 
   if (clientChanged || _lastInputClient != sender) {
+    _lastClientSyncTime = 0;
+    _clientSyncRetried = NO;
+    [self syncInputClient:sender force:YES];
     [self refreshMarkedTextPolicyForClient:sender];
+  } else if (_clientSyncRetryPending && !_clientSyncRetried) {
+    // Retry a known failure once, before processing this client's first key.
+    // Successful activations add no extra override to the typing path.
+    _clientSyncRetried = YES;
+    [self syncInputClient:sender force:YES];
   }
 
   // REMOVED: Forced setMarkedText:@"" on client change (Phase 1 Method 3)
@@ -698,6 +757,7 @@ static IMKCandidates *DKSTSharedCandidates;
 }
 
 - (void)reloadHanjaShortcut {
+  _hanjaModifierPending = NO;
   CFStringRef appID = (__bridge CFStringRef)kDKSTBundleID;
 
   // Force re-read from disk (bypass in-memory cache)
@@ -708,7 +768,9 @@ static IMKCandidates *DKSTSharedCandidates;
   CFPropertyListRef modifiersRef = CFPreferencesCopyAppValue(
       (__bridge CFStringRef)kDKSTHanjaShortcutModifiersKey, appID);
 
-  if (keyCodeRef && modifiersRef) {
+  if (keyCodeRef && modifiersRef &&
+      CFGetTypeID(keyCodeRef) == CFNumberGetTypeID() &&
+      CFGetTypeID(modifiersRef) == CFNumberGetTypeID()) {
     _hanjaShortcutKeyCode =
         (unsigned short)[((__bridge NSNumber *)keyCodeRef) integerValue];
     _hanjaShortcutModifiers =
@@ -727,25 +789,51 @@ static IMKCandidates *DKSTSharedCandidates;
 }
 
 - (void)preferencesDidChange:(NSNotification *)notification {
-  [self reloadUserPreferences];
-  if (_lastInputClient) {
-    [self refreshMarkedTextPolicyForClient:_lastInputClient];
+  if (![NSThread isMainThread]) {
+    dispatch_async(dispatch_get_main_queue(), ^{ [self preferencesDidChange:notification]; });
+    return;
+  }
+  _preferencesDirty = YES;
+  if ([[notification name] isEqualToString:kDKSTUserDefaultsDidChangeNotification]) {
+    _preferencesNeedSynchronization = YES;
+  }
+}
+
+- (void)applyPendingPreferencesForClient:(id)sender {
+  // A notification must not migrate an in-flight composition between direct
+  // and marked input or change the engine's delete behavior midway through it.
+  if ([self hasPendingComposition]) return;
+  BOOL reload = _preferencesDirty;
+  if (reload) {
+    _preferencesDirty = NO;
+    if (_preferencesNeedSynchronization) {
+      _preferencesNeedSynchronization = NO;
+      [[NSUserDefaults standardUserDefaults] synchronize];
+    }
+    [self reloadUserPreferences];
+    _hanjaShortcutDirty = NO;
+    if (sender) [self refreshMarkedTextPolicyForClient:sender];
+  } else if (_hanjaShortcutDirty) {
+    _hanjaShortcutDirty = NO;
+    [self reloadHanjaShortcut];
   }
 }
 
 // MARK: - Input Method Kit Methods
 
-- (void)dictionaryDidChange:(NSNotification *)notification {
-  DKSTLog(@"Received DKSTDictionaryDidChangeNotification — reloading");
-  [[DKSTHanjaDictionary sharedDictionary] reloadDictionary];
-}
-
 - (void)hanjaShortcutDidChange:(NSNotification *)notification {
-  DKSTLog(@"Received DKSTHanjaShortcutDidChangeNotification — reloading shortcut");
-  [self reloadHanjaShortcut];
+  if (![NSThread isMainThread]) {
+    dispatch_async(dispatch_get_main_queue(), ^{ [self hanjaShortcutDidChange:notification]; });
+    return;
+  }
+  _hanjaShortcutDirty = YES;
 }
 
 - (void)activateServer:(id)sender {
+  NSTimeInterval started = DKSTInputTracingEnabled()
+      ? [NSProcessInfo processInfo].systemUptime : 0;
+  _activationSequence++;
+  DKSTTraceInput(@"activate-begin", self, _activationSequence, sender, nil, NO, 0);
   DKSTLog(@"activateServer called");
 
   // Fix: Initialize current mode SAFELY before using it
@@ -759,37 +847,27 @@ static IMKCandidates *DKSTSharedCandidates;
   // Always call super first
   [super activateServer:sender];
 
+  [self configureReplyTimeoutForClient:sender];
+
   _lastInputClient = sender;
   [_lastInputClientBundleID release];
   _lastInputClientBundleID = nil;
 
-  // Force keyboard override and input mode selection.
+  // Apply the keyboard layout without reselecting the system input source.
   // Reset sync time to ensure override is re-applied even if the XPC
   // connection was re-established after an endpoint invalidation.
   _lastClientSyncTime = 0;
+  _clientSyncRetried = NO;
   [self syncInputClient:sender force:YES];
 
-  [self reloadUserPreferences];
-  [self refreshMarkedTextPolicyForClient:sender];
-
-  // InputMethodKit's client proxy performs synchronous XPC round trips for
-  // operations such as selectedRange and insertText:. Limit those waits so an
-  // unresponsive client cannot stall the input method indefinitely. This is an
-  // internal IMK proxy API, so keep the call capability-checked.
-  SEL timeoutSel = NSSelectorFromString(@"setReplyTimeout:");
-  if ([sender respondsToSelector:timeoutSel]) {
-    // 100 ms still bounds a hung client while leaving more headroom than the
-    // previous 30 ms for temporarily busy applications.
-    ((void (*)(id, SEL, double))objc_msgSend)(sender, timeoutSel, 0.1);
-    DKSTLog(@"Set client XPC replyTimeout to 0.1s for %@",
-            [self bundleIdentifierForClient:sender]);
-  }
-
-  // Ensure clean state and force Hangul mode on activation
   [self resetCompositionState];
+  [self applyPendingPreferencesForClient:nil];
+  [self refreshMarkedTextPolicyForClient:sender];
+  DKSTTraceInput(@"activate-end", self, _activationSequence, sender, nil, YES, started);
 }
 
 - (void)deactivateServer:(id)sender {
+  DKSTTraceInput(@"deactivate", self, _activationSequence, sender, nil, NO, 0);
   DKSTLog(@"deactivateServer called");
 
   [self cancelPendingKeyboardCandidateCommit];
@@ -801,6 +879,8 @@ static IMKCandidates *DKSTSharedCandidates;
   // internal references.
 
   // Clear our own Hanja candidates data only
+  [_currentHanjaInsertionTexts release];
+  _currentHanjaInsertionTexts = nil;
   if (_currentHanjaCandidates) {
     [_currentHanjaCandidates release];
     _currentHanjaCandidates = nil;
@@ -1094,6 +1174,9 @@ static IMKCandidates *DKSTSharedCandidates;
 // MARK: - Input Method Kit Methods (handleEvent)
 
 - (BOOL)handleEvent:(NSEvent *)event client:(id)sender {
+  NSTimeInterval started = DKSTInputTracingEnabled()
+      ? [NSProcessInfo processInfo].systemUptime : 0;
+  DKSTTraceInput(@"event-begin", self, _activationSequence, sender, event, NO, 0);
   id textDocument = nil;
   BOOL beganEdit = NO;
   SEL textDocumentSelector = NSSelectorFromString(@"textDocument");
@@ -1120,6 +1203,10 @@ static IMKCandidates *DKSTSharedCandidates;
   BOOL handled = NO;
   @try {
     handled = [self handleEventInEditTransaction:event client:sender];
+  } @catch (NSException *exception) {
+    DKSTTraceInput(@"event-exception", self, _activationSequence,
+                   sender, event, NO, started);
+    @throw;
   } @finally {
     @try {
       if (beganEdit) {
@@ -1153,11 +1240,20 @@ static IMKCandidates *DKSTSharedCandidates;
     }
   }
 
+  DKSTTraceInput(@"event-end", self, _activationSequence, sender, event, handled, started);
   return handled;
 }
 
 - (BOOL)handleEventInEditTransaction:(NSEvent *)event client:(id)sender {
   unsigned short keyCode = [event keyCode];
+
+  // Modifier-only shortcuts must see pending settings even when no ordinary
+  // key has been pressed since the preferences window was closed.
+  if ([event type] == NSEventTypeFlagsChanged &&
+      (_preferencesDirty || _hanjaShortcutDirty)) {
+    [self configureReplyTimeoutForClient:sender];
+    [self applyPendingPreferencesForClient:sender];
+  }
 
   // Handle modifier-only Hanja shortcut (e.g., Option + Control)
   if ([event type] == NSEventTypeFlagsChanged && _hanjaEnabled &&
@@ -1206,6 +1302,7 @@ static IMKCandidates *DKSTSharedCandidates;
   _hanjaModifierPending = NO;
 
   [self prepareForInputClient:sender];
+  [self applyPendingPreferencesForClient:sender];
   [self refreshMarkedTextPolicyForNewComposition:sender];
 
   // 1. Candidate window navigation
@@ -1395,8 +1492,10 @@ static IMKCandidates *DKSTSharedCandidates;
     [sender setMarkedText:attrString
            selectionRange:NSMakeRange([composed length], 0)
          replacementRange:_markedReplacementRange];
+    DKSTTraceInput(@"marked-output", self, _activationSequence, sender, nil, YES, 0);
 
-    // Item 3: Check for inline consistency (KIM's inlineInconsistent pattern)
+    // Diagnostic only: do not add a remote read to Release typing.
+#ifdef DEBUG
     @try {
       if ([sender respondsToSelector:@selector(markedRange)]) {
         NSRange markedRange = [sender markedRange];
@@ -1410,6 +1509,7 @@ static IMKCandidates *DKSTSharedCandidates;
     } @catch (NSException *exception) {
       DKSTLog(@"Exception checking inline consistency: %@", exception);
     }
+#endif
 
     [self rememberSelectedRangeForClient:sender];
   } else {
@@ -1458,7 +1558,9 @@ static IMKCandidates *DKSTSharedCandidates;
   if ([replacement length] > 0 || replacementRange.location != NSNotFound) {
     @try {
       [sender insertText:replacement replacementRange:replacementRange];
+      DKSTTraceInput(@"direct-output", self, _activationSequence, sender, nil, YES, 0);
     } @catch (NSException *exception) {
+      DKSTTraceInput(@"direct-output-failed", self, _activationSequence, sender, nil, NO, 0);
       DKSTLog(@"Direct insert failed: %@", exception);
       if (replacementRange.location != NSNotFound) {
         [self setMarkedReplacementRange:replacementRange];
@@ -1466,11 +1568,6 @@ static IMKCandidates *DKSTSharedCandidates;
       [self forceMarkedTextForClient:sender reason:@"direct insert exception"];
       return NO;
     }
-  }
-
-  NSUInteger expectedLocation = NSNotFound;
-  if (replacementStart != NSNotFound) {
-    expectedLocation = replacementStart + commitLength + composedLength;
   }
 
   // KIM's insertNewText: does not read the document back on the first direct
@@ -1503,6 +1600,9 @@ static IMKCandidates *DKSTSharedCandidates;
     }
   }
 
+#ifdef DEBUG
+  NSUInteger expectedLocation = replacementStart == NSNotFound ? NSNotFound
+      : replacementStart + commitLength + composedLength;
   if (expectedLocation != NSNotFound && composedLength > 0 && _directInputComposedLength > 0 &&
       ![self shouldTrustDirectCompositionRangeForClient:sender]) {
     @try {
@@ -1534,6 +1634,7 @@ static IMKCandidates *DKSTSharedCandidates;
               exception);
     }
   }
+#endif
 
   [_compositionState updateBufferContents:replacement];
   NSString *previousBuffer = [_compositionState previousBufferContents];

@@ -147,6 +147,8 @@
     _hanjaReplacementUsesMarkedPrefix = YES;
     _currentHanjaCandidates =
         [[NSArray alloc] initWithObjects:@"大韓民國 대한민국", @"대한민국", nil];
+    _currentHanjaInsertionTexts =
+        [[NSArray alloc] initWithObjects:@"大韓民國", @"대한민국", nil];
     _currentHanjaIndex = 0;
     _candidates = (IMKCandidates *)panel;
     _testClient = [client retain];
@@ -249,6 +251,7 @@ int main(void) {
   DKSTAssert([controller selectWithKeyCode:kDKSTKeyCodeReturn],
              @"Return was not handled for late-callback test");
   DKSTDrainDeferredCommit();
+  [controller candidateSelected:candidate];
   [controller candidateSelected:candidate];
   DKSTAssert([client insertCount] == 1,
              @"late native candidate callback caused a duplicate commit");

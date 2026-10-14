@@ -48,6 +48,15 @@ static NSUserDefaults *sharedDefaults() {
   return suiteDefaults;
 }
 
+static void DKSTPublishUserPreferences(void) {
+  [sharedDefaults() synchronize];
+  [[NSDistributedNotificationCenter defaultCenter]
+      postNotificationName:kDKSTUserDefaultsDidChangeNotification
+                    object:nil
+                  userInfo:nil
+        deliverImmediately:YES];
+}
+
 static NSString *DKSTShellSingleQuotedString(NSString *value) {
   NSString *escaped = [value stringByReplacingOccurrencesOfString:@"'"
                                                        withString:@"'\\''"];
@@ -302,33 +311,33 @@ static NSDictionary *DKSTIMEInfoPlist() {
 - (IBAction)toggleMoaJjiki:(id)sender {
   [sharedDefaults() setBool:(moaJjikiCheckbox.state == NSControlStateValueOn)
                      forKey:kDKSTEnableMoaJjikiKey];
-  [sharedDefaults() synchronize];
+  DKSTPublishUserPreferences();
 }
 
 - (IBAction)toggleFullDelete:(id)sender {
   [sharedDefaults() setBool:(fullDeleteCheckbox.state == NSControlStateValueOn)
                      forKey:kDKSTFullCharacterDeleteKey];
-  [sharedDefaults() synchronize];
+  DKSTPublishUserPreferences();
 }
 
 - (IBAction)toggleHanjaConversion:(id)sender {
   [sharedDefaults()
       setBool:(hanjaConversionCheckbox.state == NSControlStateValueOn)
        forKey:kDKSTEnableHanjaKey];
-  [sharedDefaults() synchronize];
+  DKSTPublishUserPreferences();
 }
 
 - (IBAction)toggleAppleHanjaDictionary:(id)sender {
   [sharedDefaults()
       setBool:(appleHanjaDictionaryCheckbox.state == NSControlStateValueOn)
        forKey:kDKSTUseAppleHanjaDictionaryKey];
-  [sharedDefaults() synchronize];
+  DKSTPublishUserPreferences();
 }
 
 - (IBAction)toggleCustomShift:(id)sender {
   [sharedDefaults() setBool:(customShiftCheckbox.state == NSControlStateValueOn)
                      forKey:kDKSTEnableCustomShiftKey];
-  [sharedDefaults() synchronize];
+  DKSTPublishUserPreferences();
 }
 
 - (void)shortcutRecorder:(DKSTShortcutRecorder *)recorder
@@ -466,7 +475,7 @@ static NSDictionary *DKSTIMEInfoPlist() {
     NSString *key = mappingKeys[row];
     [mappingDict setObject:(NSString *)object forKey:key];
     [sharedDefaults() setObject:mappingDict forKey:kDKSTCustomShiftMappingsKey];
-    [sharedDefaults() synchronize];
+    DKSTPublishUserPreferences();
   }
 }
 
@@ -1022,9 +1031,6 @@ static NSDictionary *DKSTIMEInfoPlist() {
 - (void)viewWillAppear {
   [super viewWillAppear];
   compatibilityExtensionsCheckbox.state = NSControlStateValueOff;
-  [sharedDefaults() setBool:NO
-                     forKey:kDKSTEnableCompatibilityExtensionsKey];
-  [sharedDefaults() synchronize];
   useMarkedTextForAllAppsCheckbox.state =
       [sharedDefaults() boolForKey:kDKSTUseMarkedTextForAllAppsKey]
           ? NSControlStateValueOn
@@ -1039,7 +1045,7 @@ static NSDictionary *DKSTIMEInfoPlist() {
   [sharedDefaults()
       setBool:(compatibilityExtensionsCheckbox.state == NSControlStateValueOn)
        forKey:kDKSTEnableCompatibilityExtensionsKey];
-  [sharedDefaults() synchronize];
+  DKSTPublishUserPreferences();
 }
 
 - (IBAction)toggleUseMarkedTextForAllApps:(id)sender {
@@ -1047,7 +1053,7 @@ static NSDictionary *DKSTIMEInfoPlist() {
   [sharedDefaults()
       setBool:(useMarkedTextForAllAppsCheckbox.state == NSControlStateValueOn)
        forKey:kDKSTUseMarkedTextForAllAppsKey];
-  [sharedDefaults() synchronize];
+  DKSTPublishUserPreferences();
 }
 
 - (void)saveData {
@@ -1055,7 +1061,7 @@ static NSDictionary *DKSTIMEInfoPlist() {
     bundleIDs = [[NSMutableArray alloc] init];
   }
   [sharedDefaults() setObject:bundleIDs forKey:kDKSTMarkedTextAppBundleIDsKey];
-  [sharedDefaults() synchronize];
+  DKSTPublishUserPreferences();
 }
 
 - (NSInteger)numberOfRowsInTableView:(NSTableView *)aTableView {

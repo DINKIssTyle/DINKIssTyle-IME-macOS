@@ -35,6 +35,13 @@
   id _pendingHanjaClient;
   BOOL _keyboardHanjaCommitPending;
   BOOL _suppressNextHanjaCandidateCallback;
+  BOOL _preferencesDirty;
+  BOOL _preferencesNeedSynchronization;
+  BOOL _hanjaShortcutDirty;
+  BOOL _clientSyncRetryPending;
+  BOOL _clientSyncRetried;
+  NSUInteger _activationSequence;
+  NSArray *_currentHanjaInsertionTexts;
   // Custom Hanja shortcut — MUST remain at the end of the ivar list
   // to avoid InputMethodKit memory layout conflicts.
   unsigned short _hanjaShortcutKeyCode;

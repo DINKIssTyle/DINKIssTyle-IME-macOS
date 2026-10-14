@@ -64,11 +64,12 @@
 
 - (BOOL)isHangulKeyCode:(unsigned short)keyCode;
 - (void)syncInputClient:(id)sender force:(BOOL)force;
+- (void)configureReplyTimeoutForClient:(id)sender;
+- (void)applyPendingPreferencesForClient:(id)sender;
 - (void)prepareForInputClient:(id)sender;
 - (void)reloadUserPreferences;
 - (void)reloadHanjaShortcut;
 - (void)preferencesDidChange:(NSNotification *)notification;
-- (void)dictionaryDidChange:(NSNotification *)notification;
 - (void)hanjaShortcutDidChange:(NSNotification *)notification;
 - (BOOL)handleCandidateNavigation:(unsigned short)keyCode client:(id)sender;
 - (BOOL)handleCustomShift:(unsigned short)keyCode

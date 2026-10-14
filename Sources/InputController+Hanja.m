@@ -237,6 +237,15 @@ static BOOL DKSTIsHangulSyllable(unichar character) {
   // the committed text when the user chooses the "leave unchanged" candidate.
   [allCandidates addObject:text];
 
+  NSMutableArray *insertionTexts = [NSMutableArray array];
+  for (NSString *display in candidates) {
+    [insertionTexts addObject:[[DKSTHanjaDictionary sharedDictionary]
+        insertionTextForCandidate:display sourceHangul:text]];
+  }
+  [insertionTexts addObject:text];
+  [_currentHanjaInsertionTexts release];
+  _currentHanjaInsertionTexts = [insertionTexts copy];
+
   if (_currentHanjaCandidates) {
     [_currentHanjaCandidates release];
   }
@@ -350,13 +359,18 @@ static BOOL DKSTIsHangulSyllable(unichar character) {
   DKSTLog(@"commitCandidate selected='%@'", selected);
 
   if (selected) {
-    // The last candidate is always the original source text. Candidate display
-    // strings may contain an annotation after a space, but the original text
-    // itself can also contain spaces and must be committed without truncation.
-    NSString *sourceText = [_currentHanjaCandidates lastObject];
-    NSString *hanja = [selected isEqualToString:sourceText]
-                          ? selected
-                          : [[selected componentsSeparatedByString:@" "] firstObject];
+    // A displayed value can contain spaces, including Apple candidate values.
+    // Use the captured insertion text instead of parsing the display string.
+    NSUInteger index = [_currentHanjaCandidates indexOfObject:selected];
+    NSString *hanja = selected;
+    if ([selected isEqualToString:[_currentHanjaCandidates lastObject]]) {
+      // The original-text choice wins even when a local display label happens
+      // to be identical to it (including a legacy annotation-like suffix).
+      hanja = selected;
+    } else if (_currentHanjaInsertionTexts && index != NSNotFound &&
+        index < [_currentHanjaInsertionTexts count]) {
+      hanja = [_currentHanjaInsertionTexts objectAtIndex:index];
+    }
     if (hanja && [hanja length] > 0) {
       NSRange replacementRange;
 
@@ -416,6 +430,8 @@ static BOOL DKSTIsHangulSyllable(unichar character) {
   _currentHanjaIndex = 0;
 
   [_candidates hide];
+  [_currentHanjaInsertionTexts release];
+  _currentHanjaInsertionTexts = nil;
   if (_currentHanjaCandidates) {
     [_currentHanjaCandidates release];
     _currentHanjaCandidates = nil;
@@ -424,6 +440,12 @@ static BOOL DKSTIsHangulSyllable(unichar character) {
 
 // Candidate Selection Handler
 - (void)candidateSelected:(NSAttributedString *)candidateString {
+  if (!_currentHanjaCandidates || !candidateString ||
+      [_currentHanjaCandidates indexOfObject:[candidateString string]] == NSNotFound) {
+    // A late callback from a closed/previous panel must not insert into the
+    // current document or cancel a newer deferred selection.
+    return;
+  }
   if (_keyboardHanjaCommitPending) {
     // InputMethodKit completed the keyboard selection before the deferred
     // fallback. Its native callback is now safe and should win.

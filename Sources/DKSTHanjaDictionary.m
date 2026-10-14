@@ -57,6 +57,8 @@ static void DKSTAppleHanjaHitCallback(DKSTIDXIndexRef index,
     CFStringRef _IDXSearchExactMatch;
     BOOL _triedAppleHanjaDictionary;
     NSCache *_appleRawMatchCache;
+    NSDictionary *_lastAppleInsertionTexts;
+    NSString *_lastAppleInsertionSource;
 }
 
 + (instancetype)sharedDictionary {
@@ -76,6 +78,12 @@ static void DKSTAppleHanjaHitCallback(DKSTIDXIndexRef index,
         _appleRawMatchCache = [[NSCache alloc] init];
         [_appleRawMatchCache setCountLimit:500];
 
+        // The process-wide dictionary owns this observation. A controller per
+        // text session must not parse the same file again for each observer.
+        [[NSDistributedNotificationCenter defaultCenter]
+            addObserver:self selector:@selector(dictionaryDidChange:)
+            name:kDKSTDictionaryDidChangeNotification object:nil];
+
         DKSTLog(@"Loaded %lu Hanja entries", (unsigned long)[_dictionary count]);
     }
     return self;
@@ -89,7 +97,48 @@ static void DKSTAppleHanjaHitCallback(DKSTIDXIndexRef index,
     _dictionary = [dict retain];
     [oldDict release];
     [_appleRawMatchCache removeAllObjects];
+    [_lastAppleInsertionTexts release];
+    _lastAppleInsertionTexts = nil;
+    [_lastAppleInsertionSource release];
+    _lastAppleInsertionSource = nil;
     DKSTLog(@"Reloaded %lu Hanja entries", (unsigned long)[_dictionary count]);
+}
+
+- (void)dictionaryDidChange:(NSNotification *)notification {
+    if (![NSThread isMainThread]) {
+        dispatch_async(dispatch_get_main_queue(), ^{ [self dictionaryDidChange:notification]; });
+        return;
+    }
+    [NSObject cancelPreviousPerformRequestsWithTarget:self
+        selector:@selector(reloadDictionary) object:nil];
+    [self performSelector:@selector(reloadDictionary) withObject:nil afterDelay:0
+        inModes:@[NSRunLoopCommonModes]];
+}
+
++ (NSString *)insertionTextForLocalCandidate:(NSString *)candidate {
+    // Legacy local dictionaries use "value (annotation)". Ordinary spaces
+    // inside phrases or emoticons are part of the value, not separators.
+    NSRange separator = [candidate rangeOfString:@" ("];
+    if (separator.location == NSNotFound || ![candidate hasSuffix:@")"]) {
+        return candidate;
+    }
+    NSInteger depth = 0;
+    for (NSUInteger i = separator.location + 1; i < [candidate length]; i++) {
+        unichar character = [candidate characterAtIndex:i];
+        if (character == '(') depth++;
+        if (character == ')') depth--;
+        if (depth < 0 || (depth == 0 && i + 1 != [candidate length])) return candidate;
+    }
+    return depth == 0 ? [candidate substringToIndex:separator.location] : candidate;
+}
+
+- (NSString *)insertionTextForCandidate:(NSString *)candidate sourceHangul:(NSString *)hangul {
+    if ([[_dictionary objectForKey:hangul] containsObject:candidate]) {
+        return [[self class] insertionTextForLocalCandidate:candidate];
+    }
+    NSString *appleText = [_lastAppleInsertionSource isEqualToString:hangul]
+        ? [_lastAppleInsertionTexts objectForKey:candidate] : nil;
+    return appleText ?: candidate;
 }
 
 - (NSDictionary *)dictionaryFromBundledHanjaFileWithLogPrefix:(NSString *)prefix {
@@ -191,6 +240,7 @@ static void DKSTAppleHanjaHitCallback(DKSTIDXIndexRef index,
     }
 
     NSMutableArray *formattedCandidates = [NSMutableArray array];
+    NSMutableDictionary *insertionTexts = [NSMutableDictionary dictionary];
     NSMutableSet *seenCandidates = [NSMutableSet set];
     for (NSString *candidate in rawCandidates) {
         NSString *formatted = [self formattedAppleCandidate:candidate
@@ -198,8 +248,13 @@ static void DKSTAppleHanjaHitCallback(DKSTIDXIndexRef index,
         if ([formatted length] > 0 && ![seenCandidates containsObject:formatted]) {
             [formattedCandidates addObject:formatted];
             [seenCandidates addObject:formatted];
+            [insertionTexts setObject:candidate forKey:formatted];
         }
     }
+    [_lastAppleInsertionTexts release];
+    _lastAppleInsertionTexts = [insertionTexts copy];
+    [_lastAppleInsertionSource release];
+    _lastAppleInsertionSource = [hangul copy];
     return formattedCandidates;
 }
 
@@ -329,6 +384,8 @@ static void DKSTAppleHanjaHitCallback(DKSTIDXIndexRef index,
 }
 
 - (void)dealloc {
+    [[NSDistributedNotificationCenter defaultCenter] removeObserver:self];
+    [NSObject cancelPreviousPerformRequestsWithTarget:self];
     if (_appleHanjaIndex) {
         CFRelease(_appleHanjaIndex);
         _appleHanjaIndex = NULL;
@@ -339,6 +396,8 @@ static void DKSTAppleHanjaHitCallback(DKSTIDXIndexRef index,
     }
     [_dictionary release];
     [_appleRawMatchCache release];
+    [_lastAppleInsertionTexts release];
+    [_lastAppleInsertionSource release];
     [super dealloc];
 }
 

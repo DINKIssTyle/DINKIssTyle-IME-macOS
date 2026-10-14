@@ -34,14 +34,13 @@
 }
 
 - (void)forceMarkedTextForClient:(id)sender reason:(NSString *)reason {
-  NSString *bundleID = [self bundleIdentifierForClient:sender];
   // A direct insert can appear inconsistent while the client is asynchronously
   // updating an autofill selection. Fall back only for the current composition;
   // making this Bundle ID sticky causes every later composition in Calendar or
   // Siri to start as marked text after one transient mismatch.
   _useMarkedTextForClient = YES;
   _compositionState.shouldForceMarkedText = YES;
-  DKSTLog(@"Forcing marked text for %@: %@", bundleID ?: @"unknown client",
+  DKSTLog(@"Forcing marked text for %@: %@", [self bundleIdentifierForClient:sender] ?: @"unknown client",
           reason);
 }
 
@@ -256,30 +255,36 @@
   // KIM_Extension uses textDocument proxy for this query.
   SEL textDocSel = NSSelectorFromString(@"textDocument");
   id textDocument = nil;
-  if ([self respondsToSelector:textDocSel]) {
+  @try {
+    if ([self respondsToSelector:textDocSel]) {
 #pragma clang diagnostic push
 #pragma clang diagnostic ignored "-Warc-performSelector-leaks"
-    textDocument = [self performSelector:textDocSel];
+      textDocument = [self performSelector:textDocSel];
 #pragma clang diagnostic pop
-  }
+    }
 
-  SEL showsComposingTextSel =
-      NSSelectorFromString(@"showsComposingTextAsMarkedText");
+    SEL showsComposingTextSel =
+        NSSelectorFromString(@"showsComposingTextAsMarkedText");
 
-  // Check textDocument proxy first (standard IMK behavior)
-  if (textDocument && [textDocument respondsToSelector:showsComposingTextSel]) {
-    BOOL showsMarked = ((BOOL (*)(
-        id, SEL))[textDocument methodForSelector:showsComposingTextSel])(
-        textDocument, showsComposingTextSel);
-    return showsMarked;
-  }
+    // An unresponsive proxy can raise even after capability checks. Fall back to
+    // the established bundle/range policy instead of aborting activation.
+    // Check textDocument proxy first (standard IMK behavior)
+    if (textDocument && [textDocument respondsToSelector:showsComposingTextSel]) {
+      BOOL showsMarked = ((BOOL (*)(
+          id, SEL))[textDocument methodForSelector:showsComposingTextSel])(
+          textDocument, showsComposingTextSel);
+      return showsMarked;
+    }
 
-  // Fallback: Check sender directly (some apps might implement it)
-  if ([sender respondsToSelector:showsComposingTextSel]) {
-    BOOL showsMarked =
-        ((BOOL (*)(id, SEL))[sender methodForSelector:showsComposingTextSel])(
-            sender, showsComposingTextSel);
-    return showsMarked;
+    // Fallback: Check sender directly (some apps might implement it)
+    if ([sender respondsToSelector:showsComposingTextSel]) {
+      BOOL showsMarked =
+          ((BOOL (*)(id, SEL))[sender methodForSelector:showsComposingTextSel])(
+              sender, showsComposingTextSel);
+      return showsMarked;
+    }
+  } @catch (NSException *exception) {
+    DKSTLog(@"Runtime marked-text policy unavailable: %@", exception);
   }
 
   if (![bundleID length]) {
@@ -321,7 +326,7 @@
 }
 
 - (void)refreshMarkedTextPolicyForNewComposition:(id)sender {
-  if (!_useMarkedTextForClient || [self hasPendingComposition]) {
+  if (!_compositionState.shouldForceMarkedText || [self hasPendingComposition]) {
     return;
   }
 
