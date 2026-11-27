@@ -309,6 +309,7 @@ static NSCache *DKSTSharedChromiumDetectionCache(void) {
   }
 
   if (![bundleID length]) {
+    _compositionState.shouldForceMarkedText = YES;
     return YES;
   }
 
@@ -327,11 +328,16 @@ static NSCache *DKSTSharedChromiumDetectionCache(void) {
     }
     NSRange selectedRange = [sender selectedRange];
     if (selectedRange.location == NSNotFound) {
+      // macOS 27 Calendar can report NSNotFound during activateServer: before
+      // its event-title editor finishes focusing. Treat this as a transient
+      // fallback so the first real keystroke re-evaluates into direct input.
+      _compositionState.shouldForceMarkedText = YES;
       return YES;
     }
   } @catch (NSException *exception) {
     DKSTLog(@"Exception checking selected range for direct input: %@",
             exception);
+    _compositionState.shouldForceMarkedText = YES;
     return YES;
   }
 
@@ -347,10 +353,12 @@ static NSCache *DKSTSharedChromiumDetectionCache(void) {
     return;
   }
 
-  // Re-evaluate after a transient direct-insert fallback. Explicit marked-text
-  // policies remain marked; ordinary direct clients return to direct input.
-  [self refreshMarkedTextPolicyForClient:sender];
+  // Re-evaluate after a transient fallback (direct-insert mismatch or
+  // activateServer: NSNotFound selection). Clear the flag before re-evaluating
+  // so a still-transient client can re-arm it, while ready direct clients
+  // return to direct input and permanent marked clients stay marked.
   _compositionState.shouldForceMarkedText = NO;
+  [self refreshMarkedTextPolicyForClient:sender];
 }
 
 @end

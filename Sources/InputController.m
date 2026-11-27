@@ -82,6 +82,9 @@ static void DKSTTraceInput(NSString *phase, id controller, NSUInteger sequence,
 @implementation InputController
 
 static IMKCandidates *DKSTSharedCandidates;
+static BOOL DKSTHanjaShortcutCacheInitialized = NO;
+static unsigned short DKSTCachedHanjaShortcutKeyCode = kDKSTKeyCodeReturn;
+static NSUInteger DKSTCachedHanjaShortcutModifiers = NSEventModifierFlagOption;
 
 - (id)initWithServer:(IMKServer *)server
             delegate:(id)delegate
@@ -93,29 +96,38 @@ static IMKCandidates *DKSTSharedCandidates;
     engine = [[DKSTHangul alloc] init];
     currentMode = [kDKSTHangulMode retain]; // Default to Hangul (Retain)
 
-    // Set default preference
-    [[NSUserDefaults standardUserDefaults] registerDefaults:@{
-      kDKSTEnableMoaJjikiKey : @YES,
-      kDKSTFullCharacterDeleteKey : @NO,
-      kDKSTEnableCustomShiftKey : @NO,
-      kDKSTUseMarkedTextForAllAppsKey : @NO,
-      kDKSTUseAppleHanjaDictionaryKey : @YES,
-      kDKSTMarkedTextAppBundleIDsKey : DKSTDefaultMarkedTextAppBundleIDs()
-    }];
+    // Set default preference once per process
+    static dispatch_once_t defaultsOnceToken;
+    dispatch_once(&defaultsOnceToken, ^{
+      [[NSUserDefaults standardUserDefaults] registerDefaults:@{
+        kDKSTEnableMoaJjikiKey : @YES,
+        kDKSTFullCharacterDeleteKey : @NO,
+        kDKSTEnableCustomShiftKey : @NO,
+        kDKSTUseMarkedTextForAllAppsKey : @NO,
+        kDKSTUseAppleHanjaDictionaryKey : @YES,
+        kDKSTMarkedTextAppBundleIDsKey : DKSTDefaultMarkedTextAppBundleIDs()
+      }];
+    });
 
-    // Note: We previously skipped IMKCandidates creation for Preferences app,
-    // but this caused crashes because InputMethodKit internally accesses
-    // _candidates (e.g., calling isVisible) during deactivation.
-    // Always create candidates to satisfy InputMethodKit's expectations.
-    // Always keep IMKCandidates available for all clients.
-    // Reuse one process-wide instance instead of allocating and releasing
-    // one per controller, which causes heavy XPC connection churn with
-    // CursorUIViewService and dangling pointer crashes in InputMethodKit.
+    // Reuse one process-wide IMKCandidates instance and configure its
+    // attributes/selection keys once on creation instead of repeating XPC
+    // calls to CursorUIViewService for every new controller.
     @synchronized([InputController class]) {
       if (!DKSTSharedCandidates) {
         DKSTSharedCandidates = [[IMKCandidates alloc]
             initWithServer:server
                  panelType:kIMKSingleColumnScrollingCandidatePanel];
+        NSDictionary *styleAttributes = @{
+          IMKCandidatesSendServerKeyEventFirst : @YES,
+          IMKCandidatesOpacityAttributeName : @(1.0),
+          @"IMKCandidatesFont" : [NSFont systemFontOfSize:15.0
+                                                   weight:NSFontWeightRegular]
+        };
+        [DKSTSharedCandidates setAttributes:styleAttributes];
+        [DKSTSharedCandidates
+            setSelectionKeys:[NSArray arrayWithObjects:@"1", @"2", @"3", @"4",
+                                                       @"5", @"6", @"7", @"8",
+                                                       @"9", nil]];
       }
       _candidates = DKSTSharedCandidates;
     }
@@ -158,20 +170,6 @@ static IMKCandidates *DKSTSharedCandidates;
            selector:@selector(hanjaShortcutDidChange:)
                name:kDKSTHanjaShortcutDidChangeNotification
              object:nil];
-
-    // Style attributes to match Apple's Korean IME
-    NSDictionary *styleAttributes = @{
-      IMKCandidatesSendServerKeyEventFirst : @YES,
-      IMKCandidatesOpacityAttributeName : @(1.0),
-      @"IMKCandidatesFont" : [NSFont systemFontOfSize:15.0
-                                               weight:NSFontWeightRegular]
-    };
-    [_candidates setAttributes:styleAttributes];
-
-    [_candidates
-        setSelectionKeys:[NSArray arrayWithObjects:@"1", @"2", @"3", @"4", @"5",
-                                                   @"6", @"7", @"8", @"9",
-                                                   nil]];
   }
   return self;
 }
@@ -463,8 +461,10 @@ static IMKCandidates *DKSTSharedCandidates;
     [sender overrideKeyboardWithKeyboardNamed:kUSKeylayout];
     _lastClientSyncTime = now;
     _clientSyncRetryPending = NO;
+    _clientSyncRetried = NO;
     DKSTTraceInput(@"keyboard-sync-end", self, _activationSequence, sender, nil, YES, started);
   } @catch (NSException *exception) {
+    _lastClientSyncTime = now;
     _clientSyncRetryPending = YES;
     DKSTTraceInput(@"keyboard-sync-failed", self, _activationSequence,
                    sender, nil, NO, started);
@@ -579,11 +579,16 @@ static IMKCandidates *DKSTSharedCandidates;
     _clientSyncRetried = NO;
     [self syncInputClient:sender force:YES];
     [self refreshMarkedTextPolicyForClient:sender];
-  } else if (_clientSyncRetryPending && !_clientSyncRetried) {
-    // Retry a known failure once, before processing this client's first key.
-    // Successful activations add no extra override to the typing path.
-    _clientSyncRetried = YES;
-    [self syncInputClient:sender force:YES];
+  } else if (_clientSyncRetryPending) {
+    NSTimeInterval now = [NSProcessInfo processInfo].systemUptime;
+    if (!_clientSyncRetried ||
+        (_lastClientSyncTime > 0 && now - _lastClientSyncTime >= 2.0)) {
+      // Retry a known failure once before this client's first key, then
+      // rate-limit further recovery attempts to a 2s cooldown so hung
+      // endpoints are not spammed while transient stalls can still recover.
+      _clientSyncRetried = YES;
+      [self syncInputClient:sender force:YES];
+    }
   }
 
   // REMOVED: Forced setMarkedText:@"" on client change (Phase 1 Method 3)
@@ -749,35 +754,53 @@ static IMKCandidates *DKSTSharedCandidates;
 }
 
 - (void)reloadHanjaShortcut {
+  [self reloadHanjaShortcutForcingSynchronization:!DKSTHanjaShortcutCacheInitialized];
+}
+
+- (void)reloadHanjaShortcutForcingSynchronization:(BOOL)forceSync {
   _hanjaModifierPending = NO;
-  CFStringRef appID = (__bridge CFStringRef)kDKSTBundleID;
 
-  // Force re-read from disk (bypass in-memory cache)
-  CFPreferencesAppSynchronize(appID);
+  @synchronized([InputController class]) {
+    if (!forceSync && DKSTHanjaShortcutCacheInitialized) {
+      _hanjaShortcutKeyCode = DKSTCachedHanjaShortcutKeyCode;
+      _hanjaShortcutModifiers = DKSTCachedHanjaShortcutModifiers;
+      return;
+    }
 
-  CFPropertyListRef keyCodeRef = CFPreferencesCopyAppValue(
-      (__bridge CFStringRef)kDKSTHanjaShortcutKeyCodeKey, appID);
-  CFPropertyListRef modifiersRef = CFPreferencesCopyAppValue(
-      (__bridge CFStringRef)kDKSTHanjaShortcutModifiersKey, appID);
+    CFStringRef appID = (__bridge CFStringRef)kDKSTBundleID;
 
-  if (keyCodeRef && modifiersRef &&
-      CFGetTypeID(keyCodeRef) == CFNumberGetTypeID() &&
-      CFGetTypeID(modifiersRef) == CFNumberGetTypeID()) {
-    _hanjaShortcutKeyCode =
-        (unsigned short)[((__bridge NSNumber *)keyCodeRef) integerValue];
-    _hanjaShortcutModifiers =
-        (NSUInteger)[((__bridge NSNumber *)modifiersRef) unsignedIntegerValue];
-    DKSTLog(@"Loaded custom Hanja shortcut: keyCode=%d modifiers=0x%lx",
-            _hanjaShortcutKeyCode, (unsigned long)_hanjaShortcutModifiers);
-  } else {
-    // Fallback to default: Option + Return
-    _hanjaShortcutKeyCode = kDKSTKeyCodeReturn;
-    _hanjaShortcutModifiers = NSEventModifierFlagOption;
-    DKSTLog(@"Using default Hanja shortcut: Option + Return");
+    // Re-read from disk when first initializing or after a change notification.
+    CFPreferencesAppSynchronize(appID);
+
+    CFPropertyListRef keyCodeRef = CFPreferencesCopyAppValue(
+        (__bridge CFStringRef)kDKSTHanjaShortcutKeyCodeKey, appID);
+    CFPropertyListRef modifiersRef = CFPreferencesCopyAppValue(
+        (__bridge CFStringRef)kDKSTHanjaShortcutModifiersKey, appID);
+
+    if (keyCodeRef && modifiersRef &&
+        CFGetTypeID(keyCodeRef) == CFNumberGetTypeID() &&
+        CFGetTypeID(modifiersRef) == CFNumberGetTypeID()) {
+      DKSTCachedHanjaShortcutKeyCode =
+          (unsigned short)[((__bridge NSNumber *)keyCodeRef) integerValue];
+      DKSTCachedHanjaShortcutModifiers =
+          (NSUInteger)[((__bridge NSNumber *)modifiersRef) unsignedIntegerValue];
+      DKSTLog(@"Loaded custom Hanja shortcut: keyCode=%d modifiers=0x%lx",
+              DKSTCachedHanjaShortcutKeyCode,
+              (unsigned long)DKSTCachedHanjaShortcutModifiers);
+    } else {
+      // Fallback to default: Option + Return
+      DKSTCachedHanjaShortcutKeyCode = kDKSTKeyCodeReturn;
+      DKSTCachedHanjaShortcutModifiers = NSEventModifierFlagOption;
+      DKSTLog(@"Using default Hanja shortcut: Option + Return");
+    }
+
+    if (keyCodeRef) CFRelease(keyCodeRef);
+    if (modifiersRef) CFRelease(modifiersRef);
+
+    DKSTHanjaShortcutCacheInitialized = YES;
+    _hanjaShortcutKeyCode = DKSTCachedHanjaShortcutKeyCode;
+    _hanjaShortcutModifiers = DKSTCachedHanjaShortcutModifiers;
   }
-
-  if (keyCodeRef) CFRelease(keyCodeRef);
-  if (modifiersRef) CFRelease(modifiersRef);
 }
 
 - (void)preferencesDidChange:(NSNotification *)notification {
@@ -801,12 +824,18 @@ static IMKCandidates *DKSTSharedCandidates;
     if (_preferencesNeedSynchronization) {
       _preferencesNeedSynchronization = NO;
       [[NSUserDefaults standardUserDefaults] synchronize];
+      @synchronized([InputController class]) {
+        DKSTHanjaShortcutCacheInitialized = NO;
+      }
     }
     [self reloadUserPreferences];
     _hanjaShortcutDirty = NO;
     if (sender) [self refreshMarkedTextPolicyForClient:sender];
   } else if (_hanjaShortcutDirty) {
     _hanjaShortcutDirty = NO;
+    @synchronized([InputController class]) {
+      DKSTHanjaShortcutCacheInitialized = NO;
+    }
     [self reloadHanjaShortcut];
   }
 }
@@ -880,12 +909,26 @@ static IMKCandidates *DKSTSharedCandidates;
   }
   _currentHanjaIndex = 0;
 
-  // Commit any pending composition
-  @try {
-    [self commitComposition:sender];
-  } @catch (NSException *exception) {
-    DKSTLog(@"Exception in deactivateServer (commit): %@", exception);
+  // Commit only when there is pending composition; avoid unnecessary XPC
+  // round-trips (setMarkedText:@"" / selectedRange) to an outgoing or closing
+  // client that could block the main thread and delay the next activateServer:.
+  if ([self hasPendingComposition]) {
+    @try {
+      [self commitComposition:sender];
+    } @catch (NSException *exception) {
+      DKSTLog(@"Exception in deactivateServer (commit): %@", exception);
+      [self resetCompositionState];
+    }
+  } else {
+    [self resetCompositionState];
   }
+
+  // Clear non-retaining client references so a deallocated XPC proxy cannot be
+  // messaged or confused with a newly allocated client at the same address.
+  _lastInputClient = nil;
+  _lastBundleIdentifierClient = nil;
+  [_lastInputClientBundleID release];
+  _lastInputClientBundleID = nil;
 
   // Call super - this is required for proper cleanup
   [super deactivateServer:sender];
@@ -1184,7 +1227,9 @@ static IMKCandidates *DKSTSharedCandidates;
   } @catch (NSException *exception) {
     DKSTTraceInput(@"event-exception", self, _activationSequence,
                    sender, event, NO, started);
-    @throw;
+    DKSTLog(@"Recovered from exception in handleEvent: %@", exception);
+    [self resetCompositionState];
+    handled = NO;
   } @finally {
     @try {
       if (beganEdit) {

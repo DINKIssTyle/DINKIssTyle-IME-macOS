@@ -18,14 +18,20 @@ BUILD_MODE="release"
 
 # --- 함수: 프로세스 종료 ---
 function kill_dkst_process() {
-    echo "🔄 변경 사항 적용을 위해 $PROCESS_NAME 프로세스를 종료합니다..."
-    # SIGTERM (graceful) first, then wait briefly for XPC endpoint cleanup.
-    # Using SIGKILL (-9) previously caused XPC endpoint invalidation
-    # in imklaunchagent, breaking the menu bar and causing Roman passthrough.
-    sudo pkill -x "$PROCESS_NAME" 2>/dev/null || true
-    sleep 1
-    # Force-kill any remaining processes
-    sudo pkill -9 -x "$PROCESS_NAME" 2>/dev/null || true
+    echo "🔄 변경 사항 적용을 위해 $PROCESS_NAME 프로세스에 정상 종료를 요청합니다..."
+    # SIGTERM (graceful) only — wait for XPC endpoint cleanup without SIGKILL (-9),
+    # which can invalidate endpoints in imklaunchagent and cause Roman passthrough.
+    sudo pkill -TERM -x "$PROCESS_NAME" 2>/dev/null || true
+    sudo pkill -TERM -x "DKSTSettings" 2>/dev/null || true
+    local elapsed=0
+    while [ "$elapsed" -lt 10 ]; do
+        if ! pgrep -x "$PROCESS_NAME" >/dev/null 2>&1 &&
+           ! pgrep -x "DKSTSettings" >/dev/null 2>&1; then
+            break
+        fi
+        sleep 1
+        elapsed=$((elapsed + 1))
+    done
 }
 
 # --- 함수: 설치 대상 앱 존재 확인 ---

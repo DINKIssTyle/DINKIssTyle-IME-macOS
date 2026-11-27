@@ -74,9 +74,20 @@
 
 @end
 
-@interface DKSTPolicyClientWithoutRuntime : DKSTPolicyClient
+@interface DKSTPolicyClientWithoutRuntime : DKSTPolicyClient {
+  NSRange _selectedRange;
+}
+@property(nonatomic, assign) NSRange selectedRange;
 @end
 @implementation DKSTPolicyClientWithoutRuntime
+@synthesize selectedRange = _selectedRange;
+- (id)initWithBundleID:(NSString *)bundleID showsMarked:(BOOL)showsMarked {
+  self = [super initWithBundleID:bundleID showsMarked:showsMarked];
+  if (self) {
+    _selectedRange = NSMakeRange(0, 0);
+  }
+  return self;
+}
 - (BOOL)respondsToSelector:(SEL)selector {
   if (selector == @selector(showsComposingTextAsMarkedText)) return NO;
   return [super respondsToSelector:selector];
@@ -154,6 +165,30 @@ int main(void) {
   DKSTAssert([documentController useMarkedTextForTestClient:calendar], @"exception lost to textDocument policy");
   DKSTAssert(![documentController useMarkedTextForTestClient:word], @"unconfigured textDocument client lost direct input");
   [documentController release];
+
+  // Regression: macOS 27 Calendar can report selectedRange == NSNotFound during
+  // activateServer: before its event-title editor finishes focusing. That
+  // fallback must be transient so the first keystroke returns to direct input.
+  DKSTPolicyControllerProbe *calendarProbe =
+      [[DKSTPolicyControllerProbe alloc] init];
+  DKSTPolicyClientWithoutRuntime *delayedCalendar =
+      [[[DKSTPolicyClientWithoutRuntime alloc]
+          initWithBundleID:@"com.apple.iCal"
+               showsMarked:NO] autorelease];
+  delayedCalendar.selectedRange = NSMakeRange(NSNotFound, 0);
+  [calendarProbe refreshMarkedTextPolicyForClient:delayedCalendar];
+  DKSTAssert([calendarProbe currentMarkedTextPolicyForTest],
+             @"NSNotFound selection did not temporarily fall back to marked text");
+  DKSTAssert([calendarProbe transientFallbackForTest],
+             @"NSNotFound selection fallback was not marked transient");
+  delayedCalendar.selectedRange = NSMakeRange(0, 0);
+  [calendarProbe refreshMarkedTextPolicyForNewComposition:delayedCalendar];
+  DKSTAssert(![calendarProbe currentMarkedTextPolicyForTest],
+             @"Calendar stayed stuck in marked text after selectedRange became valid");
+  DKSTAssert(![calendarProbe transientFallbackForTest],
+             @"transient fallback flag was not cleared after returning to direct input");
+  [calendarProbe release];
+
   [controller release];
   [pool drain];
   return 0;

@@ -18,6 +18,7 @@ static void Assert(BOOL condition, NSString *message) {
 @property NSUInteger overrideCount;
 @property NSUInteger policyCount;
 @property NSUInteger markedReads;
+@property NSUInteger markedWrites;
 @property NSUInteger selectionReads;
 @property(nonatomic, copy) NSString *bundleID;
 @end
@@ -68,6 +69,7 @@ static void Assert(BOOL condition, NSString *message) {
   self.mark = NSMakeRange(NSNotFound, 0);
 }
 - (void)setMarkedText:(id)value selectionRange:(NSRange)selection replacementRange:(NSRange)range {
+  self.markedWrites++;
   NSString *text = [value isKindOfClass:[NSAttributedString class]] ? [value string] : value;
   if (range.location == NSNotFound) range = self.mark.location == NSNotFound ? self.selection : self.mark;
   [self.text replaceCharactersInRange:range withString:text];
@@ -218,16 +220,50 @@ static void TestDeferredPreferencesAndProxyErrors(void) {
   Assert(modifier.shortcutLoads == 1, @"modifier-only shortcut update waited for an ordinary key");
 }
 
+static void TestDeactivationAvoidsIdleXPCAndClearsClient(void) {
+  SyncClient *client = [[[SyncClient alloc] init] autorelease];
+  SyncController *controller = [[[SyncController alloc] init] autorelease];
+  [controller activateServer:client];
+  NSUInteger writesBefore = client.markedWrites;
+  NSUInteger selectionsBefore = client.selectionReads;
+
+  [controller deactivateServer:client];
+  Assert(client.markedWrites == writesBefore,
+         @"idle deactivateServer: sent unnecessary setMarkedText: XPC");
+  Assert(client.selectionReads == selectionsBefore,
+         @"idle deactivateServer: sent unnecessary selectedRange XPC");
+
+  // Reusing the same client pointer after deactivation must treat it as a fresh
+  // client and re-apply reply timeout and keyboard override.
+  NSUInteger overridesBefore = client.overrideCount;
+  [client.calls removeAllObjects];
+  Assert(Type(controller, client, kDKSTKeyCodeR),
+         @"key after deactivateServer: was lost");
+  Assert([[client.calls firstObject] isEqualToString:@"timeout"],
+         @"client after deactivateServer: did not reconfigure reply timeout");
+  Assert(client.overrideCount == overridesBefore + 1,
+         @"client after deactivateServer: did not resync keyboard layout");
+
+  // Deactivating mid-composition must still commit the pending syllable.
+  [controller deactivateServer:client];
+  Assert([client.text isEqualToString:@"ㄱ"],
+         @"active composition was not committed on deactivateServer:");
+}
+
 int main(void) {
   NSAutoreleasePool *pool = [[NSAutoreleasePool alloc] init];
   // The tests execute DKST's real lifecycle body without a live system IMK
   // server. Only framework setup/teardown is stubbed, not DKST behavior.
   Method activate = class_getInstanceMethod([IMKInputController class], @selector(activateServer:));
-  IMP original = method_setImplementation(activate, (IMP)NoOpLifecycle);
+  Method deactivate = class_getInstanceMethod([IMKInputController class], @selector(deactivateServer:));
+  IMP originalActivate = method_setImplementation(activate, (IMP)NoOpLifecycle);
+  IMP originalDeactivate = method_setImplementation(deactivate, (IMP)NoOpLifecycle);
   TestActivationAndFirstKeys();
   TestBoundedRecoveryAndClientChange();
   TestDeferredPreferencesAndProxyErrors();
-  method_setImplementation(activate, original);
+  TestDeactivationAvoidsIdleXPCAndClearsClient();
+  method_setImplementation(deactivate, originalDeactivate);
+  method_setImplementation(activate, originalActivate);
   [pool drain];
   return 0;
 }

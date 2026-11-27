@@ -56,12 +56,14 @@
 @interface DKSTEventTransactionControllerProbe : InputController {
   DKSTEditDocumentProbe *_document;
   BOOL _innerResult;
+  BOOL _throwInInner;
   BOOL _innerObservedEditing;
   BOOL _commitObservedEditing;
   NSUInteger _commitCount;
 }
 - (id)initWithDocument:(DKSTEditDocumentProbe *)document;
 - (void)setInnerResult:(BOOL)innerResult;
+- (void)setThrowInInner:(BOOL)throwInInner;
 - (BOOL)innerObservedEditing;
 - (BOOL)commitObservedEditing;
 - (NSUInteger)commitCount;
@@ -90,10 +92,17 @@
   _innerResult = innerResult;
 }
 
+- (void)setThrowInInner:(BOOL)throwInInner {
+  _throwInInner = throwInInner;
+}
+
 - (BOOL)handleEventInEditTransaction:(NSEvent *)event client:(id)sender {
   (void)event;
   (void)sender;
   _innerObservedEditing = [_document isEditing];
+  if (_throwInInner) {
+    [NSException raise:NSInvalidSendPortException format:@"simulated XPC timeout"];
+  }
   return _innerResult;
 }
 
@@ -172,6 +181,14 @@ int main(void) {
              @"handled Hangul key unnecessarily invalidated the cache");
   DKSTAssert([controller commitCount] == 1,
              @"handled Hangul key unexpectedly committed composition");
+
+  [controller setThrowInInner:YES];
+  DKSTAssert(![controller handleEvent:hangulKey client:nil],
+             @"XPC exception in handleEvent did not safely return NO");
+  DKSTAssert([document beginCount] == 3 && [document endCount] == 3,
+             @"exception left edit transaction unbalanced");
+  DKSTAssert([document invalidateCount] == 2,
+             @"exception recovery did not invalidate stale text-document cache");
 
   [controller release];
   [document release];
