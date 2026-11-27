@@ -78,8 +78,7 @@
 - (BOOL)handleEventInEditTransaction:(NSEvent *)event client:(id)sender;
 - (BOOL)processHangulInput:(NSEvent *)event
                    keyCode:(unsigned short)keyCode
-                    client:(id)sender
-         candidatesVisible:(BOOL)candidatesVisible;
+                    client:(id)sender;
 - (void)commitMarkedText:(NSString *)commit client:(id)sender;
 - (void)updateComposition:(id)sender;
 - (BOOL)updateDirectComposition:(id)sender;

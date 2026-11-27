@@ -15,7 +15,6 @@
   NSString *_directInputComposedText;
   NSRange _directInputComposedRange;
   NSRange _markedReplacementRange;
-  NSMutableSet *_forcedMarkedTextBundleIDs;
   id _lastInputClient;
   id _lastBundleIdentifierClient;
   NSString *_lastInputClientBundleID;
@@ -30,7 +29,6 @@
   NSUInteger _hanjaMarkedPrefixLength;
   BOOL _hanjaReplacementUsesMarkedPrefix;
   DKSTCompositionState *_compositionState;
-  NSMutableDictionary *_chromiumDetectionCache;
   NSString *_pendingHanjaCandidate;
   id _pendingHanjaClient;
   BOOL _keyboardHanjaCommitPending;

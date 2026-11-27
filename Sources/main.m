@@ -9,6 +9,8 @@ IMKServer *server;
 
 int main(int argc, char *argv[])
 {
+  (void)argc;
+  (void)argv;
   NSAutoreleasePool *pool = [[NSAutoreleasePool alloc] init];
 
   NSError *dictionaryError = nil;

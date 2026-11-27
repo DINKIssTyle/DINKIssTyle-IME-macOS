@@ -83,6 +83,8 @@ static BOOL DKSTTextContainsRomanOrIsolatedJamo(NSString *text) {
   NSButton *_stopButton;
   NSTextField *_repeatField;
   NSTextField *_autoStatusField;
+  NSButton *_switchBeforeSample;
+  NSTextField *_switchDelayField;
   NSArray *_autoSamples;
   NSTimer *_cpuTimer;
   NSInteger _autoTargetIndex;
@@ -91,6 +93,11 @@ static BOOL DKSTTextContainsRomanOrIsolatedJamo(NSString *text) {
   NSInteger _autoRepeatIndex;
   NSInteger _autoRepeatCount;
   BOOL _autoRunning;
+  BOOL _autoSwitchSources;
+  NSInteger _autoSwitchStage;
+  NSTimeInterval _autoSwitchDelay;
+  NSUInteger _autoFailureCount;
+  NSUInteger _autoRunGeneration;
 }
 @end
 
@@ -432,6 +439,16 @@ static BOOL DKSTKeyCodeForCharacter(unichar character, CGKeyCode *keyCode) {
   [_autoStatusField setSelectable:YES];
   [content addSubview:_autoStatusField];
 
+  _switchBeforeSample = [[NSButton checkboxWithTitle:@"매 문구 영문→DKST 전환"
+      target:nil action:nil] retain];
+  [_switchBeforeSample setFrame:NSMakeRect(20, 14, 250, 24)];
+  [content addSubview:_switchBeforeSample];
+  [content addSubview:[self labelWithString:@"전환 후 대기(ms)"
+      frame:NSMakeRect(290, 17, 115, 18)]];
+  _switchDelayField = [[NSTextField alloc] initWithFrame:NSMakeRect(410, 12, 70, 26)];
+  [_switchDelayField setStringValue:@"0"];
+  [content addSubview:_switchDelayField];
+
   [_window makeKeyAndOrderFront:nil];
   [NSApp activateIgnoringOtherApps:YES];
   [self startCPUMonitoring];
@@ -452,6 +469,8 @@ static BOOL DKSTKeyCodeForCharacter(unichar character, CGKeyCode *keyCode) {
   [_stopButton release];
   [_repeatField release];
   [_autoStatusField release];
+  [_switchBeforeSample release];
+  [_switchDelayField release];
   [_autoSamples release];
   [_window release];
   [super dealloc];
@@ -506,16 +525,20 @@ static BOOL DKSTKeyCodeForCharacter(unichar character, CGKeyCode *keyCode) {
   }
 }
 
-- (void)clearAll:(id)sender {
+- (void)clearInputFields {
   [_singleLineField setStringValue:@""];
   [_searchField setStringValue:@""];
   [_comboBox setStringValue:@""];
   [_tokenField setStringValue:@""];
   [_loggingTextView setString:@""];
   [_plainTextView setString:@""];
-  [DKSTLogView setString:@""];
   [_webView evaluateJavaScript:@"document.getElementById('e').innerText='';"
              completionHandler:nil];
+}
+
+- (void)clearAll:(id)sender {
+  [self clearInputFields];
+  [DKSTLogView setString:@""];
 }
 
 - (BOOL)ensureAccessibilityPermission {
@@ -632,32 +655,17 @@ static BOOL DKSTKeyCodeForCharacter(unichar character, CGKeyCode *keyCode) {
 
 - (void)typeNextAutoCharacter {
   if (!_autoRunning) return;
+  if (![NSApp isActive] || ![_window isKeyWindow]) {
+    DKSTAppendLog(@"Stopped: tester lost focus; no keys sent to another application");
+    [self stopAutoTyping:nil];
+    return;
+  }
 
   NSArray *samples = [self autoSamples];
   if (_autoTargetIndex >= 7) {
+    // The WebKit read is asynchronous. Do not advance or clear the pass until
+    // its result has been captured and checked too.
     [self reportAutoTypingResults];
-    _autoRepeatIndex++;
-    if (_autoRepeatIndex < _autoRepeatCount) {
-      [self clearAll:nil];
-      _autoTargetIndex = 0;
-      _autoSampleIndex = 0;
-      _autoCharacterIndex = 0;
-      DKSTAppendLog(@"Auto typing pass %ld/%ld started",
-                    (long)(_autoRepeatIndex + 1),
-                    (long)_autoRepeatCount);
-      [self focusAutoTarget];
-      [self performSelector:@selector(typeNextAutoCharacter)
-                 withObject:nil
-                 afterDelay:0.45];
-      return;
-    }
-
-    _autoRunning = NO;
-    [_autoRunButton setEnabled:YES];
-    [_stopButton setEnabled:NO];
-    [_autoStatusField setStringValue:@"자동 타이핑 완료"];
-    DKSTAppendLog(@"Auto typing finished: %ld pass(es)",
-                  (long)_autoRepeatCount);
     return;
   }
 
@@ -681,6 +689,32 @@ static BOOL DKSTKeyCodeForCharacter(unichar character, CGKeyCode *keyCode) {
 
   NSString *sample = [samples objectAtIndex:_autoSampleIndex];
   if (_autoCharacterIndex == 0) {
+    if (_autoSwitchSources && _autoSwitchStage < 2) {
+      NSTextInputContext *context = [NSTextInputContext currentInputContext];
+      NSArray *sources = [context keyboardInputSources];
+      NSString *english = [sources containsObject:@"com.apple.keylayout.ABC"]
+          ? @"com.apple.keylayout.ABC" : @"com.apple.keylayout.US";
+      NSString *hangul = @"com.dinkisstyle.inputmethod.DKST.hangul";
+      if (!context || ![sources containsObject:english] || ![sources containsObject:hangul]) {
+        DKSTAppendLog(@"FAIL: active context does not offer both English and DKST sources");
+        [self stopAutoTyping:nil];
+        return;
+      }
+      if (_autoSwitchStage == 0) {
+        [context setSelectedKeyboardInputSource:english];
+        _autoSwitchStage = 1;
+        [self performSelector:@selector(typeNextAutoCharacter) withObject:nil afterDelay:0.05];
+        return;
+      }
+      [context setSelectedKeyboardInputSource:hangul];
+      _autoSwitchStage = 2;
+      DKSTAppendLog(@"Switch %@ → DKST; requested wait %.0f ms; selected=%@",
+          english, _autoSwitchDelay * 1000, [context selectedKeyboardInputSource]);
+      if (_autoSwitchDelay > 0) {
+        [self performSelector:@selector(typeNextAutoCharacter) withObject:nil afterDelay:_autoSwitchDelay];
+        return;
+      }
+    }
     DKSTAppendLog(@"Auto typing pass %ld/%ld %@: %@",
                   (long)(_autoRepeatIndex + 1),
                   (long)_autoRepeatCount, [self autoTargetName], sample);
@@ -707,6 +741,7 @@ static BOOL DKSTKeyCodeForCharacter(unichar character, CGKeyCode *keyCode) {
   if (DKSTKeyCodeForCharacter(' ', &delimiter)) [self postKeyCode:delimiter];
   _autoSampleIndex++;
   _autoCharacterIndex = 0;
+  _autoSwitchStage = 0;
   [self performSelector:@selector(typeNextAutoCharacter)
              withObject:nil
              afterDelay:0.18];
@@ -763,6 +798,7 @@ static BOOL DKSTKeyCodeForCharacter(unichar character, CGKeyCode *keyCode) {
   BOOL suspicious = DKSTTextContainsRomanOrIsolatedJamo(actual);
   BOOL mismatch = ![actual isEqualToString:normalizedExpected];
   if (suspicious || mismatch) {
+    _autoFailureCount++;
     DKSTAppendLog(@"WARN pass %ld %@ expected='%@' actual='%@'",
                   (long)(_autoRepeatIndex + 1), target,
                   normalizedExpected, actual);
@@ -781,6 +817,7 @@ static BOOL DKSTKeyCodeForCharacter(unichar character, CGKeyCode *keyCode) {
 }
 
 - (void)reportAutoTypingResults {
+  NSUInteger generation = _autoRunGeneration;
   NSString *expected = [self expectedAutoText];
   [self reportText:[_singleLineField stringValue]
          forTarget:@"NSTextField"
@@ -802,19 +839,44 @@ static BOOL DKSTKeyCodeForCharacter(unichar character, CGKeyCode *keyCode) {
           expected:expected];
   [_webView evaluateJavaScript:@"document.getElementById('e').innerText"
              completionHandler:^(id result, NSError *error) {
+               if (!_autoRunning || generation != _autoRunGeneration) return;
                if (error) {
+                 _autoFailureCount++;
                  DKSTAppendLog(@"WARN WKWebView result read failed: %@", error);
-                 return;
+               } else {
+                 [self reportText:[result description]
+                         forTarget:@"WKWebView"
+                          expected:expected];
                }
-               [self reportText:[result description]
-                       forTarget:@"WKWebView"
-                        expected:expected];
+               [self finishAutoPass];
              }];
+}
+
+- (void)finishAutoPass {
+  if (!_autoRunning) return;
+  _autoRepeatIndex++;
+  if (_autoRepeatIndex < _autoRepeatCount) {
+    [self clearInputFields];
+    _autoTargetIndex = _autoSampleIndex = _autoCharacterIndex = 0;
+    _autoSwitchStage = 0;
+    DKSTAppendLog(@"Auto typing pass %ld/%ld started", (long)(_autoRepeatIndex + 1), (long)_autoRepeatCount);
+    [self focusAutoTarget];
+    [self performSelector:@selector(typeNextAutoCharacter) withObject:nil afterDelay:0.45];
+    return;
+  }
+  _autoRunning = NO;
+  [_autoRunButton setEnabled:YES];
+  [_stopButton setEnabled:NO];
+  [_autoStatusField setStringValue:[NSString stringWithFormat:@"완료: %lu개 결과 불일치", (unsigned long)_autoFailureCount]];
+  DKSTAppendLog(@"Auto typing finished: %ld pass(es), %lu failed result(s)",
+      (long)_autoRepeatCount, (unsigned long)_autoFailureCount);
 }
 
 - (void)runAutoTyping:(id)sender {
   if (_autoRunning) return;
   if (![self ensureAccessibilityPermission]) return;
+  [NSObject cancelPreviousPerformRequestsWithTarget:self selector:@selector(typeNextAutoCharacter) object:nil];
+  _autoRunGeneration++;
 
   [_autoSamples release];
   _autoSamples = nil;
@@ -825,6 +887,10 @@ static BOOL DKSTKeyCodeForCharacter(unichar character, CGKeyCode *keyCode) {
   _autoTargetIndex = 0;
   _autoSampleIndex = 0;
   _autoCharacterIndex = 0;
+  _autoSwitchStage = 0;
+  _autoFailureCount = 0;
+  _autoSwitchSources = ([_switchBeforeSample state] == NSControlStateValueOn);
+  _autoSwitchDelay = MAX(0, MIN(2000, [_switchDelayField doubleValue])) / 1000;
   [_autoRunButton setEnabled:NO];
   [_stopButton setEnabled:YES];
   DKSTAppendLog(@"Auto typing pass 1/%ld started", (long)_autoRepeatCount);
@@ -836,6 +902,8 @@ static BOOL DKSTKeyCodeForCharacter(unichar character, CGKeyCode *keyCode) {
 
 - (void)stopAutoTyping:(id)sender {
   if (!_autoRunning) return;
+  [NSObject cancelPreviousPerformRequestsWithTarget:self selector:@selector(typeNextAutoCharacter) object:nil];
+  _autoRunGeneration++;
   _autoRunning = NO;
   [_autoRunButton setEnabled:YES];
   [_stopButton setEnabled:NO];

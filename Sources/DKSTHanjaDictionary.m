@@ -20,6 +20,8 @@ static void DKSTAppleHanjaHitCallback(DKSTIDXIndexRef index,
                                       const UInt8 *recordData,
                                       long recordLength, UInt8 recordType,
                                       void *context) {
+    (void)index;
+    (void)recordType;
     if (!recordData || recordLength <= 0 || !context) {
         return;
     }
@@ -156,21 +158,25 @@ static void DKSTAppleHanjaHitCallback(DKSTIDXIndexRef index,
                                                      encoding:NSUTF8StringEncoding
                                                         error:&error];
         if (content) {
+            NSCharacterSet *trimSet =
+                [NSCharacterSet whitespaceAndNewlineCharacterSet];
             NSArray *lines = [content componentsSeparatedByString:@"\n"];
             for (NSString *line in lines) {
                 if ([line length] == 0)
                     continue;
                 NSRange colonRange = [line rangeOfString:@":"];
                 if (colonRange.location != NSNotFound) {
-                    NSString *key = [line substringToIndex:colonRange.location];
+                    NSString *key = [[line substringToIndex:colonRange.location]
+                        stringByTrimmingCharactersInSet:trimSet];
+                    if ([key length] == 0)
+                        continue;
                     NSString *valuesStr = [line substringFromIndex:colonRange.location + 1];
                     NSArray *values =
                         [valuesStr componentsSeparatedByString:@","];
                     NSMutableArray *trimmedValues = [NSMutableArray array];
                     for (NSString *v in values) {
-                        NSString *trimmed = [v
-                            stringByTrimmingCharactersInSet:
-                                [NSCharacterSet whitespaceCharacterSet]];
+                        NSString *trimmed =
+                            [v stringByTrimmingCharactersInSet:trimSet];
                         if ([trimmed length] > 0) {
                             [trimmedValues addObject:trimmed];
                         }
@@ -293,6 +299,13 @@ static void DKSTAppleHanjaHitCallback(DKSTIDXIndexRef index,
     NSString *sourceMarker =
         [NSString stringWithFormat:@"<%@>", sourceHangul ? sourceHangul : @""];
 
+    static NSRegularExpression *angleTagRegex = nil;
+    static dispatch_once_t regexOnceToken;
+    dispatch_once(&regexOnceToken, ^{
+        angleTagRegex = [[NSRegularExpression alloc]
+            initWithPattern:@"<[^>]*>" options:0 error:nil];
+    });
+
     for (NSString *component in
          [definition componentsSeparatedByString:@", "]) {
         NSString *cleaned =
@@ -300,10 +313,13 @@ static void DKSTAppleHanjaHitCallback(DKSTIDXIndexRef index,
                                                   withString:@""]
                 stringByTrimmingCharactersInSet:
                     [NSCharacterSet whitespaceAndNewlineCharacterSet]];
-        cleaned = [cleaned stringByReplacingOccurrencesOfString:@"<[^>]*>"
-                                                     withString:@""
-                                                        options:NSRegularExpressionSearch
-                                                          range:NSMakeRange(0, [cleaned length])];
+        if (angleTagRegex) {
+            cleaned = [angleTagRegex
+                stringByReplacingMatchesInString:cleaned
+                                         options:0
+                                           range:NSMakeRange(0, [cleaned length])
+                                    withTemplate:@""];
+        }
         cleaned = [cleaned stringByTrimmingCharactersInSet:
                                [NSCharacterSet whitespaceAndNewlineCharacterSet]];
         if ([cleaned length] > 0 && ![annotations containsObject:cleaned]) {

@@ -13,11 +13,11 @@
 }
 
 - (instancetype)init {
-  NSWindow *window = [[NSWindow alloc]
+  NSWindow *window = [[[NSWindow alloc]
       initWithContentRect:NSMakeRect(0, 0, 600, 500)
                 styleMask:(NSWindowStyleMaskTitled | NSWindowStyleMaskClosable)
                   backing:NSBackingStoreBuffered
-                    defer:NO];
+                    defer:NO] autorelease];
   [window center];
   [window setTitle:@"DKST macOS용 한글입력기"];
 
@@ -32,7 +32,7 @@
 
     // Tab 1: General
     DKSTGeneralViewController *generalVC =
-        [[DKSTGeneralViewController alloc] init];
+        [[[DKSTGeneralViewController alloc] init] autorelease];
     NSTabViewItem *generalItem =
         [NSTabViewItem tabViewItemWithViewController:generalVC];
     generalItem.label = @"일반";
@@ -42,7 +42,7 @@
 
     // Tab 2: Single Consonants
     DKSTMappingViewController *mappingVC =
-        [[DKSTMappingViewController alloc] init];
+        [[[DKSTMappingViewController alloc] init] autorelease];
     NSTabViewItem *mappingItem =
         [NSTabViewItem tabViewItemWithViewController:mappingVC];
     mappingItem.label = @"단자음/단모음";
@@ -52,7 +52,7 @@
 
     // Tab 3: Dictionary
     DKSTDictionaryViewController *dictVC =
-        [[DKSTDictionaryViewController alloc] init];
+        [[[DKSTDictionaryViewController alloc] init] autorelease];
     NSTabViewItem *dictItem =
         [NSTabViewItem tabViewItemWithViewController:dictVC];
     dictItem.label = @"사전";
@@ -62,7 +62,7 @@
 
     // Tab 4: Compatibility
     DKSTCompatibilityViewController *compatVC =
-        [[DKSTCompatibilityViewController alloc] init];
+        [[[DKSTCompatibilityViewController alloc] init] autorelease];
     NSTabViewItem *compatItem =
         [NSTabViewItem tabViewItemWithViewController:compatVC];
     compatItem.label = @"호환성";
@@ -71,7 +71,8 @@
     [_tabViewController addTabViewItem:compatItem];
 
     // Tab 5: Info
-    DKSTAboutViewController *aboutVC = [[DKSTAboutViewController alloc] init];
+    DKSTAboutViewController *aboutVC =
+        [[[DKSTAboutViewController alloc] init] autorelease];
     NSTabViewItem *aboutItem =
         [NSTabViewItem tabViewItemWithViewController:aboutVC];
     aboutItem.label = @"정보";
@@ -92,6 +93,8 @@
 - (void)dealloc {
   [_tabViewController removeObserver:self
                           forKeyPath:@"selectedTabViewItemIndex"];
+  [_tabViewController release];
+  _tabViewController = nil;
   [super dealloc];
 }
 
@@ -117,7 +120,7 @@
 
 - (void)updateWindowSizeAnimated:(BOOL)animated {
   NSInteger index = _tabViewController.selectedTabViewItemIndex;
-  if (index < 0 || index >= _tabViewController.tabViewItems.count)
+  if (index < 0 || index >= (NSInteger)_tabViewController.tabViewItems.count)
     return;
 
   NSTabViewItem *item = _tabViewController.tabViewItems[index];

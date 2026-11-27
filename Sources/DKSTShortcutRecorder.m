@@ -406,22 +406,21 @@ static NSString *DKSTKeyNameForKeyCode(unsigned short keyCode) {
 - (void)drawRect:(NSRect)dirtyRect {
     NSRect bounds = [self bounds];
 
-    // Background
-    NSColor *bgColor;
-    if (_isRecording) {
-        bgColor = [NSColor colorWithCalibratedWhite:0.95 alpha:1.0];
-    } else if (_isHovering) {
-        bgColor = [NSColor colorWithCalibratedWhite:0.97 alpha:1.0];
-    } else {
-        bgColor = [NSColor controlBackgroundColor];
-    }
-
+    // Background (adapts to Light and Dark Mode)
     NSBezierPath *bgPath =
         [NSBezierPath bezierPathWithRoundedRect:NSInsetRect(bounds, 0.5, 0.5)
                                         xRadius:6.0
                                         yRadius:6.0];
-    [bgColor setFill];
+    [[NSColor controlBackgroundColor] setFill];
     [bgPath fill];
+
+    if (_isRecording) {
+        [[[NSColor controlAccentColor] colorWithAlphaComponent:0.12] setFill];
+        [bgPath fill];
+    } else if (_isHovering) {
+        [[[NSColor labelColor] colorWithAlphaComponent:0.05] setFill];
+        [bgPath fill];
+    }
 
     // Border
     NSColor *borderColor;

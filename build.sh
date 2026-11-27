@@ -69,10 +69,20 @@ mkdir -p build/DKST.app/Contents/Resources/Base.lproj
 # even when built on newer macOS (e.g., macOS 26 beta)
 echo "Compiling Sources..."
 clang -arch x86_64 -arch arm64 -mmacosx-version-min=10.15 \
+    -Wall -Wextra \
     $OPTIMIZATION $DEBUG_FLAGS \
     -framework Cocoa -framework InputMethodKit -framework Carbon \
     -o build/DKST.app/Contents/MacOS/DKST \
-    Sources/*.m
+    Sources/main.m \
+    Sources/ApplicationDelegate.m \
+    Sources/InputController.m \
+    Sources/InputController+ClientPolicy.m \
+    Sources/InputController+Hanja.m \
+    Sources/DKSTCompositionState.m \
+    Sources/DKSTHangul.m \
+    Sources/DKSTHanjaDictionary.m \
+    Sources/DKSTKeyMap.m \
+    Sources/DKSTConstants.m
 
 # Process Info.plist
 echo "Processing Info.plist..."
@@ -111,6 +121,7 @@ mkdir -p build/DKSTSettings.app/Contents/MacOS
 mkdir -p build/DKSTSettings.app/Contents/Resources
 
 clang -arch x86_64 -arch arm64 -mmacosx-version-min=10.15 \
+    -Wall -Wextra \
     $OPTIMIZATION $DEBUG_FLAGS \
     -DDKST_PREFS_VERSION=\"$DKST_PREFS_VERSION\" \
     -o build/DKSTSettings.app/Contents/MacOS/DKSTSettings \
@@ -120,7 +131,7 @@ clang -arch x86_64 -arch arm64 -mmacosx-version-min=10.15 \
     Sources/DKSTConstants.m \
     Sources/DKSTKeyMap.m \
     Sources/DKSTShortcutRecorder.m \
-    -framework Cocoa -framework Carbon -I Sources
+    -framework Cocoa -framework Carbon -weak_framework UniformTypeIdentifiers -I Sources
 
 # Create simple Info.plist for Settings
 cat > build/DKSTSettings.app/Contents/Info.plist <<EOF
@@ -152,7 +163,7 @@ set_plist_string build/DKSTSettings.app/Contents/Info.plist CFBundleVersion "$DK
 
 # Copy Icon
 cp Resources/DKST_pref.icns build/DKSTSettings.app/Contents/Resources/
-cp Resources/Not_installed.icns build/DKSTSettings.app/Contents/Resources/
+cp Resources/Not_Installed.icns build/DKSTSettings.app/Contents/Resources/
 cp Resources/SettingsIcons/*.pdf build/DKSTSettings.app/Contents/Resources/
 cp Resources/SettingsIcons/icon.png build/DKSTSettings.app/Contents/Resources/
 cp Resources/hanja.txt build/DKSTSettings.app/Contents/Resources/

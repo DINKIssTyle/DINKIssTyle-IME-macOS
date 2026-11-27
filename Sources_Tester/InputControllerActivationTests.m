@@ -89,7 +89,6 @@ static void Assert(BOOL condition, NSString *message) {
     _compositionState = [[DKSTCompositionState alloc] init];
     _markedTextCommittedPrefix = [[NSMutableString alloc] init];
     _markedTextBundleIDSet = [[NSSet alloc] init];
-    _chromiumDetectionCache = [[NSMutableDictionary alloc] init];
     _directInputComposedRange = NSMakeRange(NSNotFound, 0);
     _markedReplacementRange = NSMakeRange(NSNotFound, 0);
     _selectedTextRange = NSMakeRange(NSNotFound, 0);

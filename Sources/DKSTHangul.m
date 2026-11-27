@@ -11,7 +11,6 @@
     unichar _cho;
     unichar _jung;
     unichar _jong;
-    NSMutableString *_buffer;
     NSMutableString *_completed;
 }
 @end
@@ -21,7 +20,6 @@
 - (instancetype)init {
     self = [super init];
     if (self) {
-        _buffer = [[NSMutableString alloc] init];
         _completed = [[NSMutableString alloc] init];
         [self reset];
     }
@@ -29,7 +27,6 @@
 }
 
 - (void)dealloc {
-    [_buffer release];
     [_completed release];
     [super dealloc];
 }
@@ -38,7 +35,6 @@
     _cho = 0;
     _jung = 0;
     _jong = 0;
-    [_buffer setString:@""];
     [_completed setString:@""];
 }
 
@@ -299,9 +295,8 @@
                  _cho = 0; _jung = hangul; _jong = 0;
             }
         } else {
-            // Cho + Jung
-             if (_cho) _jung = hangul; 
-             else _jung = hangul; // Independent Jung
+            // Cho + Jung or independent Jung
+            _jung = hangul;
         }
     }
     

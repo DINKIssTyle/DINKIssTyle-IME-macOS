@@ -124,7 +124,6 @@ static IMKCandidates *DKSTSharedCandidates;
     _directInputComposedText = nil;
     _directInputComposedRange = NSMakeRange(NSNotFound, 0);
     _markedReplacementRange = NSMakeRange(NSNotFound, 0);
-    _forcedMarkedTextBundleIDs = [[NSMutableSet alloc] init];
     _lastInputClient = inputClient;
     _lastBundleIdentifierClient = nil;
     _lastInputClientBundleID = nil;
@@ -135,7 +134,6 @@ static IMKCandidates *DKSTSharedCandidates;
     _hanjaMarkedPrefixLength = 0;
     _hanjaReplacementUsesMarkedPrefix = NO;
     _compositionState = [[DKSTCompositionState alloc] init];
-    _chromiumDetectionCache = [[NSMutableDictionary alloc] init];
 
     // Default Hanja shortcut: Option + Return
     _hanjaShortcutKeyCode = kDKSTKeyCodeReturn;
@@ -209,10 +207,6 @@ static IMKCandidates *DKSTSharedCandidates;
     [_directInputComposedText release];
     _directInputComposedText = nil;
   }
-  if (_forcedMarkedTextBundleIDs) {
-    [_forcedMarkedTextBundleIDs release];
-    _forcedMarkedTextBundleIDs = nil;
-  }
   if (_customShiftMappings) {
     [_customShiftMappings release];
     _customShiftMappings = nil;
@@ -232,10 +226,6 @@ static IMKCandidates *DKSTSharedCandidates;
   if (_lastInputClientBundleID) {
     [_lastInputClientBundleID release];
     _lastInputClientBundleID = nil;
-  }
-  if (_chromiumDetectionCache) {
-    [_chromiumDetectionCache release];
-    _chromiumDetectionCache = nil;
   }
   // (observers already removed at top of dealloc)
   [super dealloc];
@@ -646,7 +636,9 @@ static IMKCandidates *DKSTSharedCandidates;
                                        client:sender
                                allowSelection:YES];
           if (canRebaseDirectRange) {
+#ifdef DEBUG
             NSRange previousInlineRange = _directInputComposedRange;
+#endif
             _directInputComposedRange = backtrackRange;
             _lastClientSelectedRange = selectedRange;
 #ifdef DEBUG
@@ -852,6 +844,7 @@ static IMKCandidates *DKSTSharedCandidates;
   _lastInputClient = sender;
   [_lastInputClientBundleID release];
   _lastInputClientBundleID = nil;
+  _lastBundleIdentifierClient = nil;
 
   // Apply the keyboard layout without reselecting the system input source.
   // Reset sync time to ensure override is re-applied even if the XPC
@@ -933,14 +926,15 @@ static IMKCandidates *DKSTSharedCandidates;
 
 - (BOOL)handleCandidateNavigation:(unsigned short)keyCode client:(id)sender {
   DKSTLog(@"Candidate window is visible, keyCode=%d", keyCode);
-  BOOL hasCandidates =
-      _currentHanjaCandidates && [_currentHanjaCandidates count] > 0;
+  NSInteger candidateCount =
+      _currentHanjaCandidates ? (NSInteger)[_currentHanjaCandidates count] : 0;
+  BOOL hasCandidates = candidateCount > 0;
 
   if (keyCode == kDKSTKeyCodeUp) {
     if (hasCandidates) {
       _currentHanjaIndex--;
       if (_currentHanjaIndex < 0) {
-        _currentHanjaIndex = [_currentHanjaCandidates count] - 1;
+        _currentHanjaIndex = candidateCount - 1;
       }
       [_candidates performSelector:@selector(moveUp:) withObject:sender];
       DKSTLog(@"Arrow Up: Index is now %ld", (long)_currentHanjaIndex);
@@ -951,7 +945,7 @@ static IMKCandidates *DKSTSharedCandidates;
   if (keyCode == kDKSTKeyCodeDown) {
     if (hasCandidates) {
       _currentHanjaIndex++;
-      if (_currentHanjaIndex >= [_currentHanjaCandidates count]) {
+      if (_currentHanjaIndex >= candidateCount) {
         _currentHanjaIndex = 0;
       }
       [_candidates performSelector:@selector(moveDown:) withObject:sender];
@@ -963,7 +957,7 @@ static IMKCandidates *DKSTSharedCandidates;
   if (keyCode == kDKSTKeyCodeRight) {
     if (hasCandidates) {
       _currentHanjaIndex++;
-      if (_currentHanjaIndex >= [_currentHanjaCandidates count]) {
+      if (_currentHanjaIndex >= candidateCount) {
         _currentHanjaIndex = 0;
       }
       [_candidates performSelector:@selector(moveRight:) withObject:sender];
@@ -975,7 +969,7 @@ static IMKCandidates *DKSTSharedCandidates;
     if (hasCandidates) {
       _currentHanjaIndex--;
       if (_currentHanjaIndex < 0) {
-        _currentHanjaIndex = [_currentHanjaCandidates count] - 1;
+        _currentHanjaIndex = candidateCount - 1;
       }
       [_candidates performSelector:@selector(moveLeft:) withObject:sender];
     }
@@ -995,8 +989,8 @@ static IMKCandidates *DKSTSharedCandidates;
   if (keyCode == kDKSTKeyCodePageDown) {
     if (hasCandidates) {
       _currentHanjaIndex += 9;
-      if (_currentHanjaIndex >= [_currentHanjaCandidates count])
-        _currentHanjaIndex = [_currentHanjaCandidates count] - 1;
+      if (_currentHanjaIndex >= candidateCount)
+        _currentHanjaIndex = candidateCount - 1;
       [_candidates performSelector:@selector(pageDown:) withObject:sender];
     }
     return YES;
@@ -1011,9 +1005,9 @@ static IMKCandidates *DKSTSharedCandidates;
     DKSTLog(@"Enter/Space pressed. Current Index: %ld",
             (long)_currentHanjaIndex);
     if (hasCandidates && _currentHanjaIndex >= 0 &&
-        _currentHanjaIndex < [_currentHanjaCandidates count]) {
+        _currentHanjaIndex < candidateCount) {
       NSString *selected =
-          [_currentHanjaCandidates objectAtIndex:_currentHanjaIndex];
+          [_currentHanjaCandidates objectAtIndex:(NSUInteger)_currentHanjaIndex];
       DKSTLog(@"Scheduling manually tracked candidate: %@", selected);
       [self scheduleKeyboardCandidateCommit:selected client:sender];
     } else {
@@ -1028,10 +1022,10 @@ static IMKCandidates *DKSTSharedCandidates;
     if (hasCandidates) {
       NSInteger pageStartIndex = (_currentHanjaIndex / 9) * 9;
       NSInteger targetIndex = pageStartIndex + index;
-      if (targetIndex < [_currentHanjaCandidates count]) {
+      if (targetIndex >= 0 && targetIndex < candidateCount) {
         _currentHanjaIndex = targetIndex;
         NSString *selected =
-            [_currentHanjaCandidates objectAtIndex:_currentHanjaIndex];
+            [_currentHanjaCandidates objectAtIndex:(NSUInteger)_currentHanjaIndex];
         [self scheduleKeyboardCandidateCommit:selected client:sender];
       }
     }
@@ -1130,15 +1124,10 @@ static IMKCandidates *DKSTSharedCandidates;
 
 - (BOOL)processHangulInput:(NSEvent *)event
                    keyCode:(unsigned short)keyCode
-                    client:(id)sender
-         candidatesVisible:(BOOL)candidatesVisible {
+                    client:(id)sender {
   BOOL processed = [engine processCode:keyCode modifiers:[event modifierFlags]];
 
   if (processed) {
-    if (candidatesVisible) {
-      [_candidates hide];
-    }
-
     if (_useMarkedTextForClient) {
       NSString *commit = [engine commitString];
       if ([commit length] > 0) {
@@ -1154,17 +1143,6 @@ static IMKCandidates *DKSTSharedCandidates;
     DKSTLog(@"Blocked unprocessed Hangul keyCode=%d", keyCode);
     [self updateInlineForClient:sender];
     return YES;
-  }
-
-  if (candidatesVisible) {
-    if (keyCode == kDKSTKeyCodeLeft || keyCode == kDKSTKeyCodeRight ||
-        keyCode == kDKSTKeyCodeDown || keyCode == kDKSTKeyCodeUp ||
-        keyCode == kDKSTKeyCodeReturn || keyCode == kDKSTKeyCodeSpace ||
-        keyCode == kDKSTKeyCodeEscape ||
-        (keyCode >= kDKSTKeyCodeNum1 && keyCode <= kDKSTKeyCodeNum0)) {
-      return NO;
-    }
-    [_candidates hide];
   }
 
   [self commitComposition:sender];
@@ -1438,10 +1416,7 @@ static IMKCandidates *DKSTSharedCandidates;
   }
 
   // 8. Hangul processing
-  return [self processHangulInput:event
-                          keyCode:keyCode
-                           client:sender
-                candidatesVisible:candidatesVisible];
+  return [self processHangulInput:event keyCode:keyCode client:sender];
 }
 
 - (void)commitMarkedText:(NSString *)commit client:(id)sender {

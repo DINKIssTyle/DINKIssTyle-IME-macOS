@@ -1,6 +1,7 @@
 #import "DKSTSettingsViewControllers.h"
 #import "DKSTConstants.h"
 #import "DKSTShortcutRecorder.h"
+#import <UniformTypeIdentifiers/UniformTypeIdentifiers.h>
 
 @protocol DKSTApplicationDropTarget <NSObject>
 - (BOOL)canAcceptApplicationDrag:(id<NSDraggingInfo>)draggingInfo;
@@ -44,6 +45,15 @@ static NSUserDefaults *sharedDefaults() {
   static dispatch_once_t onceToken;
   dispatch_once(&onceToken, ^{
     suiteDefaults = [[NSUserDefaults alloc] initWithSuiteName:kDKSTBundleID];
+    [suiteDefaults registerDefaults:@{
+      kDKSTEnableMoaJjikiKey : @YES,
+      kDKSTFullCharacterDeleteKey : @NO,
+      kDKSTEnableHanjaKey : @YES,
+      kDKSTUseAppleHanjaDictionaryKey : @YES,
+      kDKSTEnableCustomShiftKey : @NO,
+      kDKSTUseMarkedTextForAllAppsKey : @NO,
+      kDKSTMarkedTextAppBundleIDsKey : DKSTDefaultMarkedTextAppBundleIDs()
+    }];
   });
   return suiteDefaults;
 }
@@ -185,7 +195,7 @@ static NSDictionary *DKSTIMEInfoPlist() {
 
 - (void)loadView {
   NSStackView *stackView =
-      [[NSStackView alloc] initWithFrame:NSMakeRect(0, 0, 550, 450)];
+      [[[NSStackView alloc] initWithFrame:NSMakeRect(0, 0, 550, 450)] autorelease];
   stackView.orientation = NSUserInterfaceLayoutOrientationVertical;
   stackView.alignment = NSLayoutAttributeLeading;
   stackView.spacing = 12; // Tighter internal spacing
@@ -232,7 +242,8 @@ static NSDictionary *DKSTIMEInfoPlist() {
                            target:self
                            action:@selector(toggleHanjaConversion:)];
   hanjaShortcutRecorder =
-      [[DKSTShortcutRecorder alloc] initWithFrame:NSMakeRect(0, 0, 150, 26)];
+      [[[DKSTShortcutRecorder alloc] initWithFrame:NSMakeRect(0, 0, 150, 26)]
+          autorelease];
   hanjaShortcutRecorder.delegate = self;
   NSStackView *shortcutInputRow = [NSStackView stackViewWithViews:@[
     [NSTextField labelWithString:@"단축키:"], hanjaShortcutRecorder
@@ -254,7 +265,7 @@ static NSDictionary *DKSTIMEInfoPlist() {
            inGravity:NSStackViewGravityTop];
 
   // Flex spacer
-  NSView *spacer = [[NSView alloc] init];
+  NSView *spacer = [[[NSView alloc] init] autorelease];
   [stackView addView:spacer inGravity:NSStackViewGravityTop];
   [stackView setCustomSpacing:0 afterView:spacer];
 
@@ -384,7 +395,7 @@ static NSDictionary *DKSTIMEInfoPlist() {
 
 - (void)loadView {
   NSStackView *stackView =
-      [[NSStackView alloc] initWithFrame:NSMakeRect(0, 0, 500, 400)];
+      [[[NSStackView alloc] initWithFrame:NSMakeRect(0, 0, 500, 400)] autorelease];
   stackView.orientation = NSUserInterfaceLayoutOrientationVertical;
   stackView.alignment = NSLayoutAttributeLeading;
   stackView.spacing = 15;
@@ -397,18 +408,20 @@ static NSDictionary *DKSTIMEInfoPlist() {
   [stackView addView:descLabel inGravity:NSStackViewGravityTop];
 
   NSScrollView *scrollView =
-      [[NSScrollView alloc] initWithFrame:NSMakeRect(0, 0, 440, 250)];
+      [[[NSScrollView alloc] initWithFrame:NSMakeRect(0, 0, 440, 250)] autorelease];
   scrollView.hasVerticalScroller = YES;
   scrollView.borderType = NSBezelBorder;
 
-  tableView = [[NSTableView alloc] initWithFrame:scrollView.bounds];
-  NSTableColumn *keyCol = [[NSTableColumn alloc] initWithIdentifier:@"Key"];
+  tableView = [[[NSTableView alloc] initWithFrame:scrollView.bounds] autorelease];
+  NSTableColumn *keyCol =
+      [[[NSTableColumn alloc] initWithIdentifier:@"Key"] autorelease];
   keyCol.title = @"키";
   keyCol.width = 100;
   keyCol.editable = NO;
   [tableView addTableColumn:keyCol];
 
-  NSTableColumn *outCol = [[NSTableColumn alloc] initWithIdentifier:@"Output"];
+  NSTableColumn *outCol =
+      [[[NSTableColumn alloc] initWithIdentifier:@"Output"] autorelease];
   outCol.title = @"출력내용(Text/Emoji)";
   outCol.width = 300;
   outCol.editable = YES;
@@ -421,6 +434,7 @@ static NSDictionary *DKSTIMEInfoPlist() {
   scrollView.documentView = tableView;
   [stackView addView:scrollView inGravity:NSStackViewGravityTop];
 
+  [mappingKeys release];
   mappingKeys = [[NSMutableArray alloc]
       initWithObjects:@"y (ㅛ)", @"u (ㅕ)", @"i (ㅑ)", @"a (ㅁ)", @"s (ㄴ)",
                       @"d (ㅇ)", @"f (ㄹ)", @"g (ㅎ)", @"h (ㅗ)", @"j (ㅓ)",
@@ -428,6 +442,12 @@ static NSDictionary *DKSTIMEInfoPlist() {
                       @"v (ㅍ)", @"b (ㅠ)", @"n (ㅜ)", @"m (ㅡ)", nil];
 
   self.preferredContentSize = NSMakeSize(550, 480);
+}
+
+- (void)dealloc {
+  [mappingKeys release];
+  [mappingDict release];
+  [super dealloc];
 }
 
 - (void)viewWillAppear {
@@ -488,56 +508,56 @@ static NSDictionary *DKSTIMEInfoPlist() {
   NSMutableArray *allEntries;
   NSMutableArray *filteredEntries;
   NSSearchField *searchField;
+  NSButton *updateButton;
   NSString *currentFilePath;
+  BOOL isUpdatingDictionary;
 }
 
 - (void)loadView {
   NSStackView *stackView =
-      [[NSStackView alloc] initWithFrame:NSMakeRect(0, 0, 500, 400)];
+      [[[NSStackView alloc] initWithFrame:NSMakeRect(0, 0, 500, 400)] autorelease];
   stackView.orientation = NSUserInterfaceLayoutOrientationVertical;
   stackView.alignment = NSLayoutAttributeLeading;
   stackView.spacing = 10;
   stackView.edgeInsets = NSEdgeInsetsMake(30, 30, 30, 30);
   self.view = stackView;
 
-  NSStackView *topRow = [NSStackView stackViewWithViews:@[
-    searchField =
-        [[NSSearchField alloc] initWithFrame:NSMakeRect(0, 0, 240, 22)],
-    ({
-      NSButton *btn =
-          [[NSButton alloc] initWithFrame:NSMakeRect(0, 0, 100, 26)];
-      btn.title = @"온라인 업데이트";
-      btn.bezelStyle = NSBezelStyleRounded;
-      btn.target = self;
-      btn.action = @selector(updateDictionary:);
-      btn;
-    }),
-    ({
-      NSButton *btn = [[NSButton alloc] initWithFrame:NSMakeRect(0, 0, 80, 26)];
-      btn.title = @"저장";
-      btn.bezelStyle = NSBezelStyleRounded;
-      btn.target = self;
-      btn.action = @selector(saveDictionary:);
-      btn;
-    })
-  ]];
+  searchField =
+      [[[NSSearchField alloc] initWithFrame:NSMakeRect(0, 0, 240, 22)] autorelease];
+  updateButton =
+      [[[NSButton alloc] initWithFrame:NSMakeRect(0, 0, 100, 26)] autorelease];
+  updateButton.title = @"온라인 업데이트";
+  updateButton.bezelStyle = NSBezelStyleRounded;
+  updateButton.target = self;
+  updateButton.action = @selector(updateDictionary:);
+
+  NSButton *saveButton =
+      [[[NSButton alloc] initWithFrame:NSMakeRect(0, 0, 80, 26)] autorelease];
+  saveButton.title = @"저장";
+  saveButton.bezelStyle = NSBezelStyleRounded;
+  saveButton.target = self;
+  saveButton.action = @selector(saveDictionary:);
+
+  NSStackView *topRow =
+      [NSStackView stackViewWithViews:@[ searchField, updateButton, saveButton ]];
   searchField.delegate = self;
   searchField.placeholderString = @"문자, 또는 후보창 문자를 검색하세요.";
   [stackView addView:topRow inGravity:NSStackViewGravityTop];
 
   NSScrollView *scrollView =
-      [[NSScrollView alloc] initWithFrame:NSMakeRect(0, 0, 440, 250)];
+      [[[NSScrollView alloc] initWithFrame:NSMakeRect(0, 0, 440, 250)] autorelease];
   scrollView.hasVerticalScroller = YES;
   scrollView.borderType = NSBezelBorder;
 
-  tableView = [[NSTableView alloc] initWithFrame:scrollView.bounds];
+  tableView = [[[NSTableView alloc] initWithFrame:scrollView.bounds] autorelease];
   NSTableColumn *trigCol =
-      [[NSTableColumn alloc] initWithIdentifier:@"trigger"];
+      [[[NSTableColumn alloc] initWithIdentifier:@"trigger"] autorelease];
   trigCol.title = @"문자";
   trigCol.width = 80;
   [tableView addTableColumn:trigCol];
 
-  NSTableColumn *valCol = [[NSTableColumn alloc] initWithIdentifier:@"values"];
+  NSTableColumn *valCol =
+      [[[NSTableColumn alloc] initWithIdentifier:@"values"] autorelease];
   valCol.title = @"한자 후보창에 보여줄 문자";
   valCol.width = 330;
   [tableView addTableColumn:valCol];
@@ -548,34 +568,31 @@ static NSDictionary *DKSTIMEInfoPlist() {
   scrollView.documentView = tableView;
   [stackView addView:scrollView inGravity:NSStackViewGravityTop];
 
-  NSStackView *bottomRow = [NSStackView stackViewWithViews:@[
-    ({
-      NSButton *btn = [[NSButton alloc] initWithFrame:NSMakeRect(0, 0, 70, 26)];
-      btn.title = @"+ 추가";
-      btn.bezelStyle = NSBezelStyleRounded;
-      btn.target = self;
-      btn.action = @selector(addEntry:);
-      btn;
-    }),
-    ({
-      NSButton *btn = [[NSButton alloc] initWithFrame:NSMakeRect(0, 0, 70, 26)];
-      btn.title = @"- 제거";
-      btn.bezelStyle = NSBezelStyleRounded;
-      btn.target = self;
-      btn.action = @selector(deleteEntry:);
-      btn;
-    }),
-    [NSView new], // Spacer
-    ({
-      NSButton *btn =
-          [[NSButton alloc] initWithFrame:NSMakeRect(0, 0, 100, 26)];
-      btn.title = @"파일 열기";
-      btn.bezelStyle = NSBezelStyleRounded;
-      btn.target = self;
-      btn.action = @selector(openDictionaryFile:);
-      btn;
-    })
-  ]];
+  NSButton *addButton =
+      [[[NSButton alloc] initWithFrame:NSMakeRect(0, 0, 70, 26)] autorelease];
+  addButton.title = @"+ 추가";
+  addButton.bezelStyle = NSBezelStyleRounded;
+  addButton.target = self;
+  addButton.action = @selector(addEntry:);
+
+  NSButton *deleteButton =
+      [[[NSButton alloc] initWithFrame:NSMakeRect(0, 0, 70, 26)] autorelease];
+  deleteButton.title = @"- 제거";
+  deleteButton.bezelStyle = NSBezelStyleRounded;
+  deleteButton.target = self;
+  deleteButton.action = @selector(deleteEntry:);
+
+  NSView *spacer = [[[NSView alloc] init] autorelease];
+
+  NSButton *openButton =
+      [[[NSButton alloc] initWithFrame:NSMakeRect(0, 0, 100, 26)] autorelease];
+  openButton.title = @"파일 열기";
+  openButton.bezelStyle = NSBezelStyleRounded;
+  openButton.target = self;
+  openButton.action = @selector(openDictionaryFile:);
+
+  NSStackView *bottomRow = [NSStackView
+      stackViewWithViews:@[ addButton, deleteButton, spacer, openButton ]];
   bottomRow.distribution = NSStackViewDistributionFill;
   [stackView addView:bottomRow inGravity:NSStackViewGravityTop];
   [bottomRow.widthAnchor constraintEqualToAnchor:stackView.widthAnchor
@@ -584,6 +601,13 @@ static NSDictionary *DKSTIMEInfoPlist() {
 
   self.preferredContentSize = NSMakeSize(550, 480);
   [self detectAndLoadFile];
+}
+
+- (void)dealloc {
+  [allEntries release];
+  [filteredEntries release];
+  [currentFilePath release];
+  [super dealloc];
 }
 
 - (void)detectAndLoadFile {
@@ -611,7 +635,8 @@ static NSDictionary *DKSTIMEInfoPlist() {
     filteredEntries = nil;
   }
 
-  currentFilePath = [path retain]; // Ensure path is kept
+  [currentFilePath release];
+  currentFilePath = [path copy]; // Ensure path is kept
   allEntries = [[NSMutableArray alloc] init];
   NSString *content = [NSString stringWithContentsOfFile:path
                                                 encoding:NSUTF8StringEncoding
@@ -695,21 +720,21 @@ static NSDictionary *DKSTIMEInfoPlist() {
 - (BOOL)tableView:(NSTableView *)tableView
     shouldEditTableColumn:(NSTableColumn *)tableColumn
                       row:(NSInteger)row {
-  if (row < 0 || row >= filteredEntries.count) {
+  if (row < 0 || row >= (NSInteger)filteredEntries.count) {
     return NO;
   }
   return !DKSTDictionaryEntryIsSeparator(filteredEntries[row]);
 }
 
 - (BOOL)tableView:(NSTableView *)tableView shouldSelectRow:(NSInteger)row {
-  if (row < 0 || row >= filteredEntries.count) {
+  if (row < 0 || row >= (NSInteger)filteredEntries.count) {
     return NO;
   }
   return !DKSTDictionaryEntryIsSeparator(filteredEntries[row]);
 }
 
 - (CGFloat)tableView:(NSTableView *)aTableView heightOfRow:(NSInteger)row {
-  if (row >= 0 && row < filteredEntries.count &&
+  if (row >= 0 && row < (NSInteger)filteredEntries.count &&
       DKSTDictionaryEntryIsSeparator(filteredEntries[row])) {
     return 30.0;
   }
@@ -720,7 +745,7 @@ static NSDictionary *DKSTIMEInfoPlist() {
     willDisplayCell:(id)cell
      forTableColumn:(NSTableColumn *)tableColumn
                 row:(NSInteger)row {
-  if (row < 0 || row >= filteredEntries.count) {
+  if (row < 0 || row >= (NSInteger)filteredEntries.count) {
     return;
   }
 
@@ -807,61 +832,120 @@ static NSDictionary *DKSTIMEInfoPlist() {
 }
 
 - (void)updateDictionary:(id)sender {
-  // Use the script to update
+  (void)sender;
+  if (isUpdatingDictionary) {
+    return;
+  }
+
+  // Use the bundled update script first, then fall back to a relative dev path.
   NSString *scriptPath = [[NSBundle mainBundle] pathForResource:@"dictup"
                                                          ofType:@"sh"];
-  // Fallback for development environment
   if (!scriptPath) {
     scriptPath = [[[[[NSBundle mainBundle] bundlePath]
         stringByDeletingLastPathComponent] stringByDeletingLastPathComponent]
         stringByAppendingPathComponent:@"dictup.sh"];
   }
 
-  if (![[NSFileManager defaultManager] fileExistsAtPath:scriptPath]) {
-    // Try one more common dev path
-    scriptPath =
-        @"/Users/dinki/Documents/GitHub/DINKIssTyle-IME-macOS/dictup.sh";
+  if (![scriptPath length] ||
+      ![[NSFileManager defaultManager] fileExistsAtPath:scriptPath]) {
+    NSAlert *alert = [[[NSAlert alloc] init] autorelease];
+    alert.messageText = @"사전 업데이트 스크립트(dictup.sh)를 찾을 수 없습니다.";
+    [alert runModal];
+    return;
   }
 
-  NSString *command =
-      [NSString stringWithFormat:@"/bin/bash %@",
-                                 DKSTShellSingleQuotedString(scriptPath)];
-  NSString *appleScriptSource =
-      [NSString stringWithFormat:@"do shell script \"%@\"",
-                                 DKSTAppleScriptDoubleQuotedString(command)];
+  isUpdatingDictionary = YES;
+  updateButton.enabled = NO;
+  updateButton.title = @"업데이트 중...";
 
-  NSAppleScript *appleScript =
-      [[NSAppleScript alloc] initWithSource:appleScriptSource];
-  NSDictionary *errorInfo = nil;
-  NSAppleEventDescriptor *result =
-      [appleScript executeAndReturnError:&errorInfo];
+  NSString *scriptPathCopy = [scriptPath copy];
+  NSString *targetPathCopy =
+      [([currentFilePath length] ? currentFilePath : DKSTUserDictionaryPath())
+          copy];
+  [self retain];
 
-  if (result) {
-    NSString *updatedPath = currentFilePath;
-    if (![updatedPath length]) {
-      updatedPath = DKSTUserDictionaryPath();
-    }
-    [self loadFile:updatedPath];
-    [[NSDistributedNotificationCenter defaultCenter]
-        postNotificationName:kDKSTDictionaryDidChangeNotification
-                      object:nil
-                    userInfo:nil
-          deliverImmediately:YES];
-    NSAlert *a = [[NSAlert alloc] init];
-    a.messageText = @"온라인 업데이트가 완료되었습니다.";
-    [a runModal];
-  } else {
-    DKSTLog(@"Update failed: %@", errorInfo);
-    NSAlert *a = [[NSAlert alloc] init];
-    a.messageText =
-        [NSString stringWithFormat:@"업데이트 중 오류가 발생했습니다: %@",
-                                   errorInfo[NSAppleScriptErrorMessage]
-                                       ?: @"알 수 없는 오류"];
-    [a runModal];
-  }
+  dispatch_async(
+      dispatch_get_global_queue(QOS_CLASS_USER_INITIATED, 0), ^{
+        @autoreleasepool {
+          BOOL succeeded = NO;
+          NSString *errorMessage = nil;
+
+          NSTask *task = [[[NSTask alloc] init] autorelease];
+          task.launchPath = @"/bin/bash";
+          task.arguments = @[ scriptPathCopy ];
+
+          NSPipe *errorPipe = [NSPipe pipe];
+          task.standardError = errorPipe;
+          task.standardOutput = [NSPipe pipe];
+
+          @try {
+            [task launch];
+            [task waitUntilExit];
+            if (task.terminationStatus == 0) {
+              succeeded = YES;
+            } else {
+              NSData *errData =
+                  [[errorPipe fileHandleForReading] readDataToEndOfFile];
+              NSString *stderrStr = [[[NSString alloc]
+                  initWithData:errData
+                      encoding:NSUTF8StringEncoding] autorelease];
+              errorMessage = [stderrStr
+                  stringByTrimmingCharactersInSet:
+                      [NSCharacterSet whitespaceAndNewlineCharacterSet]];
+              if (![errorMessage length]) {
+                errorMessage = [NSString
+                    stringWithFormat:@"종료 코드 %d", task.terminationStatus];
+              }
+            }
+          } @catch (NSException *exception) {
+            errorMessage = [exception reason] ?: @"스크립트 실행 실패";
+          }
+
+          NSString *finalError = [errorMessage copy];
+          dispatch_async(dispatch_get_main_queue(), ^{
+            self->isUpdatingDictionary = NO;
+            self->updateButton.enabled = YES;
+            self->updateButton.title = @"온라인 업데이트";
+
+            if (succeeded) {
+              [self loadFile:targetPathCopy];
+              [[NSDistributedNotificationCenter defaultCenter]
+                  postNotificationName:kDKSTDictionaryDidChangeNotification
+                                object:nil
+                              userInfo:nil
+                    deliverImmediately:YES];
+              NSAlert *a = [[[NSAlert alloc] init] autorelease];
+              a.messageText = @"온라인 업데이트가 완료되었습니다.";
+              [a runModal];
+            } else {
+              DKSTLog(@"Update failed: %@", finalError);
+              NSAlert *a = [[[NSAlert alloc] init] autorelease];
+              a.messageText = [NSString
+                  stringWithFormat:@"업데이트 중 오류가 발생했습니다: %@",
+                                   finalError ?: @"알 수 없는 오류"];
+              [a runModal];
+            }
+
+            [finalError release];
+            [scriptPathCopy release];
+            [targetPathCopy release];
+            [self release];
+          });
+        }
+      });
 }
 
 - (void)saveDictionary:(id)sender {
+  (void)sender;
+  NSString *targetPath =
+      [currentFilePath length] ? currentFilePath : DKSTUserDictionaryPath();
+  if (![targetPath length]) {
+    NSAlert *a = [[[NSAlert alloc] init] autorelease];
+    a.messageText = @"사전 파일 경로를 확인할 수 없습니다.";
+    [a runModal];
+    return;
+  }
+
   NSMutableString *outS = [NSMutableString string];
   for (NSDictionary *e in allEntries) {
     NSString *trigger = e[@"trigger"];
@@ -881,7 +965,7 @@ static NSDictionary *DKSTIMEInfoPlist() {
   }
 
   NSError *error = nil;
-  if ([outS writeToFile:currentFilePath
+  if ([outS writeToFile:targetPath
              atomically:YES
                encoding:NSUTF8StringEncoding
                   error:&error]) {
@@ -890,37 +974,70 @@ static NSDictionary *DKSTIMEInfoPlist() {
                       object:nil
                     userInfo:nil
           deliverImmediately:YES];
-    NSAlert *a = [[NSAlert alloc] init];
+    NSAlert *a = [[[NSAlert alloc] init] autorelease];
     a.messageText = @"저장되었습니다.";
     [a runModal];
   } else {
-    // Fallback to admin permission if needed (AppleScript logic)
-    NSString *temp = [NSTemporaryDirectory()
-        stringByAppendingPathComponent:@"hanja_temp.txt"];
-    [outS writeToFile:temp
-           atomically:YES
-             encoding:NSUTF8StringEncoding
-                error:nil];
-    NSString *script =
-        [NSString stringWithFormat:@"do shell script \"cp -f '%@' '%@'\" with "
-                                   @"administrator privileges",
-                                   temp, currentFilePath];
-    NSAppleScript *as = [[NSAppleScript alloc] initWithSource:script];
-    if ([as executeAndReturnError:nil]) {
+    // Fallback to admin permission if needed (properly escaped)
+    NSString *tempFilename = [NSString
+        stringWithFormat:@"dkst-hanja-%@.txt", [[NSUUID UUID] UUIDString]];
+    NSString *temp =
+        [NSTemporaryDirectory() stringByAppendingPathComponent:tempFilename];
+    NSError *tempError = nil;
+    if (![outS writeToFile:temp
+                atomically:YES
+                  encoding:NSUTF8StringEncoding
+                     error:&tempError]) {
+      NSAlert *a = [[[NSAlert alloc] init] autorelease];
+      a.messageText =
+          [NSString stringWithFormat:@"임시 파일 저장에 실패했습니다: %@",
+                                     tempError.localizedDescription
+                                         ?: @"알 수 없는 오류"];
+      [a runModal];
+      return;
+    }
+
+    NSString *shellCommand =
+        [NSString stringWithFormat:@"/bin/cp -f %@ %@",
+                                   DKSTShellSingleQuotedString(temp),
+                                   DKSTShellSingleQuotedString(targetPath)];
+    NSString *script = [NSString
+        stringWithFormat:
+            @"do shell script \"%@\" with administrator privileges",
+            DKSTAppleScriptDoubleQuotedString(shellCommand)];
+    NSAppleScript *as = [[[NSAppleScript alloc] initWithSource:script] autorelease];
+    NSDictionary *errorInfo = nil;
+    NSAppleEventDescriptor *result = [as executeAndReturnError:&errorInfo];
+    [[NSFileManager defaultManager] removeItemAtPath:temp error:nil];
+
+    if (result) {
       [[NSDistributedNotificationCenter defaultCenter]
           postNotificationName:kDKSTDictionaryDidChangeNotification
                         object:nil
                       userInfo:nil
             deliverImmediately:YES];
-      NSAlert *a = [[NSAlert alloc] init];
+      NSAlert *a = [[[NSAlert alloc] init] autorelease];
       a.messageText = @"저장되었습니다.";
+      [a runModal];
+    } else {
+      DKSTLog(@"Admin save failed: %@", errorInfo);
+      NSAlert *a = [[[NSAlert alloc] init] autorelease];
+      a.messageText = [NSString
+          stringWithFormat:@"저장에 실패했습니다: %@",
+                           errorInfo[NSAppleScriptErrorMessage]
+                               ?: error.localizedDescription
+                               ?: @"알 수 없는 오류"];
       [a runModal];
     }
   }
 }
 
 - (void)openDictionaryFile:(id)sender {
-  [[NSWorkspace sharedWorkspace] openFile:currentFilePath];
+  (void)sender;
+  if ([currentFilePath length] > 0) {
+    [[NSWorkspace sharedWorkspace]
+        openURL:[NSURL fileURLWithPath:currentFilePath]];
+  }
 }
 
 @end
@@ -932,6 +1049,7 @@ static NSDictionary *DKSTIMEInfoPlist() {
   NSButton *useMarkedTextForAllAppsCheckbox;
   NSTableView *tableView;
   NSMutableArray *bundleIDs;
+  NSMutableDictionary *appMetadataCache;
   NSTableView *runningAppsTableView;
   NSMutableArray *runningApps;
   NSPanel *runningAppsPanel;
@@ -939,7 +1057,7 @@ static NSDictionary *DKSTIMEInfoPlist() {
 
 - (void)loadView {
   NSStackView *stackView =
-      [[NSStackView alloc] initWithFrame:NSMakeRect(0, 0, 500, 400)];
+      [[[NSStackView alloc] initWithFrame:NSMakeRect(0, 0, 500, 400)] autorelease];
   stackView.orientation = NSUserInterfaceLayoutOrientationVertical;
   stackView.alignment = NSLayoutAttributeLeading;
   stackView.spacing = 15;
@@ -968,15 +1086,16 @@ static NSDictionary *DKSTIMEInfoPlist() {
   [stackView addView:desc inGravity:NSStackViewGravityTop];
 
   NSScrollView *scrollView =
-      [[NSScrollView alloc] initWithFrame:NSMakeRect(0, 0, 440, 250)];
+      [[[NSScrollView alloc] initWithFrame:NSMakeRect(0, 0, 440, 250)] autorelease];
   scrollView.hasVerticalScroller = YES;
   scrollView.borderType = NSBezelBorder;
 
-  tableView =
-      [[DKSTApplicationDropTableView alloc] initWithFrame:scrollView.bounds];
+  tableView = [[[DKSTApplicationDropTableView alloc]
+      initWithFrame:scrollView.bounds] autorelease];
   ((DKSTApplicationDropTableView *)tableView).applicationDropTarget = self;
   [tableView registerForDraggedTypes:@[ NSPasteboardTypeFileURL ]];
-  NSTableColumn *col = [[NSTableColumn alloc] initWithIdentifier:@"BundleID"];
+  NSTableColumn *col =
+      [[[NSTableColumn alloc] initWithIdentifier:@"BundleID"] autorelease];
   col.title = @"앱 / Bundle ID";
   col.width = 420;
   [tableView addTableColumn:col];
@@ -988,33 +1107,29 @@ static NSDictionary *DKSTIMEInfoPlist() {
   scrollView.documentView = tableView;
   [stackView addView:scrollView inGravity:NSStackViewGravityTop];
 
-  NSStackView *btnRow = [NSStackView stackViewWithViews:@[
-    ({
-      NSButton *btn =
-          [[NSButton alloc] initWithFrame:NSMakeRect(0, 0, 100, 26)];
-      btn.title = @"실행 중인 앱";
-      btn.bezelStyle = NSBezelStyleRounded;
-      btn.target = self;
-      btn.action = @selector(showRunningApps:);
-      btn;
-    }),
-    ({
-      NSButton *btn = [[NSButton alloc] initWithFrame:NSMakeRect(0, 0, 70, 26)];
-      btn.title = @"+ 추가";
-      btn.bezelStyle = NSBezelStyleRounded;
-      btn.target = self;
-      btn.action = @selector(addApp:);
-      btn;
-    }),
-    ({
-      NSButton *btn = [[NSButton alloc] initWithFrame:NSMakeRect(0, 0, 70, 26)];
-      btn.title = @"- 제거";
-      btn.bezelStyle = NSBezelStyleRounded;
-      btn.target = self;
-      btn.action = @selector(removeApp:);
-      btn;
-    })
-  ]];
+  NSButton *runningAppsBtn =
+      [[[NSButton alloc] initWithFrame:NSMakeRect(0, 0, 100, 26)] autorelease];
+  runningAppsBtn.title = @"실행 중인 앱";
+  runningAppsBtn.bezelStyle = NSBezelStyleRounded;
+  runningAppsBtn.target = self;
+  runningAppsBtn.action = @selector(showRunningApps:);
+
+  NSButton *addAppBtn =
+      [[[NSButton alloc] initWithFrame:NSMakeRect(0, 0, 70, 26)] autorelease];
+  addAppBtn.title = @"+ 추가";
+  addAppBtn.bezelStyle = NSBezelStyleRounded;
+  addAppBtn.target = self;
+  addAppBtn.action = @selector(addApp:);
+
+  NSButton *removeAppBtn =
+      [[[NSButton alloc] initWithFrame:NSMakeRect(0, 0, 70, 26)] autorelease];
+  removeAppBtn.title = @"- 제거";
+  removeAppBtn.bezelStyle = NSBezelStyleRounded;
+  removeAppBtn.target = self;
+  removeAppBtn.action = @selector(removeApp:);
+
+  NSStackView *btnRow = [NSStackView
+      stackViewWithViews:@[ runningAppsBtn, addAppBtn, removeAppBtn ]];
   btnRow.spacing = 10;
   [stackView addView:btnRow inGravity:NSStackViewGravityTop];
 
@@ -1024,6 +1139,9 @@ static NSDictionary *DKSTIMEInfoPlist() {
   dropHint.textColor = [NSColor secondaryLabelColor];
   dropHint.font = [NSFont systemFontOfSize:[NSFont smallSystemFontSize]];
   [stackView addView:dropHint inGravity:NSStackViewGravityTop];
+
+  [appMetadataCache release];
+  appMetadataCache = [[NSMutableDictionary alloc] init];
 
   self.preferredContentSize = NSMakeSize(550, 550);
 }
@@ -1075,17 +1193,57 @@ static NSDictionary *DKSTIMEInfoPlist() {
     objectValueForTableColumn:(NSTableColumn *)tableColumn
                           row:(NSInteger)row {
   if (aTableView == runningAppsTableView) {
-    if (row < 0 || row >= runningApps.count) {
+    if (row < 0 || row >= (NSInteger)runningApps.count) {
       return @"";
     }
     NSRunningApplication *app = runningApps[row];
     return [NSString stringWithFormat:@"%@ — %@", app.localizedName ?: @"",
                                       app.bundleIdentifier ?: @""];
   }
-  if (row < 0 || row >= bundleIDs.count) {
+  if (row < 0 || row >= (NSInteger)bundleIDs.count) {
     return @"";
   }
   return bundleIDs[row];
+}
+
+- (NSDictionary *)cachedApplicationMetadataForBundleID:(NSString *)bundleID {
+  if (![bundleID length]) {
+    return nil;
+  }
+  NSDictionary *cached = [appMetadataCache objectForKey:bundleID];
+  if (cached) {
+    return cached;
+  }
+
+  NSMutableDictionary *entry = [NSMutableDictionary dictionary];
+  NSURL *applicationURL = [[NSWorkspace sharedWorkspace]
+      URLForApplicationWithBundleIdentifier:bundleID];
+  if (applicationURL) {
+    NSBundle *applicationBundle = [NSBundle bundleWithURL:applicationURL];
+    NSDictionary *localizedInfo = applicationBundle.localizedInfoDictionary;
+    NSDictionary *info = applicationBundle.infoDictionary;
+    NSString *displayName =
+        localizedInfo[@"CFBundleDisplayName"]
+            ?: localizedInfo[@"CFBundleName"]
+            ?: info[@"CFBundleDisplayName"]
+            ?: info[@"CFBundleName"]
+            ?: applicationURL.URLByDeletingPathExtension.lastPathComponent;
+    if ([displayName length] > 0) {
+      entry[@"displayName"] = displayName;
+    }
+    NSImage *icon =
+        [[NSWorkspace sharedWorkspace] iconForFile:applicationURL.path];
+    if (icon) {
+      entry[@"icon"] = icon;
+    }
+    entry[@"notInstalled"] = @NO;
+  } else {
+    entry[@"notInstalled"] = @YES;
+  }
+
+  NSDictionary *immutable = [[entry copy] autorelease];
+  [appMetadataCache setObject:immutable forKey:bundleID];
+  return immutable;
 }
 
 - (NSTableCellView *)tableView:(NSTableView *)aTableView
@@ -1126,28 +1284,19 @@ static NSDictionary *DKSTIMEInfoPlist() {
   NSImage *icon = nil;
   BOOL applicationIsNotInstalled = NO;
   if (aTableView == runningAppsTableView) {
-    if (row >= 0 && row < runningApps.count) {
+    if (row >= 0 && row < (NSInteger)runningApps.count) {
       NSRunningApplication *app = runningApps[row];
       bundleID = app.bundleIdentifier;
       displayName = app.localizedName;
       icon = app.icon;
     }
-  } else if (row >= 0 && row < bundleIDs.count) {
+  } else if (row >= 0 && row < (NSInteger)bundleIDs.count) {
     bundleID = bundleIDs[row];
-    NSURL *applicationURL = [[NSWorkspace sharedWorkspace]
-        URLForApplicationWithBundleIdentifier:bundleID];
-    if (applicationURL) {
-      NSBundle *applicationBundle = [NSBundle bundleWithURL:applicationURL];
-      NSDictionary *localizedInfo = applicationBundle.localizedInfoDictionary;
-      NSDictionary *info = applicationBundle.infoDictionary;
-      displayName = localizedInfo[@"CFBundleDisplayName"] ?:
-                        localizedInfo[@"CFBundleName"] ?:
-                        info[@"CFBundleDisplayName"] ?: info[@"CFBundleName"] ?:
-                        applicationURL.URLByDeletingPathExtension.lastPathComponent;
-      icon = [[NSWorkspace sharedWorkspace] iconForFile:applicationURL.path];
-    } else {
-      applicationIsNotInstalled = YES;
-    }
+    NSDictionary *metadata =
+        [self cachedApplicationMetadataForBundleID:bundleID];
+    displayName = metadata[@"displayName"];
+    icon = metadata[@"icon"];
+    applicationIsNotInstalled = [metadata[@"notInstalled"] boolValue];
   }
 
   cell.textField.stringValue =
@@ -1156,7 +1305,7 @@ static NSDictionary *DKSTIMEInfoPlist() {
           : bundleID ?: @"";
   cell.textField.toolTip = bundleID;
   if (!icon && applicationIsNotInstalled) {
-    icon = [NSImage imageNamed:@"Not_installed"];
+    icon = [NSImage imageNamed:@"Not_Installed"];
   }
   cell.imageView.image =
       icon ?: [NSImage imageNamed:NSImageNameApplicationIcon];
@@ -1167,7 +1316,7 @@ static NSDictionary *DKSTIMEInfoPlist() {
     setObjectValue:(id)object
     forTableColumn:(NSTableColumn *)tableColumn
                row:(NSInteger)row {
-  if (row < 0 || row >= bundleIDs.count ||
+  if (row < 0 || row >= (NSInteger)bundleIDs.count ||
       ![object isKindOfClass:[NSString class]]) {
     return;
   }
@@ -1201,8 +1350,16 @@ static NSDictionary *DKSTIMEInfoPlist() {
 }
 
 - (void)addApp:(id)sender {
+  (void)sender;
   NSOpenPanel *p = [NSOpenPanel openPanel];
-  p.allowedFileTypes = @[ @"app" ];
+  if (@available(macOS 11.0, *)) {
+    p.allowedContentTypes = @[ UTTypeApplicationBundle ];
+  } else {
+#pragma clang diagnostic push
+#pragma clang diagnostic ignored "-Wdeprecated-declarations"
+    p.allowedFileTypes = @[ @"app" ];
+#pragma clang diagnostic pop
+  }
   p.allowsMultipleSelection = YES;
   if ([p runModal] == NSModalResponseOK) {
     for (NSURL *url in p.URLs) {
@@ -1338,7 +1495,7 @@ static NSDictionary *DKSTIMEInfoPlist() {
 
 - (void)addSelectedRunningApp:(id)sender {
   NSInteger row = runningAppsTableView.selectedRow;
-  if (row < 0 || row >= runningApps.count) {
+  if (row < 0 || row >= (NSInteger)runningApps.count) {
     NSBeep();
     return;
   }
@@ -1360,7 +1517,7 @@ static NSDictionary *DKSTIMEInfoPlist() {
 
 - (void)removeApp:(id)sender {
   NSInteger row = tableView.selectedRow;
-  if (row >= 0 && row < bundleIDs.count) {
+  if (row >= 0 && row < (NSInteger)bundleIDs.count) {
     [bundleIDs removeObjectAtIndex:row];
     [tableView reloadData];
     [self saveData];
@@ -1373,6 +1530,7 @@ static NSDictionary *DKSTIMEInfoPlist() {
     [runningAppsPanel orderOut:nil];
     [runningAppsPanel release];
   }
+  [appMetadataCache release];
   [runningApps release];
   [bundleIDs release];
   [super dealloc];
@@ -1386,7 +1544,7 @@ static NSDictionary *DKSTIMEInfoPlist() {
 
 - (void)loadView {
   NSStackView *stackView =
-      [[NSStackView alloc] initWithFrame:NSMakeRect(0, 0, 500, 400)];
+      [[[NSStackView alloc] initWithFrame:NSMakeRect(0, 0, 500, 400)] autorelease];
   stackView.orientation = NSUserInterfaceLayoutOrientationVertical;
   stackView.alignment = NSLayoutAttributeCenterX;
   stackView.spacing = 20;
@@ -1395,7 +1553,7 @@ static NSDictionary *DKSTIMEInfoPlist() {
 
   // App Icon (128x128)
   NSImageView *iconView =
-      [[NSImageView alloc] initWithFrame:NSMakeRect(0, 0, 128, 128)];
+      [[[NSImageView alloc] initWithFrame:NSMakeRect(0, 0, 128, 128)] autorelease];
   iconView.image = [NSImage imageNamed:@"icon"];
   [iconView.widthAnchor constraintEqualToConstant:128].active = YES;
   [iconView.heightAnchor constraintEqualToConstant:128].active = YES;
@@ -1431,40 +1589,36 @@ static NSDictionary *DKSTIMEInfoPlist() {
   [stackView addView:prefsVerLabel inGravity:NSStackViewGravityTop];
 
   // Links
-  NSStackView *linkRow = [NSStackView stackViewWithViews:@[
-    ({
-      NSButton *btn = [NSButton buttonWithTitle:@"GitHub 페이지"
-                                         target:self
-                                         action:@selector(openGitHub:)];
-      [btn setBordered:NO];
-      NSMutableAttributedString *t =
-          [[NSMutableAttributedString alloc] initWithString:btn.title];
-      [t addAttribute:NSForegroundColorAttributeName
-                value:[NSColor linkColor]
-                range:NSMakeRange(0, t.length)];
-      [t addAttribute:NSUnderlineStyleAttributeName
-                value:@(NSUnderlineStyleSingle)
-                range:NSMakeRange(0, t.length)];
-      btn.attributedTitle = t;
-      btn;
-    }),
-    ({
-      NSButton *btn = [NSButton buttonWithTitle:@"후원"
-                                         target:self
-                                         action:@selector(openSupport:)];
-      [btn setBordered:NO];
-      NSMutableAttributedString *t =
-          [[NSMutableAttributedString alloc] initWithString:btn.title];
-      [t addAttribute:NSForegroundColorAttributeName
-                value:[NSColor linkColor]
-                range:NSMakeRange(0, t.length)];
-      [t addAttribute:NSUnderlineStyleAttributeName
-                value:@(NSUnderlineStyleSingle)
-                range:NSMakeRange(0, t.length)];
-      btn.attributedTitle = t;
-      btn;
-    })
-  ]];
+  NSButton *githubButton = [NSButton buttonWithTitle:@"GitHub 페이지"
+                                              target:self
+                                              action:@selector(openGitHub:)];
+  [githubButton setBordered:NO];
+  NSMutableAttributedString *githubTitle = [[[NSMutableAttributedString alloc]
+      initWithString:githubButton.title] autorelease];
+  [githubTitle addAttribute:NSForegroundColorAttributeName
+                      value:[NSColor linkColor]
+                      range:NSMakeRange(0, githubTitle.length)];
+  [githubTitle addAttribute:NSUnderlineStyleAttributeName
+                      value:@(NSUnderlineStyleSingle)
+                      range:NSMakeRange(0, githubTitle.length)];
+  githubButton.attributedTitle = githubTitle;
+
+  NSButton *supportButton = [NSButton buttonWithTitle:@"후원"
+                                               target:self
+                                               action:@selector(openSupport:)];
+  [supportButton setBordered:NO];
+  NSMutableAttributedString *supportTitle = [[[NSMutableAttributedString alloc]
+      initWithString:supportButton.title] autorelease];
+  [supportTitle addAttribute:NSForegroundColorAttributeName
+                       value:[NSColor linkColor]
+                       range:NSMakeRange(0, supportTitle.length)];
+  [supportTitle addAttribute:NSUnderlineStyleAttributeName
+                       value:@(NSUnderlineStyleSingle)
+                       range:NSMakeRange(0, supportTitle.length)];
+  supportButton.attributedTitle = supportTitle;
+
+  NSStackView *linkRow =
+      [NSStackView stackViewWithViews:@[ githubButton, supportButton ]];
   linkRow.spacing = 20;
   [stackView addView:linkRow inGravity:NSStackViewGravityTop];
 

@@ -3,6 +3,8 @@
 #import <Cocoa/Cocoa.h>
 
 int main(int argc, const char *argv[]) {
+  (void)argc;
+  (void)argv;
   @autoreleasepool {
     NSError *dictionaryError = nil;
     if (!DKSTEnsureUserDictionary([NSBundle mainBundle], &dictionaryError)) {
@@ -13,22 +15,22 @@ int main(int argc, const char *argv[]) {
     [app setActivationPolicy:NSApplicationActivationPolicyRegular];
 
     // Create standard menu
-    NSMenu *menubar = [[NSMenu alloc] init];
+    NSMenu *menubar = [[[NSMenu alloc] init] autorelease];
     [app setMainMenu:menubar];
 
     // App Menu
-    NSMenuItem *appMenuItem = [[NSMenuItem alloc] init];
+    NSMenuItem *appMenuItem = [[[NSMenuItem alloc] init] autorelease];
     [menubar addItem:appMenuItem];
-    NSMenu *appMenu = [[NSMenu alloc] init];
+    NSMenu *appMenu = [[[NSMenu alloc] init] autorelease];
     [appMenuItem setSubmenu:appMenu];
     [appMenu addItemWithTitle:@"Quit DKST macOS용 한글입력기"
                        action:@selector(terminate:)
                 keyEquivalent:@"q"];
 
     // Edit Menu
-    NSMenuItem *editMenuItem = [[NSMenuItem alloc] init];
+    NSMenuItem *editMenuItem = [[[NSMenuItem alloc] init] autorelease];
     [menubar addItem:editMenuItem];
-    NSMenu *editMenu = [[NSMenu alloc] initWithTitle:@"Edit"];
+    NSMenu *editMenu = [[[NSMenu alloc] initWithTitle:@"Edit"] autorelease];
     [editMenuItem setSubmenu:editMenu];
 
     [editMenu addItemWithTitle:@"Undo"

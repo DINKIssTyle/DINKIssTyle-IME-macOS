@@ -40,7 +40,6 @@
 @interface DKSTPolicyControllerProbe : InputController
 - (BOOL)useMarkedTextForTestClient:(id)client;
 - (BOOL)currentMarkedTextPolicyForTest;
-- (NSUInteger)stickyFallbackCountForTest;
 - (BOOL)transientFallbackForTest;
 @end
 
@@ -49,9 +48,7 @@
 - (id)init {
   self = [super init];
   if (self) {
-    _forcedMarkedTextBundleIDs = [[NSMutableSet alloc] init];
     _markedTextBundleIDSet = [[NSSet alloc] init];
-    _chromiumDetectionCache = [[NSMutableDictionary alloc] init];
     _compositionState = [[DKSTCompositionState alloc] init];
     _directInputComposedRange = NSMakeRange(NSNotFound, 0);
     _markedReplacementRange = NSMakeRange(NSNotFound, 0);
@@ -69,10 +66,6 @@
 
 - (BOOL)currentMarkedTextPolicyForTest {
   return _useMarkedTextForClient;
-}
-
-- (NSUInteger)stickyFallbackCountForTest {
-  return [_forcedMarkedTextBundleIDs count];
 }
 
 - (BOOL)transientFallbackForTest {
@@ -122,7 +115,7 @@ int main(void) {
              @"current composition did not enter marked fallback");
   DKSTAssert([controller transientFallbackForTest],
              @"marked fallback was not recorded as transient");
-  DKSTAssert([controller stickyFallbackCountForTest] == 0,
+  DKSTAssert(![controller useMarkedTextForTestClient:calendar],
              @"transient fallback made Calendar permanently marked");
 
   [controller refreshMarkedTextPolicyForNewComposition:calendar];

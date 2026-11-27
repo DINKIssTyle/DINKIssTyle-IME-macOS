@@ -1,6 +1,16 @@
 #import "InputController+Private.h"
 #import "DKSTConstants.h"
 
+static NSCache *DKSTSharedChromiumDetectionCache(void) {
+  static NSCache *cache = nil;
+  static dispatch_once_t onceToken;
+  dispatch_once(&onceToken, ^{
+    cache = [[NSCache alloc] init];
+    [cache setCountLimit:256];
+  });
+  return cache;
+}
+
 @implementation InputController (ClientPolicy)
 
 - (NSString *)bundleIdentifierForClient:(id)sender {
@@ -84,13 +94,19 @@
     return NO;
   }
 
-  NSArray *webkitBundlePrefixes =
-      [NSArray arrayWithObjects:@"com.apple.Safari", @"com.apple.WebKit",
-                                @"com.apple.mobilesafari", nil];
+  static NSArray *webkitBundlePrefixes = nil;
+  static dispatch_once_t onceToken;
+  dispatch_once(&onceToken, ^{
+    webkitBundlePrefixes = [[NSArray alloc]
+        initWithObjects:@"com.apple.Safari", @"com.apple.WebKit",
+                        @"com.apple.mobilesafari", nil];
+  });
 
   for (NSString *prefix in webkitBundlePrefixes) {
     if ([bundleID isEqualToString:prefix] ||
-        [bundleID hasPrefix:[prefix stringByAppendingString:@"."]]) {
+        ([bundleID hasPrefix:prefix] &&
+         [bundleID length] > [prefix length] &&
+         [bundleID characterAtIndex:[prefix length]] == '.')) {
       return YES;
     }
   }
@@ -116,19 +132,25 @@
     return NO;
   }
 
-  NSArray *chromiumBundlePrefixes = [NSArray
-      arrayWithObjects:@"org.chromium.Chromium", @"com.google.Chrome",
-                       @"com.google.Chrome.canary", @"com.microsoft.edgemac",
-                       @"com.brave.Browser", @"com.vivaldi.Vivaldi",
-                       @"com.operasoftware.Opera", @"com.naver.Whale",
-                       @"company.thebrowser.Browser", @"ai.perplexity.comet",
-                       @"com.perplexity.Comet", @"com.perplexity.comet",
-                       @"com.openai.atlas", @"com.openai.Atlas",
-                       @"com.openai.chatgpt.atlas", nil];
+  static NSArray *chromiumBundlePrefixes = nil;
+  static dispatch_once_t onceToken;
+  dispatch_once(&onceToken, ^{
+    chromiumBundlePrefixes = [[NSArray alloc]
+        initWithObjects:@"org.chromium.Chromium", @"com.google.Chrome",
+                        @"com.google.Chrome.canary", @"com.microsoft.edgemac",
+                        @"com.brave.Browser", @"com.vivaldi.Vivaldi",
+                        @"com.operasoftware.Opera", @"com.naver.Whale",
+                        @"company.thebrowser.Browser", @"ai.perplexity.comet",
+                        @"com.perplexity.Comet", @"com.perplexity.comet",
+                        @"com.openai.atlas", @"com.openai.Atlas",
+                        @"com.openai.chatgpt.atlas", nil];
+  });
 
   for (NSString *prefix in chromiumBundlePrefixes) {
     if ([bundleID isEqualToString:prefix] ||
-        [bundleID hasPrefix:[prefix stringByAppendingString:@"."]]) {
+        ([bundleID hasPrefix:prefix] &&
+         [bundleID length] > [prefix length] &&
+         [bundleID characterAtIndex:[prefix length]] == '.')) {
       return YES;
     }
   }
@@ -146,7 +168,8 @@
     return NO;
   }
 
-  NSNumber *cachedResult = [_chromiumDetectionCache objectForKey:bundlePath];
+  NSCache *cache = DKSTSharedChromiumDetectionCache();
+  NSNumber *cachedResult = [cache objectForKey:bundlePath];
   if (cachedResult) {
     return [cachedResult boolValue];
   }
@@ -157,26 +180,28 @@
   BOOL isDirectory = NO;
   if (![fm fileExistsAtPath:frameworksPath isDirectory:&isDirectory] ||
       !isDirectory) {
-    [_chromiumDetectionCache setObject:[NSNumber numberWithBool:NO]
-                                forKey:bundlePath];
+    [cache setObject:[NSNumber numberWithBool:NO] forKey:bundlePath];
     return NO;
   }
 
   NSArray *frameworkNames = [fm contentsOfDirectoryAtPath:frameworksPath
                                                     error:nil];
-  NSArray *chromiumFrameworkNames =
-      [NSArray arrayWithObjects:@"Electron Framework.framework",
-                                @"Chromium Embedded Framework.framework",
-                                @"Google Chrome Framework.framework",
-                                @"Microsoft Edge Framework.framework",
-                                @"Brave Browser Framework.framework",
-                                @"Vivaldi Framework.framework",
-                                @"Opera Framework.framework", nil];
+  static NSSet *chromiumFrameworkNames = nil;
+  static dispatch_once_t onceToken;
+  dispatch_once(&onceToken, ^{
+    chromiumFrameworkNames = [[NSSet alloc]
+        initWithObjects:@"Electron Framework.framework",
+                        @"Chromium Embedded Framework.framework",
+                        @"Google Chrome Framework.framework",
+                        @"Microsoft Edge Framework.framework",
+                        @"Brave Browser Framework.framework",
+                        @"Vivaldi Framework.framework",
+                        @"Opera Framework.framework", nil];
+  });
 
   for (NSString *frameworkName in frameworkNames) {
     if ([chromiumFrameworkNames containsObject:frameworkName]) {
-      [_chromiumDetectionCache setObject:[NSNumber numberWithBool:YES]
-                                  forKey:bundlePath];
+      [cache setObject:[NSNumber numberWithBool:YES] forKey:bundlePath];
       return YES;
     }
     if ([frameworkName rangeOfString:@"Chromium"
@@ -185,14 +210,12 @@
         [frameworkName rangeOfString:@"Electron"
                              options:NSCaseInsensitiveSearch]
                 .location != NSNotFound) {
-      [_chromiumDetectionCache setObject:[NSNumber numberWithBool:YES]
-                                  forKey:bundlePath];
+      [cache setObject:[NSNumber numberWithBool:YES] forKey:bundlePath];
       return YES;
     }
   }
 
-  [_chromiumDetectionCache setObject:[NSNumber numberWithBool:NO]
-                              forKey:bundlePath];
+  [cache setObject:[NSNumber numberWithBool:NO] forKey:bundlePath];
   return NO;
 }
 
@@ -202,10 +225,11 @@
   }
 
   // The fallback Chromium check can enumerate running apps and inspect bundle
-  // frameworks on disk. Cache both YES and NO by bundle ID so first-key policy
-  // detection does not repeatedly block the input path.
+  // frameworks on disk. Cache both YES and NO by bundle ID process-wide so
+  // first-key policy detection does not repeatedly block the input path.
+  NSCache *cache = DKSTSharedChromiumDetectionCache();
   NSString *cacheKey = [@"bundle:" stringByAppendingString:bundleID];
-  NSNumber *cachedResult = [_chromiumDetectionCache objectForKey:cacheKey];
+  NSNumber *cachedResult = [cache objectForKey:cacheKey];
   if (cachedResult) {
     return [cachedResult boolValue];
   }
@@ -222,20 +246,17 @@
         [bundleName isEqualToString:@"atlas"] ||
         [appName isEqualToString:@"chatgpt atlas"] ||
         [bundleName isEqualToString:@"chatgpt atlas"]) {
-      [_chromiumDetectionCache setObject:[NSNumber numberWithBool:YES]
-                                  forKey:cacheKey];
+      [cache setObject:[NSNumber numberWithBool:YES] forKey:cacheKey];
       return YES;
     }
 
     if ([self applicationBundleUsesChromiumTextStack:[app bundleURL]]) {
-      [_chromiumDetectionCache setObject:[NSNumber numberWithBool:YES]
-                                  forKey:cacheKey];
+      [cache setObject:[NSNumber numberWithBool:YES] forKey:cacheKey];
       return YES;
     }
   }
 
-  [_chromiumDetectionCache setObject:[NSNumber numberWithBool:NO]
-                              forKey:cacheKey];
+  [cache setObject:[NSNumber numberWithBool:NO] forKey:cacheKey];
   return NO;
 }
 
@@ -288,10 +309,6 @@
   }
 
   if (![bundleID length]) {
-    return YES;
-  }
-
-  if ([_forcedMarkedTextBundleIDs containsObject:bundleID]) {
     return YES;
   }
 

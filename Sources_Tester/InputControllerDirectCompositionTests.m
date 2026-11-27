@@ -163,7 +163,6 @@
   if (self) {
     engine = [[DKSTHangul alloc] init];
     _compositionState = [[DKSTCompositionState alloc] init];
-    _forcedMarkedTextBundleIDs = [[NSMutableSet alloc] init];
     _markedTextCommittedPrefix = [[NSMutableString alloc] init];
     _directInputComposedRange = NSMakeRange(NSNotFound, 0);
     _markedReplacementRange = NSMakeRange(NSNotFound, 0);

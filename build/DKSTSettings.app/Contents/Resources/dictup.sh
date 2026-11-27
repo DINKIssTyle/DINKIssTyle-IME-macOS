@@ -21,9 +21,9 @@ MERGED="$TEMP_DIR/merged.txt"
 echo "Checking for dictionary updates..."
 
 # 1. Download new system dictionary
-# Use -L for redirects and -f to fail on 404
-if ! curl -L -s -f -o "$NEW_SYS" "$REMOTE_URL" || [ ! -s "$NEW_SYS" ]; then
-    echo "Error: Failed to download dictionary from GitHub or file is empty."
+# Use -L for redirects, -f to fail on 404, and bounded timeouts so UI callers do not hang.
+if ! curl -L -s -f --connect-timeout 15 --max-time 60 -o "$NEW_SYS" "$REMOTE_URL" || [ ! -s "$NEW_SYS" ]; then
+    echo "Error: Failed to download dictionary from GitHub or file is empty." >&2
     exit 1
 fi
 
@@ -42,10 +42,10 @@ if [ -f "$LOCAL_PATH" ]; then
     if [ ! -z "$LOCAL_SEP" ]; then
         sed -n "${LOCAL_SEP},\$p" "$LOCAL_PATH" > "$USER_PART"
     else
-        echo -e "\n###DKST" > "$USER_PART"
+        printf '\n###DKST\n' > "$USER_PART"
     fi
 else
-    echo -e "\n###DKST" > "$USER_PART"
+    printf '\n###DKST\n' > "$USER_PART"
 fi
 
 # 4. Merge: New System Data + User Part
